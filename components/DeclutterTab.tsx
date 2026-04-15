@@ -1,19 +1,40 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
 type Decision = 'keep' | 'donate' | 'toss' | null
-type Item = { name: string; decision: Decision; category?: string; disposeDate?: string; memo?: string }
+type Item = { id: string; name: string; decision: Decision; category?: string; disposeDate?: string; tossMemo?: string }
+type TossEntry = { id: string; name: string; memo: string; date: string }
 
 const KEEP_CATS = ['日常用品', '季節性', '紀念品', '備用品', '工作用品']
+const LS_KEY = 'organizer_declutter_v1'
+
+const SHARE_BTNS = [
+  { id: 'threads', label: '分享到 Threads', color: '#000' },
+  { id: 'line', label: '分享到 LINE', color: '#00B900' },
+  { id: 'fb', label: '分享到 Facebook', color: '#1877F2' },
+  { id: 'ig', label: '開啟 Instagram（手動貼文）', color: '#C13584' },
+  { id: 'copy', label: '複製文字', color: ml },
+]
+
+function shareToSocial(platform: string, text: string) {
+  const url = typeof window !== 'undefined' ? window.location.href : ''
+  const enc = encodeURIComponent
+  if (platform === 'copy') { navigator.clipboard.writeText(text); alert('已複製！') }
+  else if (platform === 'line') window.open(`https://social-plugins.line.me/lineit/share?url=${enc(url)}&text=${enc(text)}`)
+  else if (platform === 'threads') window.open(`https://www.threads.net/intent/post?text=${enc(text + '\n' + url)}`)
+  else if (platform === 'fb') window.open(`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}&quote=${enc(text)}`)
+  else if (platform === 'ig') window.open('https://www.instagram.com/')
+}
 
 export default function DeclutterTab() {
   const [items, setItems] = useState<Item[]>([])
   const [input, setInput] = useState('')
-  const [stage, setStage] = useState<'input' | 'review' | 'flow'>('input')
+  const [stage, setStage] = useState<'input' | 'review' | 'flow' | 'tosslist'>('input')
   const [flowIndex, setFlowIndex] = useState(0)
   const [flowType, setFlowType] = useState<'keep' | 'donate' | 'toss'>('keep')
+  const [saved, setSaved] = useState(false)
 
   // Keep flow
   const [keepCat, setKeepCat] = useState('')
@@ -24,263 +45,356 @@ export default function DeclutterTab() {
   const [tossWrite, setTossWrite] = useState(false)
   const [tossMemo, setTossMemo] = useState('')
 
+  // Toss list page
+  const [tossEntries, setTossEntries] = useState<TossEntry[]>([])
+  const [editTossId, setEditTossId] = useState<string | null>(null)
+  const [editTossMemo, setEditTossMemo] = useState('')
+  const [shareTossEntry, setShareTossEntry] = useState<TossEntry | null>(null)
+
+  // Load from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY)
+      if (raw) {
+        const data = JSON.parse(raw)
+        if (data.items) setItems(data.items)
+        if (data.tossEntries) setTossEntries(data.tossEntries)
+        if (data.stage) setStage(data.stage)
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  const persist = (newItems: Item[], newTossEntries: TossEntry[], newStage: string) => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ items: newItems, tossEntries: newTossEntries, stage: newStage })) } catch { /* ignore */ }
+  }
+
+  const updateItems = (next: Item[]) => { setItems(next); persist(next, tossEntries, stage) }
+  const updateTossEntries = (next: TossEntry[]) => { setTossEntries(next); persist(items, next, stage) }
+
   const addItem = (name?: string) => {
     const v = name || input.trim()
     if (!v) return
-    setItems([...items, { name: v, decision: null }])
+    const next = [...items, { id: Date.now().toString(), name: v, decision: null }]
+    updateItems(next)
     setInput('')
   }
-
-  const setDec = (i: number, d: Decision) => {
-    const n = [...items]; n[i] = { ...n[i], decision: n[i].decision === d ? null : d }
-    setItems(n)
+  const setDec = (id: string, d: Decision) => {
+    updateItems(items.map(x => x.id === id ? { ...x, decision: x.decision === d ? null : d } : x))
   }
 
-  const decided = items.filter(x => x.decision)
   const undecided = items.filter(x => !x.decision)
   const keepItems = items.filter(x => x.decision === 'keep')
   const donateItems = items.filter(x => x.decision === 'donate')
   const tossItems = items.filter(x => x.decision === 'toss')
-
-  const startFlow = (type: 'keep' | 'donate' | 'toss') => {
-    setFlowType(type)
-    setFlowIndex(0)
-    setStage('flow')
-    setKeepCat('')
-    setDonateDate('')
-    setDonateCalAdded(false)
-    setTossWrite(false)
-    setTossMemo('')
-  }
+  const allDecided = items.length > 0 && undecided.length === 0
 
   const flowItems = items.filter(x => x.decision === flowType)
   const currentFlowItem = flowItems[flowIndex]
 
+  const startFlow = (type: 'keep' | 'donate' | 'toss') => {
+    setFlowType(type); setFlowIndex(0); setStage('flow')
+    setKeepCat(''); setDonateDate(''); setDonateCalAdded(false); setTossWrite(false); setTossMemo('')
+    persist(items, tossEntries, 'flow')
+  }
+
   const nextFlowItem = () => {
     if (flowIndex < flowItems.length - 1) {
       setFlowIndex(flowIndex + 1)
-      setKeepCat('')
-      setDonateCalAdded(false)
-      setTossWrite(false)
-      setTossMemo('')
+      setKeepCat(''); setDonateCalAdded(false); setTossWrite(false); setTossMemo('')
     } else {
-      setStage('review')
+      if (flowType === 'toss') { setStage('tosslist'); persist(items, tossEntries, 'tosslist') }
+      else { setStage('review'); persist(items, tossEntries, 'review') }
     }
   }
 
   const saveFlowItem = () => {
-    const n = [...items]
-    const idx = n.findIndex(x => x.name === currentFlowItem.name)
-    if (idx !== -1) {
-      if (flowType === 'keep') n[idx].category = keepCat
-      if (flowType === 'donate') n[idx].disposeDate = donateDate
-      if (flowType === 'toss') n[idx].memo = tossMemo
+    const next = items.map(x => {
+      if (x.name !== currentFlowItem?.name) return x
+      if (flowType === 'keep') return { ...x, category: keepCat }
+      if (flowType === 'donate') return { ...x, disposeDate: donateDate }
+      if (flowType === 'toss') return { ...x, tossMemo }
+    })
+    // For toss: also push to tossEntries
+    if (flowType === 'toss' && currentFlowItem) {
+      const entry: TossEntry = { id: currentFlowItem.id, name: currentFlowItem.name, memo: tossMemo, date: new Date().toLocaleDateString('zh-TW') }
+      const nextEntries = [...tossEntries.filter(e => e.id !== currentFlowItem.id), entry]
+      setTossEntries(nextEntries)
+      persist(next as Item[], nextEntries, 'flow')
+    } else {
+      persist(next as Item[], tossEntries, 'flow')
     }
-    setItems(n)
+    setItems(next as Item[])
     nextFlowItem()
   }
 
-  const handleDonateCalendar = () => {
-    if (!donateDate) { alert('請先選擇日期'); return }
-    setDonateCalAdded(true)
-    alert(`✅ 已設定提醒：${donateDate}\n（部署後需完成 Google Calendar API 串接）`)
+  const handleSaveAll = () => {
+    persist(items, tossEntries, stage)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
   }
 
-  return (
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+
+  // ── Input stage ──────────────────────────────────────────
+  if (stage === 'input') return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>斷捨離決策</h1>
-      <p style={{ color: ml, fontSize: 14, marginBottom: 28 }}>逐一判斷每件物品的去留，完成後進入分流處理</p>
+      <p style={{ color: ml, fontSize: 14, marginBottom: 28 }}>逐一判斷每件物品的去留，全部完成才能進入分流處理</p>
 
-      {/* Input stage */}
-      {stage === 'input' && (
-        <>
-          <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>新增物品</div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              <input style={{ flex: 1, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, background: 'white', color: ink, outline: 'none' }}
-                value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()}
-                placeholder="例：三年沒穿的外套" />
-              <button style={{ padding: '10px 18px', borderRadius: 8, border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500, background: ink, color: 'white' }} onClick={() => addItem()}>加入</button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: mf }}>快速加：</span>
-              {['備用充電線', '舊T-shirt', '過期保養品', '購物袋', '舊雜誌', '贈品文具'].map(n => (
-                <button key={n} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, cursor: 'pointer', background: cr, color: ml }} onClick={() => addItem(n)}>{n}</button>
-              ))}
-            </div>
-          </div>
-
-          {items.length > 0 && (
-            <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>等待判斷</div>
-              {items.map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: `1px solid ${cr}`, gap: 12 }}>
-                  <span style={{ fontSize: 14, flex: 1, color: ink }}>{item.name}</span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {(['keep', 'donate', 'toss'] as const).map(d => {
-                      const ac = item.decision === d
-                      const col = d === 'keep' ? sg : d === 'donate' ? '#C47B5A' : mf
-                      return <button key={d} onClick={() => setDec(i, d)} style={{ padding: '4px 12px', borderRadius: 20, border: `1px solid ${col}`, background: ac ? col : 'white', color: ac ? 'white' : col, fontSize: 12, cursor: 'pointer' }}>{d === 'keep' ? '留' : d === 'donate' ? '送' : '丟'}</button>
-                    })}
-                  </div>
-                </div>
-              ))}
-
-              <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-                <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, background: '#EAF2EE', color: sg }}>留下 {keepItems.length}</span>
-                <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, background: '#F0D5C8', color: '#C47B5A' }}>送出 {donateItems.length}</span>
-                <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, background: cr, color: ml }}>丟棄 {tossItems.length}</span>
-                {undecided.length > 0 && <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, background: '#F5F0E8', color: mf }}>未決定 {undecided.length}</span>}
-              </div>
-
-              {decided.length > 0 && (
-                <button onClick={() => setStage('review')} style={{ width: '100%', marginTop: 16, padding: '12px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                  進入分流處理 →
-                </button>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Review stage - show 3 flows */}
-      {stage === 'review' && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div>
-              <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink }}>分流處理</div>
-              <div style={{ fontSize: 13, color: ml }}>選擇一個類別開始處理</div>
-            </div>
-            <button onClick={() => setStage('input')} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
-          </div>
-
-          {/* Keep flow card */}
-          {keepItems.length > 0 && (
-            <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: sg, marginBottom: 4 }}>✅ 選留 — {keepItems.length} 件</div>
-                  <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>為每件物品指定收納分類，避免放錯位置</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                    {keepItems.slice(0, 4).map((item, i) => (
-                      <span key={i} style={{ padding: '3px 10px', background: 'white', borderRadius: 20, fontSize: 12, color: ink }}>
-                        {item.name}{item.category ? ` · ${item.category}` : ''}
-                      </span>
-                    ))}
-                    {keepItems.length > 4 && <span style={{ fontSize: 12, color: mf }}>+{keepItems.length - 4} 件</span>}
-                  </div>
-                </div>
-              </div>
-              <button onClick={() => startFlow('keep')} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-                開始分類 →
-              </button>
-            </div>
-          )}
-
-          {/* Donate flow card */}
-          {donateItems.length > 0 && (
-            <div style={{ background: '#FDF5F0', border: '1px solid #C47B5A', borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#C47B5A', marginBottom: 4 }}>📦 選送 — {donateItems.length} 件</div>
-              <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>拍照記錄後設定送出日，系統加入行事曆提醒</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {donateItems.map((item, i) => (
-                  <span key={i} style={{ padding: '3px 10px', background: 'white', borderRadius: 20, fontSize: 12, color: ink }}>
-                    {item.name}{item.disposeDate ? ` · ${item.disposeDate}` : ''}
-                  </span>
-                ))}
-              </div>
-              <button onClick={() => startFlow('donate')} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#C47B5A', color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-                設定送出日 →
-              </button>
-            </div>
-          )}
-
-          {/* Toss flow card */}
-          {tossItems.length > 0 && (
-            <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: ml, marginBottom: 4 }}>🗑 選丟 — {tossItems.length} 件</div>
-              <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>可以選擇是否寫一段告別記念文，整理記憶後再放手</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {tossItems.map((item, i) => (
-                  <span key={i} style={{ padding: '3px 10px', background: cr, borderRadius: 20, fontSize: 12, color: ink }}>{item.name}</span>
-                ))}
-              </div>
-              <button onClick={() => startFlow('toss')} style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>
-                寫告別紀念文 →
-              </button>
-            </div>
-          )}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>新增物品</div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <input style={{ flex: 1, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, background: 'white', color: ink, outline: 'none' }}
+            value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="例：三年沒穿的外套" />
+          <button style={{ padding: '10px 18px', borderRadius: 8, border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500, background: ink, color: 'white' }} onClick={() => addItem()}>加入</button>
         </div>
-      )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: mf }}>快速加：</span>
+          {['備用充電線', '舊T-shirt', '過期保養品', '購物袋', '舊雜誌', '贈品文具'].map(n => (
+            <button key={n} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, cursor: 'pointer', background: cr, color: ml }} onClick={() => addItem(n)}>{n}</button>
+          ))}
+        </div>
+      </div>
 
-      {/* Flow stage */}
-      {stage === 'flow' && currentFlowItem && (
-        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '24px 28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div style={{ fontSize: 13, color: mf }}>{flowIndex + 1} / {flowItems.length}</div>
-            <button onClick={() => setStage('review')} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
+      {items.length > 0 && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>等待判斷</div>
+          {items.map((item) => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: `1px solid ${cr}`, gap: 12 }}>
+              <span style={{ fontSize: 14, flex: 1, color: ink }}>{item.name}</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['keep', 'donate', 'toss'] as const).map(d => {
+                  const ac = item.decision === d
+                  const col = d === 'keep' ? sg : d === 'donate' ? '#C47B5A' : mf
+                  return <button key={d} onClick={() => setDec(item.id, d)} style={{ padding: '4px 12px', borderRadius: 20, border: `1px solid ${col}`, background: ac ? col : 'white', color: ac ? 'white' : col, fontSize: 12, cursor: 'pointer' }}>
+                    {d === 'keep' ? '留' : d === 'donate' ? '送' : '丟'}
+                  </button>
+                })}
+              </div>
+            </div>
+          ))}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+            <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, background: '#EAF2EE', color: sg }}>留下 {keepItems.length}</span>
+            <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, background: '#F0D5C8', color: '#C47B5A' }}>送出 {donateItems.length}</span>
+            <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, background: cr, color: ml }}>丟棄 {tossItems.length}</span>
+            {undecided.length > 0 && <span style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, background: '#F5F0E8', color: mf }}>未決定 {undecided.length}</span>}
           </div>
 
-          <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 20 }}>「{currentFlowItem.name}」</div>
+          {!allDecided && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 10 }}>還有 {undecided.length} 件物品未判斷，全部完成才能進入分流處理</div>}
 
-          {/* Keep flow */}
-          {flowType === 'keep' && (
-            <>
-              <div style={{ fontSize: 14, color: ml, marginBottom: 12 }}>這件東西要收在哪一類？</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-                {KEEP_CATS.map(cat => (
-                  <button key={cat} onClick={() => setKeepCat(cat)} style={{ padding: '8px 16px', borderRadius: 20, border: `1px solid ${keepCat === cat ? sg : bd}`, background: keepCat === cat ? sg : 'white', color: keepCat === cat ? 'white' : ml, fontSize: 13, cursor: 'pointer' }}>{cat}</button>
-                ))}
-              </div>
-              <button onClick={saveFlowItem} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                {flowIndex < flowItems.length - 1 ? '確認，下一件 →' : '完成 ✓'}
-              </button>
-            </>
-          )}
-
-          {/* Donate flow */}
-          {flowType === 'donate' && (
-            <>
-              <div style={{ fontSize: 14, color: ml, marginBottom: 8 }}>預計什麼時候送出？</div>
-              <input type="date" value={donateDate} onChange={e => setDonateDate(e.target.value)}
-                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none', marginBottom: 12, boxSizing: 'border-box' }} />
-
-              {!donateCalAdded
-                ? <button onClick={handleDonateCalendar} style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: `1px solid #4285F4`, background: 'white', color: '#4285F4', fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
-                    📅 加入行事曆提醒
-                  </button>
-                : <div style={{ padding: '10px', borderRadius: 10, background: '#EAF2EE', color: sg, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>✅ 已加入行事曆</div>
-              }
-              <button onClick={saveFlowItem} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: '#C47B5A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                {flowIndex < flowItems.length - 1 ? '確認，下一件 →' : '完成 ✓'}
-              </button>
-            </>
-          )}
-
-          {/* Toss flow */}
-          {flowType === 'toss' && (
-            <>
-              <div style={{ fontSize: 14, color: ml, marginBottom: 16 }}>丟之前，要留下一些話嗎？</div>
-              {!tossWrite
-                ? <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                    <button onClick={() => setTossWrite(true)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>✍️ 寫告別紀念</button>
-                    <button onClick={saveFlowItem} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer' }}>
-                      直接放手 {flowIndex < flowItems.length - 1 ? '→' : '✓'}
-                    </button>
-                  </div>
-                : <>
-                    <textarea value={tossMemo} onChange={e => setTossMemo(e.target.value)}
-                      placeholder={`這是一件 ${currentFlowItem.name}。它曾陪伴過我…`}
-                      style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 100, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }} />
-                    <button onClick={saveFlowItem} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                      儲存後放手 {flowIndex < flowItems.length - 1 ? '→' : '✓'}
-                    </button>
-                  </>
-              }
-            </>
-          )}
+          <button onClick={() => { setStage('review'); persist(items, tossEntries, 'review') }} disabled={!allDecided}
+            style={{ width: '100%', marginTop: 16, padding: '12px', borderRadius: 10, border: 'none', background: allDecided ? ink : '#C8C2B8', color: 'white', fontSize: 14, cursor: allDecided ? 'pointer' : 'not-allowed', fontWeight: 500 }}>
+            {allDecided ? '進入分流處理 →' : `還有 ${undecided.length} 件未判斷`}
+          </button>
         </div>
       )}
     </div>
   )
+
+  // ── Review stage ─────────────────────────────────────────
+  if (stage === 'review') return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0 }}>分流處理</h1>
+          <div style={{ fontSize: 13, color: ml, marginTop: 4 }}>選擇一個類別開始處理</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleSaveAll} style={{ fontSize: 12, color: sg, background: saved ? '#EAF2EE' : 'white', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '6px 12px' }}>
+            {saved ? '✅ 已儲存' : '💾 儲存'}
+          </button>
+          <button onClick={() => { setStage('input'); persist(items, tossEntries, 'input') }} style={{ fontSize: 12, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
+        </div>
+      </div>
+
+      {keepItems.length > 0 && (
+        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: sg, marginBottom: 4 }}>✅ 選留 — {keepItems.length} 件</div>
+          <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>為每件物品指定收納分類，避免放錯位置</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {keepItems.map(item => <span key={item.id} style={{ padding: '3px 10px', background: 'white', borderRadius: 20, fontSize: 12, color: ink }}>{item.name}{item.category ? ` · ${item.category}` : ''}</span>)}
+          </div>
+          <button onClick={() => startFlow('keep')} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>開始分類 →</button>
+        </div>
+      )}
+
+      {donateItems.length > 0 && (
+        <div style={{ background: '#FDF5F0', border: '1px solid #C47B5A', borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#C47B5A', marginBottom: 4 }}>📦 選送 — {donateItems.length} 件</div>
+          <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>設定送出日，系統加入行事曆提醒</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {donateItems.map(item => <span key={item.id} style={{ padding: '3px 10px', background: 'white', borderRadius: 20, fontSize: 12, color: ink }}>{item.name}{item.disposeDate ? ` · ${item.disposeDate}` : ''}</span>)}
+          </div>
+          <button onClick={() => startFlow('donate')} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#C47B5A', color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>設定送出日 →</button>
+        </div>
+      )}
+
+      {tossItems.length > 0 && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: ml, marginBottom: 4 }}>🗑 選丟 — {tossItems.length} 件</div>
+          <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>可選擇是否寫告別紀念文</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {tossItems.map(item => <span key={item.id} style={{ padding: '3px 10px', background: cr, borderRadius: 20, fontSize: 12, color: ink }}>{item.name}</span>)}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => startFlow('toss')} style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>寫告別紀念文 →</button>
+            <button onClick={() => { setStage('tosslist'); persist(items, tossEntries, 'tosslist') }} style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${bd}`, background: ww, color: ml, fontSize: 13, cursor: 'pointer' }}>查看丟棄列表</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  // ── Flow stage ───────────────────────────────────────────
+  if (stage === 'flow' && currentFlowItem) return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <button onClick={() => { setStage('review'); persist(items, tossEntries, 'review') }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span style={{ fontSize: 13, color: mf }}>{flowIndex + 1} / {flowItems.length}</span>
+          <button onClick={handleSaveAll} style={{ fontSize: 12, color: sg, background: saved ? '#EAF2EE' : 'white', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '4px 10px' }}>
+            {saved ? '✅ 已儲存' : '💾 儲存'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '24px 28px' }}>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 20 }}>「{currentFlowItem.name}」</div>
+
+        {/* Keep */}
+        {flowType === 'keep' && (
+          <>
+            <div style={{ fontSize: 14, color: ml, marginBottom: 12 }}>這件東西要收在哪一類？</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+              {KEEP_CATS.map(cat => (
+                <button key={cat} onClick={() => setKeepCat(cat)} style={{ padding: '8px 16px', borderRadius: 20, border: `1px solid ${keepCat === cat ? sg : bd}`, background: keepCat === cat ? sg : 'white', color: keepCat === cat ? 'white' : ml, fontSize: 13, cursor: 'pointer' }}>{cat}</button>
+              ))}
+            </div>
+            <button onClick={saveFlowItem} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+              {flowIndex < flowItems.length - 1 ? '確認，下一件 →' : '完成 ✓'}
+            </button>
+          </>
+        )}
+
+        {/* Donate */}
+        {flowType === 'donate' && (
+          <>
+            <div style={{ fontSize: 14, color: ink, marginBottom: 8, fontWeight: 500 }}>預計什麼時候送出？</div>
+            <input type="date" value={donateDate} min={todayStr()} onChange={e => setDonateDate(e.target.value)}
+              style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none', marginBottom: 12, boxSizing: 'border-box', color: ink, background: 'white' }} />
+            {!donateCalAdded
+              ? <button onClick={() => { if (!donateDate) { alert('請先選擇日期'); return }; setDonateCalAdded(true); alert(`✅ 已設定提醒：${donateDate}\n（部署後需完成 Google Calendar API 串接）`) }}
+                  style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #4285F4', background: 'white', color: '#4285F4', fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+                  📅 加入行事曆提醒
+                </button>
+              : <div style={{ padding: '10px', borderRadius: 10, background: '#EAF2EE', color: sg, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>✅ 已加入行事曆</div>
+            }
+            <button onClick={saveFlowItem} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: '#C47B5A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+              {flowIndex < flowItems.length - 1 ? '確認，下一件 →' : '完成 ✓'}
+            </button>
+          </>
+        )}
+
+        {/* Toss */}
+        {flowType === 'toss' && (
+          <>
+            <div style={{ fontSize: 14, color: ml, marginBottom: 16 }}>丟之前，要留下一些話嗎？</div>
+            {!tossWrite
+              ? <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                  <button onClick={() => setTossWrite(true)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>✍️ 寫告別紀念</button>
+                  <button onClick={saveFlowItem} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer' }}>
+                    直接放手 {flowIndex < flowItems.length - 1 ? '→' : '✓'}
+                  </button>
+                </div>
+              : <>
+                  <textarea value={tossMemo} onChange={e => setTossMemo(e.target.value)}
+                    placeholder={`這是一件 ${currentFlowItem.name}。它曾陪伴過我…`}
+                    style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 100, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }} />
+                  <button onClick={saveFlowItem} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+                    儲存後放手 {flowIndex < flowItems.length - 1 ? '→' : '✓'}
+                  </button>
+                </>
+            }
+          </>
+        )}
+      </div>
+    </div>
+  )
+
+  // ── Toss list page ───────────────────────────────────────
+  if (stage === 'tosslist') return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <button onClick={() => { setStage('review'); persist(items, tossEntries, 'review') }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: ink, margin: 0 }}>丟棄列表</h1>
+        <button onClick={handleSaveAll} style={{ fontSize: 12, color: sg, background: saved ? '#EAF2EE' : 'white', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '5px 10px' }}>
+          {saved ? '✅ 已儲存' : '💾 儲存'}
+        </button>
+      </div>
+
+      {tossItems.length === 0 ? (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '32px 24px', textAlign: 'center', color: mf, fontSize: 14 }}>還沒有要丟棄的物品</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {tossItems.map(item => {
+            const entry = tossEntries.find(e => e.id === item.id)
+            return (
+              <div key={item.id} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: entry?.memo ? 8 : 0 }}>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: ink }}>{item.name}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {entry && <button onClick={() => setShareTossEntry(entry)} style={{ fontSize: 12, color: 'white', background: sg, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontWeight: 500 }}>分享</button>}
+                    <button onClick={() => { setEditTossId(item.id); setEditTossMemo(entry?.memo || '') }}
+                      style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>編輯</button>
+                  </div>
+                </div>
+
+                {editTossId === item.id ? (
+                  <div>
+                    <textarea value={editTossMemo} onChange={e => setEditTossMemo(e.target.value)}
+                      placeholder="寫下告別紀念文…" style={{ width: '100%', border: `1px solid ${sg}`, borderRadius: 8, padding: '8px 10px', fontSize: 13, color: ink, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', minHeight: 70 }} />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                      <button onClick={() => {
+                        const next = [...tossEntries.filter(e => e.id !== item.id), { id: item.id, name: item.name, memo: editTossMemo, date: new Date().toLocaleDateString('zh-TW') }]
+                        updateTossEntries(next); setEditTossId(null)
+                      }} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存</button>
+                      <button onClick={() => setEditTossId(null)} style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
+                    </div>
+                  </div>
+                ) : (
+                  entry?.memo && <p style={{ fontSize: 13, color: ml, margin: 0, lineHeight: 1.7 }}>{entry.memo}</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Share toss popup */}
+      {shareTossEntry && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 400, width: '100%' }}>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 4 }}>「{shareTossEntry.name}」告別紀念</div>
+            <div style={{ fontSize: 12, color: mf, marginBottom: 16 }}>{shareTossEntry.date}</div>
+            {shareTossEntry.memo && (
+              <div style={{ background: cr, borderRadius: 10, padding: '14px 16px', marginBottom: 16, fontSize: 14, color: ink, lineHeight: 1.8 }}>{shareTossEntry.memo}</div>
+            )}
+            <div style={{ background: '#F5F0E8', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: ml, lineHeight: 1.7 }}>
+              {`我放手了一件「${shareTossEntry.name}」。${shareTossEntry.memo ? '\n' + shareTossEntry.memo : ''}\n\n#斷捨離 #整理小幫手`}
+            </div>
+            {SHARE_BTNS.map(p => (
+              <button key={p.id} onClick={() => shareToSocial(p.id, `我放手了一件「${shareTossEntry.name}」。${shareTossEntry.memo ? '\n' + shareTossEntry.memo : ''}\n#斷捨離 #整理小幫手`)}
+                style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', marginBottom: 8, fontWeight: 500 }}>
+                {p.label}
+              </button>
+            ))}
+            <button onClick={() => setShareTossEntry(null)} style={{ width: '100%', marginTop: 4, padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  return null
 }
