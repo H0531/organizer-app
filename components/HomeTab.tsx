@@ -12,7 +12,7 @@ export default function HomeTab({ onNavigate }: { onNavigate: (t: Tab) => void }
     <div>
       {/* Hero */}
       <div style={{ marginBottom: 32 }}>
-        <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>人 × 物 × 空間 的對話</p>
+        <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}> H 的收整沙龍</p>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 24, fontWeight: 700, color: ink, lineHeight: 1.5, marginBottom: 14 }}>
           人 × 物 × 空間 的對話
         </h1>
@@ -20,7 +20,7 @@ export default function HomeTab({ onNavigate }: { onNavigate: (t: Tab) => void }
           調整心情，安置物品，享受空間──
         </p>
         <p style={{ fontSize: 14, color: ml, lineHeight: 1.8 }}>
-        24 小時陪伴你一起做整理的整理小幫手。
+        我是 24 小時陪伴你一起做整理的整理小幫手。
         </p>
       </div>
 
