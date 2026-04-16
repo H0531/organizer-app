@@ -1,3 +1,26 @@
+export type Decision = 'keep' | 'donate' | 'toss'
+
+export type DeclutterItem = {
+  id: string
+  name: string
+  decision: Decision | null
+  category?: string
+  disposeDate?: string
+  tossMemo?: string
+}
+
+export type TossEntry = {
+  id: string
+  name: string
+  memo: string
+  date: string
+}
+
+export type DeclutterRecord = {
+  savedAt: string
+  items: DeclutterItem[]
+  tossEntries: TossEntry[]
+}
 export const SHARE_BTNS = [
   { id: 'threads', label: 'Threads', color: '#000000' },
   { id: 'line', label: 'LINE', color: '#06C755' },

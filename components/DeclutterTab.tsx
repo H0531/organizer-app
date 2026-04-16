@@ -198,6 +198,14 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       </div>
 
       <SaveBanner />
+      <button
+  onClick={() => shareToSocial('threads',
+    `今天完成斷捨離整理 🗂️\n✅ 留下 ${keepItems.length} 件　📦 送出 ${donateItems.length} 件　🗑 丟棄 ${tossItems.length} 件\n\n#斷捨離 #整理 #整理師`
+  )}
+  style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: '1px solid #000', background: 'white', color: '#000', fontSize: 14, cursor: 'pointer', marginBottom: 12, fontWeight: 500 }}
+>
+  分享整理結果到 Threads
+</button>
 
       {keepItems.length > 0 && (
         <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
