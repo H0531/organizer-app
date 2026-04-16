@@ -73,7 +73,7 @@ export default function Home() {
           <button key={t.id} onClick={() => handleTabChange(t.id)} style={{
             flex: 1, padding: '8px 4px 6px', border: 'none',
             background: 'transparent',
-            color: tab === t.id ? sg : mf,
+            color: tab === t.id ? sg : ml,
             fontSize: 10, cursor: 'pointer', fontWeight: tab === t.id ? 600 : 400,
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
             borderTop: tab === t.id ? `2px solid ${sg}` : '2px solid transparent',
