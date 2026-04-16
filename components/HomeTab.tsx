@@ -12,15 +12,12 @@ export default function HomeTab({ onNavigate }: { onNavigate: (t: Tab) => void }
     <div>
       {/* Hero */}
       <div style={{ marginBottom: 32 }}>
-        <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>人 × 物 × 空間 的對話</p>
+        <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>H 的收整沙龍</p>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 24, fontWeight: 700, color: ink, lineHeight: 1.5, marginBottom: 14 }}>
-          調整心情，安置物品，<br />享受空間──
+          調整心情，安置物品，享受空間──
         </h1>
         <p style={{ fontSize: 14, color: ml, lineHeight: 1.8, marginBottom: 20 }}>
-          24 小時陪伴你一起做整理的整理小幫手。
-        </p>
-        <p style={{ fontSize: 14, color: ml, lineHeight: 1.8 }}>
-          不需要一次整理整間房子。今天只整理書桌，明天只整理包包，每天 15 分鐘，三個月後你的生活會是另一個樣子。
+          我是 24 小時伴你左右的整理小幫手，<br />有我陪你，一起整理。
         </p>
       </div>
 
