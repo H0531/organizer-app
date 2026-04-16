@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
-type ChallengeMode = 30 | 60 | 100
+type ChallengeMode = 7 | 30 | 60 | 100
 type TossEntry = { day: number; item: string; origin: string; reason: string; feeling: string; date: string }
 
 // Fixed memorial templates
@@ -67,13 +67,13 @@ export default function ChallengeTab() {
       {!mode && (
         <div>
           <div style={{ fontSize: 14, color: ml, marginBottom: 16 }}>選擇挑戰長度：</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
-            {([30, 60, 100] as ChallengeMode[]).map(m => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 24 }}>
+            {([7, 30, 60, 100] as ChallengeMode[]).map(m => (
               <button key={m} onClick={() => setMode(m)} style={{ padding: '24px 12px', border: `1px solid ${bd}`, borderRadius: 12, background: ww, cursor: 'pointer', textAlign: 'center' }}>
                 <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 28, fontWeight: 700, color: sg, marginBottom: 4 }}>{m}</div>
                 <div style={{ fontSize: 13, color: ml }}>天挑戰</div>
                 <div style={{ fontSize: 11, color: mf, marginTop: 6 }}>
-                  {m === 30 ? '入門首選' : m === 60 ? '進階版本' : '終極挑戰'}
+                  {m === 7 ? '輕鬆入門' : m === 30 ? '入門首選' : m === 60 ? '進階版本' : '終極挑戰'}
                 </div>
               </button>
             ))}
@@ -160,19 +160,19 @@ export default function ChallengeTab() {
                 <div>
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: mf, marginBottom: 4 }}>物品名稱 *</div>
-                    <input value={fItem} onChange={e => setFItem(e.target.value)} placeholder="例：七年前買的馬克杯" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                    <input value={fItem} onChange={e => setFItem(e.target.value)} placeholder="例：七年前買的馬克杯" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
                   </div>
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: mf, marginBottom: 4 }}>它從哪裡來？（可略）</div>
-                    <input value={fOrigin} onChange={e => setFOrigin(e.target.value)} placeholder="例：大學時朋友送的、自己買的" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                    <input value={fOrigin} onChange={e => setFOrigin(e.target.value)} placeholder="例：大學時朋友送的、自己買的" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
                   </div>
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: mf, marginBottom: 4 }}>為什麼要放手？（可略）</div>
-                    <input value={fReason} onChange={e => setFReason(e.target.value)} placeholder="例：已經有新的替代品了" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                    <input value={fReason} onChange={e => setFReason(e.target.value)} placeholder="例：已經有新的替代品了" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
                   </div>
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 12, color: mf, marginBottom: 4 }}>放掉之後的感受？（可略）</div>
-                    <input value={fFeeling} onChange={e => setFFeeling(e.target.value)} placeholder="例：有點輕鬆，但也有點捨不得" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                    <input value={fFeeling} onChange={e => setFFeeling(e.target.value)} placeholder="例：有點輕鬆，但也有點捨不得" style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button onClick={submitEntry} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>打卡完成 ✓</button>
@@ -185,7 +185,7 @@ export default function ChallengeTab() {
             <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16, textAlign: 'center' }}>
               <div style={{ fontSize: 24, marginBottom: 4 }}>✅</div>
               <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: sg, marginBottom: 4 }}>今天已打卡！</div>
-              <div style={{ fontSize: 13, color: ml }}>明天再來 Day {currentDay + 1}</div>
+              <div style={{ fontSize: 13, color: ml }}>明天再來 Day {entries.length + 1}</div>
             </div>
           )}
 

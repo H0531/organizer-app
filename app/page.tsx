@@ -24,6 +24,11 @@ const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358'
 export default function Home() {
   const [tab, setTab] = useState<AppTab>('home')
 
+  const handleTabChange = (newTab: AppTab) => {
+    setTab(newTab)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   // Shared state: declutter records saved to member area
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
 
@@ -35,44 +40,49 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#F5F0E8', fontFamily: "'Noto Sans TC', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet" />
 
-      <nav style={{
+      {/* Top title bar */}
+      <div style={{
         background: '#FAF8F4', borderBottom: `1px solid ${bd}`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: 52,
+        justifyContent: 'center', height: 46,
         position: 'sticky', top: 0, zIndex: 100,
       }}>
-        <div style={{ fontFamily: "'Noto Serif TC', serif", fontWeight: 700, fontSize: 16, color: ink, flexShrink: 0 }}>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontWeight: 700, fontSize: 17, color: ink }}>
           整理<span style={{ color: sg }}>•</span>小幫手
         </div>
-        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: '5px 10px', borderRadius: 20, border: 'none',
-              background: tab === t.id ? ink : 'transparent',
-              color: tab === t.id ? '#FAF8F4' : ml,
-              fontSize: 12, cursor: 'pointer', fontWeight: tab === t.id ? 500 : 400,
-              display: 'flex', alignItems: 'center', gap: 3,
-            }}>
-              <span>{t.icon}</span>
-              <span className="nav-label">{t.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+      </div>
 
-      <style>{`
-        .nav-label { display: none; }
-        @media (min-width: 480px) { .nav-label { display: inline; } }
-      `}</style>
-
-      <div style={{ padding: '28px 20px', maxWidth: 760, margin: '0 auto' }}>
-        {tab === 'home'      && <HomeTab onNavigate={setTab} />}
+      {/* Main content */}
+      <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
+        {tab === 'home'      && <HomeTab onNavigate={handleTabChange} />}
         {tab === 'checklist' && <ChecklistTab />}
-        {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={() => setTab('member')} />}
+        {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={() => handleTabChange('member')} />}
         {tab === 'challenge' && <ChallengeTab />}
         {tab === 'recommend' && <RecommendTab />}
         {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} />}
       </div>
+
+      {/* Bottom navigation */}
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: '#FAF8F4', borderTop: `1px solid ${bd}`,
+        display: 'flex', zIndex: 100,
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => handleTabChange(t.id)} style={{
+            flex: 1, padding: '8px 4px 6px', border: 'none',
+            background: 'transparent',
+            color: tab === t.id ? sg : mf,
+            fontSize: 10, cursor: 'pointer', fontWeight: tab === t.id ? 600 : 400,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+            borderTop: tab === t.id ? `2px solid ${sg}` : '2px solid transparent',
+          }}>
+            <span style={{ fontSize: 18 }}>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

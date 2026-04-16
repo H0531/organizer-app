@@ -232,15 +232,48 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       {tossItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: ml, marginBottom: 4 }}>🗑 選丟 — {tossItems.length} 件</div>
-          <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>可選擇是否寫告別紀念文</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-            {tossItems.map(item => (
-              <span key={item.id} style={{ padding: '3px 10px', background: cr, borderRadius: 20, fontSize: 12, color: ink }}>{item.name}</span>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => startFlow('toss')} style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>寫告別紀念文 →</button>
-            <button onClick={() => setStage('tosslist')} style={{ padding: '8px 18px', borderRadius: 8, border: `1px solid ${bd}`, background: ww, color: ml, fontSize: 13, cursor: 'pointer' }}>查看丟棄列表</button>
+          <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>點選每件物品，選擇寫告別紀念或直接放手</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tossItems.map(item => {
+              const entry = tossEntries.find(e => e.id === item.id)
+              return (
+                <div key={item.id} style={{ background: cr, borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: entry?.memo || editTossId === item.id ? 8 : 0 }}>
+                    <span style={{ fontSize: 14, color: ink, fontWeight: 500 }}>{item.name}</span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {entry?.memo && !editTossId && (
+                        <button onClick={() => setShareTossEntry(entry)} style={{ fontSize: 12, color: 'white', background: sg, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontWeight: 500 }}>分享</button>
+                      )}
+                      <button onClick={() => { setEditTossId(item.id); setEditTossMemo(entry?.memo || '') }}
+                        style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>
+                        {entry?.memo ? '編輯' : '✍️ 寫紀念文'}
+                      </button>
+                      {!entry?.memo && (
+                        <button onClick={() => {
+                          setItems(prev => prev.map(x => x.id === item.id ? { ...x, tossMemo: '' } : x))
+                        }} style={{ fontSize: 12, color: mf, background: 'none', border: `1px solid ${bd}`, borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>直接放手</button>
+                      )}
+                    </div>
+                  </div>
+                  {editTossId === item.id ? (
+                    <div>
+                      <textarea value={editTossMemo} onChange={e => setEditTossMemo(e.target.value)}
+                        placeholder={`這是一件 ${item.name}。它曾陪伴過我…`}
+                        style={{ width: '100%', border: `1px solid ${sg}`, borderRadius: 8, padding: '8px 10px', fontSize: 13, color: ink, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', minHeight: 70 }} />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                        <button onClick={() => {
+                          const next = [...tossEntries.filter(e => e.id !== item.id), { id: item.id, name: item.name, memo: editTossMemo, date: new Date().toLocaleDateString('zh-TW') }]
+                          setTossEntries(next); setEditTossId(null)
+                        }} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存</button>
+                        <button onClick={() => setEditTossId(null)} style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
+                      </div>
+                    </div>
+                  ) : (
+                    entry?.memo && <p style={{ fontSize: 13, color: ml, margin: 0, lineHeight: 1.7 }}>{entry.memo}</p>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

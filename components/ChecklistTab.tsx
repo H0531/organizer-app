@@ -160,7 +160,7 @@ export default function ChecklistTab() {
 
   const saveLog = () => {
     if (!canSave) return
-    const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}，打勾 ${done}/${total} 項。`
+    const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
     const entry: LogEntry = {
       id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
       space: SN[space], note: note.trim() || defaultNote,
@@ -186,6 +186,36 @@ export default function ChecklistTab() {
   const deleteLog = (id: string) => { setLogs(logs.filter(l => l.id !== id)); setConfirmDeleteId(null); if (shareEntry?.id === id) setShareEntry(null) }
 
   const shareText = (e: LogEntry) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
+
+  const shareCardRef = useRef<HTMLDivElement>(null)
+
+  const captureAndShare = async (entry: LogEntry) => {
+    if (!shareCardRef.current) return
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(shareCardRef.current, {
+        useCORS: true,
+        backgroundColor: '#FAF8F4',
+        scale: 2,
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'organizer-diary.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text: shareText(entry) })
+        } else {
+          // Fallback: download the image
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = 'organizer-diary.png'; a.click()
+          URL.revokeObjectURL(url)
+        }
+      }, 'image/png')
+    } catch (err) {
+      console.error('截圖失敗', err)
+      shareToSocial('copy', shareText(entry))
+    }
+  }
 
   // ══════════════════════════════════════
   // PAGE 1
@@ -439,44 +469,55 @@ export default function ChecklistTab() {
       {shareEntry && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.52)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 2 }}>{shareEntry.space}整理紀錄</div>
-            <div style={{ fontSize: 12, color: mf, marginBottom: 20 }}>{shareEntry.date} · 用時 {fmtMins(shareEntry.duration)}</div>
 
-            {shareEntry.beforePhotos.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
-                  <div style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 800, color: '#7A6A50', background: '#EDE2CC', padding: '4px 14px', borderRadius: 30, border: '1px solid #CDB98A' }}>BEFORE</div>
-                  <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {shareEntry.beforePhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.beforePhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, filter: 'grayscale(10%)' }} />)}
-                </div>
-              </div>
-            )}
-            {shareEntry.afterPhotos.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
-                  <div style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 800, color: '#2E6B50', background: '#E0F0E8', padding: '4px 14px', borderRadius: 30, border: `1.5px solid ${sg}` }}>AFTER</div>
-                  <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {shareEntry.afterPhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.afterPhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, border: `2px solid ${sg}` }} />)}
-                </div>
-              </div>
-            )}
+            {/* Shareable card — this gets captured */}
+            <div ref={shareCardRef} style={{ background: ww, borderRadius: 12, padding: '20px 20px 16px' }}>
+              <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 2 }}>{shareEntry.space}整理紀錄</div>
+              <div style={{ fontSize: 12, color: mf, marginBottom: 16 }}>{shareEntry.date} · 用時 {fmtMins(shareEntry.duration)}</div>
 
-            {shareEntry.note && <div style={{ background: cr, borderRadius: 10, padding: '14px 16px', marginBottom: 20, fontSize: 14, color: ink, lineHeight: 1.8 }}>{shareEntry.note}</div>}
-            <div style={{ background: '#F5F0E8', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: ml, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{shareText(shareEntry)}</div>
+              {shareEntry.beforePhotos.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
+                    <div style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 800, color: '#7A6A50', background: '#EDE2CC', padding: '4px 14px', borderRadius: 30, border: '1px solid #CDB98A' }}>BEFORE</div>
+                    <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {shareEntry.beforePhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.beforePhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, filter: 'grayscale(10%)' }} />)}
+                  </div>
+                </div>
+              )}
+              {shareEntry.afterPhotos.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
+                    <div style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 800, color: '#2E6B50', background: '#E0F0E8', padding: '4px 14px', borderRadius: 30, border: `1.5px solid ${sg}` }}>AFTER</div>
+                    <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {shareEntry.afterPhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.afterPhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, border: `2px solid ${sg}` }} />)}
+                  </div>
+                </div>
+              )}
 
-            {SHARE_BTNS.map(p => (
-              <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry))}
-                style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', marginBottom: 8, fontWeight: 500 }}>
-                {p.label}
+              {shareEntry.note && <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 12, fontSize: 13, color: ink, lineHeight: 1.8 }}>{shareEntry.note}</div>}
+              <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #生活整理</div>
+            </div>
+
+            {/* Share actions */}
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button onClick={() => captureAndShare(shareEntry)}
+                style={{ display: 'block', width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+                📸 儲存 / 分享圖片
               </button>
-            ))}
-            <button onClick={() => setShareEntry(null)} style={{ width: '100%', marginTop: 4, padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
+              {SHARE_BTNS.map(p => (
+                <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry))}
+                  style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+                  {p.label}（純文字）
+                </button>
+              ))}
+              <button onClick={() => setShareEntry(null)} style={{ width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
+            </div>
           </div>
         </div>
       )}
