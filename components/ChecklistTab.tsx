@@ -172,7 +172,7 @@ export default function ChecklistTab() {
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: SP[space].items.map(() => false) })
     setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
-    setPage(3)
+    setPage(3); window.scrollTo(0, 0); window.scrollTo(0, 0)
   }
 
   const validateAndSaveCal = () => {
@@ -403,7 +403,7 @@ export default function ChecklistTab() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
         <button onClick={() => setPage(1)} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 新的整理</button>
-        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>打卡日記</h1>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>整理完成清單</h1>
         <div style={{ fontSize: 13, color: mf }}>{logs.length} 筆</div>
       </div>
       <PageDots page={3} />
