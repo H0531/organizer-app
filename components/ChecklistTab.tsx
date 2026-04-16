@@ -1,42 +1,30 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { SHARE_BTNS, shareToSocial } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
 const SP: Record<string, { label: string; items: { text: string; badge?: string }[] }> = {
-  desk: { label: '書桌整理清單', items: [{ text: '清空桌面所有物品', badge: '必做' }, { text: '分類文件文具雜物' }, { text: '丟棄過期收據廢紙' }, { text: '文具只留常用3支筆' }, { text: '電線整理貼上標籤' }, { text: '桌面只留今日必要物品' }] },
+  desk:     { label: '書桌整理清單', items: [{ text: '清空桌面所有物品', badge: '必做' }, { text: '分類文件文具雜物' }, { text: '丟棄過期收據廢紙' }, { text: '文具只留常用3支筆' }, { text: '電線整理貼上標籤' }, { text: '桌面只留今日必要物品' }] },
   wardrobe: { label: '衣櫃整理清單', items: [{ text: '全部衣物取出攤開', badge: '必做' }, { text: '依類型分堆上衣褲外套' }, { text: '超過一年未穿考慮送出' }, { text: '破損變形衣物直接淘汰' }, { text: '常穿放前方少穿放後方' }, { text: '折疊統一方式直立收納' }] },
-  kitchen: { label: '廚房整理清單', items: [{ text: '清查過期食品與調味料', badge: '必做' }, { text: '餐具統計過多的送出' }, { text: '常用鍋具放瓦斯爐旁' }, { text: '塑膠袋只留10個' }, { text: '清潔用品集中一區' }, { text: '冰箱門背貼購物清單欄' }] },
+  kitchen:  { label: '廚房整理清單', items: [{ text: '清查過期食品與調味料', badge: '必做' }, { text: '餐具統計過多的送出' }, { text: '常用鍋具放瓦斯爐旁' }, { text: '塑膠袋只留10個' }, { text: '清潔用品集中一區' }, { text: '冰箱門背貼購物清單欄' }] },
   bathroom: { label: '浴室整理清單', items: [{ text: '清查過期保養品藥品', badge: '必做' }, { text: '只留1套備用備品' }, { text: '毛巾超過3條斷捨離' }, { text: '瓶瓶罐罐整理到收納架' }, { text: '清除水垢黴菌' }, { text: '放一個小香氛提升儀式感' }] },
-  bag: { label: '包包整理清單', items: [{ text: '倒出所有東西', badge: '必做' }, { text: '丟棄發票廢紙屑' }, { text: '零錢集中到錢包' }, { text: '超過3個購物袋只留一個' }, { text: '藥品確認是否過期' }, { text: '常用物品分區放小包' }] },
-  digital: { label: '數位整理清單', items: [{ text: '截圖資料夾整理或刪除', badge: '必做' }, { text: '手機App超過3頁刪一輪' }, { text: '相簿備份到雲端' }, { text: '訂閱email取消不需要的' }, { text: '桌面資料夾分類命名' }, { text: '清除瀏覽器書籤' }] },
+  bag:      { label: '包包整理清單', items: [{ text: '倒出所有東西', badge: '必做' }, { text: '丟棄發票廢紙屑' }, { text: '零錢集中到錢包' }, { text: '超過3個購物袋只留一個' }, { text: '藥品確認是否過期' }, { text: '常用物品分區放小包' }] },
+  digital:  { label: '數位整理清單', items: [{ text: '截圖資料夾整理或刪除', badge: '必做' }, { text: '手機App超過3頁刪一輪' }, { text: '相簿備份到雲端' }, { text: '訂閱email取消不需要的' }, { text: '桌面資料夾分類命名' }, { text: '清除瀏覽器書籤' }] },
 }
 const SI: Record<string, string> = { desk: '🗂', wardrobe: '👕', kitchen: '🍳', bathroom: '🪥', bag: '👜', digital: '📱' }
 const SN: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen: '廚房', bathroom: '浴室', bag: '包包', digital: '數位' }
+
 const PRESET_MINS = [10, 30, 60, 90, 120]
 const MAX_PHOTOS = 5
 
 type PhotoSet = string[]
-type LogEntry = {
-  id: string; date: string; space: string; note: string
-  beforePhotos: PhotoSet; afterPhotos: PhotoSet
-  duration: number; targetMinutes: number
-}
+type LogEntry = { id: string; date: string; space: string; note: string; beforePhotos: PhotoSet; afterPhotos: PhotoSet; duration: number; targetMinutes: number }
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
 const fmtSecs = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
-const todayStr = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-const nowTimeStr = () => {
-  const d = new Date()
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-// ─── Photo Strip ─────────────────────────────────────────────────────────────
 function PhotoStrip({ photos, onAdd, onRemove, skipped, onSkip, label, color }: {
   photos: string[]; onAdd: (f: FileList) => void; onRemove: (i: number) => void
   skipped: boolean; onSkip: () => void; label: string; color: string
@@ -76,15 +64,16 @@ function PhotoStrip({ photos, onAdd, onRemove, skipped, onSkip, label, color }: 
               ))}
             </div>
           )}
-          {photos.length < MAX_PHOTOS && (
+          {photos.length < MAX_PHOTOS ? (
             <>
               <button onClick={() => ref.current?.click()} style={{ padding: '7px 16px', border: `1px dashed ${color}`, borderRadius: 8, background: 'white', color: color, cursor: 'pointer', fontSize: 13 }}>
                 ＋ 上傳照片{photos.length > 0 ? `（${photos.length}/${MAX_PHOTOS}）` : ''}
               </button>
               <input ref={ref} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => e.target.files && onAdd(e.target.files)} />
             </>
+          ) : (
+            <div style={{ fontSize: 12, color: mf }}>已達上限（{MAX_PHOTOS} 張）</div>
           )}
-          {photos.length >= MAX_PHOTOS && <div style={{ fontSize: 12, color: mf }}>已達上限（{MAX_PHOTOS} 張）</div>}
         </>
       )}
     </div>
@@ -99,77 +88,49 @@ function PageDots({ page }: { page: number }) {
   )
 }
 
-// ─── Share helpers ────────────────────────────────────────────────────────────
-function shareToSocial(platform: string, text: string, url: string) {
-  const enc = encodeURIComponent
-  if (platform === 'copy') { navigator.clipboard.writeText(text + '\n' + url); alert('已複製！') }
-  else if (platform === 'line') window.open(`https://social-plugins.line.me/lineit/share?url=${enc(url)}&text=${enc(text)}`)
-  else if (platform === 'threads') window.open(`https://www.threads.net/intent/post?text=${enc(text + '\n' + url)}`)
-  else if (platform === 'fb') window.open(`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}&quote=${enc(text)}`)
-  else if (platform === 'ig') window.open('https://www.instagram.com/')
-}
-
-const SHARE_BTNS = [
-  { id: 'threads', label: '分享到 Threads', color: '#000' },
-  { id: 'line', label: '分享到 LINE', color: '#00B900' },
-  { id: 'fb', label: '分享到 Facebook', color: '#1877F2' },
-  { id: 'ig', label: '開啟 Instagram（手動貼文）', color: '#C13584' },
-  { id: 'copy', label: '複製文字', color: ml },
-]
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function ChecklistTab() {
   const [page, setPage] = useState<1 | 2 | 3>(1)
   const [space, setSpace] = useState('desk')
   const [checked, setChecked] = useState<Record<string, boolean[]>>({})
 
-  // Photos
   const [beforePhotos, setBeforePhotos] = useState<PhotoSet>([])
-  const [afterPhotos, setAfterPhotos] = useState<PhotoSet>([])
+  const [afterPhotos, setAfterPhotos]   = useState<PhotoSet>([])
   const [skipBefore, setSkipBefore] = useState(false)
-  const [skipAfter, setSkipAfter] = useState(false)
+  const [skipAfter,  setSkipAfter]  = useState(false)
 
-  // Timer
   const [targetMins, setTargetMins] = useState(30)
   const [customMins, setCustomMins] = useState('')
-  const [useCustom, setUseCustom] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(0)
+  const [useCustom,  setUseCustom]  = useState(false)
+  const [timeLeft,   setTimeLeft]   = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
-  const [timerDone, setTimerDone] = useState(false)
-  const [elapsedSecs, setElapsedSecs] = useState(0)
+  const [timerDone,    setTimerDone]    = useState(false)
+  const [elapsedSecs,  setElapsedSecs]  = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Note
   const [note, setNote] = useState('')
 
-  // Calendar
   const [showCalModal, setShowCalModal] = useState(false)
-  const [calDate, setCalDate] = useState('')
-  const [calTime, setCalTime] = useState('')
+  const [calDate,      setCalDate]      = useState('')
+  const [calTime,      setCalTime]      = useState('')
   const [calConnected, setCalConnected] = useState(false)
-  const [calLoading, setCalLoading] = useState(false)
-  const [calSaved, setCalSaved] = useState(false)
-  const [calError, setCalError] = useState('')
+  const [calLoading,   setCalLoading]   = useState(false)
+  const [calSaved,     setCalSaved]     = useState(false)
+  const [calError,     setCalError]     = useState('')
 
-  // Diary
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [shareEntry, setShareEntry] = useState<LogEntry | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editNote, setEditNote] = useState('')
+  const [logs,            setLogs]            = useState<LogEntry[]>([])
+  const [shareEntry,      setShareEntry]      = useState<LogEntry | null>(null)
+  const [editingId,       setEditingId]       = useState<string | null>(null)
+  const [editNote,        setEditNote]        = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
-  const totalSecs = effectiveMins * 60
+  const totalSecs     = effectiveMins * 60
+  const beforeReady   = skipBefore || beforePhotos.length > 0
+  const afterReady    = skipAfter  || afterPhotos.length > 0
 
-  // Validation: before photo done = has photos OR skipped
-  const beforeReady = skipBefore || beforePhotos.length > 0
-  // After photo done = has photos OR skipped
-  const afterReady = skipAfter || afterPhotos.length > 0
-
-  // Page 2 save: all checklist done AND after photo ready
   const getC = () => checked[space] || SP[space].items.map(() => false)
   const toggleC = (i: number) => { const c = getC(); const n = [...c]; n[i] = !n[i]; setChecked({ ...checked, [space]: n }) }
-  const done = getC().filter(Boolean).length
+  const done  = getC().filter(Boolean).length
   const total = SP[space].items.length
   const checklistDone = done === total
   const canSave = checklistDone && afterReady
@@ -204,7 +165,7 @@ export default function ChecklistTab() {
       id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
       space: SN[space], note: note.trim() || defaultNote,
       beforePhotos: skipBefore ? [] : beforePhotos,
-      afterPhotos: skipAfter ? [] : afterPhotos,
+      afterPhotos:  skipAfter  ? [] : afterPhotos,
       duration: elapsedSecs, targetMinutes: effectiveMins,
     }
     setLogs([entry, ...logs])
@@ -214,32 +175,27 @@ export default function ChecklistTab() {
     setPage(3)
   }
 
-  // Calendar validation: must be future datetime
   const validateAndSaveCal = () => {
     setCalError('')
     if (!calDate || !calTime) { setCalError('請選擇日期和時間'); return }
-    const selected = new Date(`${calDate}T${calTime}`)
-    if (selected <= new Date()) { setCalError('請選擇當下之後的時間'); return }
-    setCalSaved(true)
-    setShowCalModal(false)
+    if (new Date(`${calDate}T${calTime}`) <= new Date()) { setCalError('請選擇當下之後的時間'); return }
+    setCalSaved(true); setShowCalModal(false)
   }
 
   const saveEdit = () => { setLogs(logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)); setEditingId(null) }
   const deleteLog = (id: string) => { setLogs(logs.filter(l => l.id !== id)); setConfirmDeleteId(null); if (shareEntry?.id === id) setShareEntry(null) }
 
   const shareText = (e: LogEntry) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
-  const siteUrl = typeof window !== 'undefined' ? window.location.href : 'https://organizer.app'
 
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════
   // PAGE 1
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════
   if (page === 1) return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>今天整理哪裡？</h1>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>選空間、拍整理前照片、設好時間，再開始</p>
       <PageDots page={1} />
 
-      {/* 空間 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
         {Object.keys(SP).map(k => (
           <button key={k} onClick={() => setSpace(k)} style={{ padding: '14px 10px', border: space === k ? `2px solid ${sg}` : `1px solid ${bd}`, borderRadius: 10, background: space === k ? '#EAF2EE' : ww, cursor: 'pointer', textAlign: 'center' }}>
@@ -249,15 +205,12 @@ export default function ChecklistTab() {
         ))}
       </div>
 
-      {/* Before photos */}
       <div style={{ background: ww, border: `1px solid ${beforeReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <PhotoStrip photos={beforePhotos} onAdd={f => addPhotos('before', f)} onRemove={i => removePhoto('before', i)}
-          skipped={skipBefore} onSkip={() => { setSkipBefore(s => !s); setBeforePhotos([]) }}
-          label="📷 整理前照片" color={mf} />
+          skipped={skipBefore} onSkip={() => { setSkipBefore(s => !s); setBeforePhotos([]) }} label="📷 整理前照片" color={mf} />
         {!beforeReady && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 8 }}>請上傳照片或選擇「不上傳照片」才能繼續</div>}
       </div>
 
-      {/* Timer */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>⏱ 設定整理時間</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -278,7 +231,6 @@ export default function ChecklistTab() {
         <div style={{ fontSize: 12, color: mf, marginTop: 6 }}>已設定：<strong style={{ color: ink }}>{effectiveMins} 分鐘</strong></div>
       </div>
 
-      {/* Calendar */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 8 }}>📅 提前安排整理時間</div>
         <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>排進行事曆後，前一天會收到通知提醒</div>
@@ -294,13 +246,11 @@ export default function ChecklistTab() {
         )}
       </div>
 
-      {/* Start button — disabled if not ready */}
       <button onClick={startTimer} disabled={!beforeReady}
         style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: beforeReady ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: beforeReady ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
         {beforeReady ? '開始整理 ▶' : '請先處理整理前照片'}
       </button>
 
-      {/* Cal Modal */}
       {showCalModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 28, maxWidth: 380, width: '100%' }}>
@@ -338,9 +288,9 @@ export default function ChecklistTab() {
     </div>
   )
 
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════
   // PAGE 2
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════
   if (page === 2) return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
@@ -349,7 +299,6 @@ export default function ChecklistTab() {
       </div>
       <PageDots page={2} />
 
-      {/* Countdown ring */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center' }}>
         <div style={{ position: 'relative', width: 130, height: 130, margin: '0 auto 12px' }}>
           <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: 'rotate(-90deg)' }}>
@@ -375,7 +324,6 @@ export default function ChecklistTab() {
         )}
       </div>
 
-      {/* Checklist */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>{SP[space].label}</div>
         {SP[space].items.map((item, i) => (
@@ -393,11 +341,9 @@ export default function ChecklistTab() {
         <div style={{ fontSize: 12, color: mf, marginTop: 6, textAlign: 'right' }}>{done} / {total} 完成</div>
       </div>
 
-      {/* After photos + note */}
       <div style={{ background: ww, border: `1px solid ${afterReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <PhotoStrip photos={afterPhotos} onAdd={f => addPhotos('after', f)} onRemove={i => removePhoto('after', i)}
-          skipped={skipAfter} onSkip={() => { setSkipAfter(s => !s); setAfterPhotos([]) }}
-          label="📷 整理後照片" color={sg} />
+          skipped={skipAfter} onSkip={() => { setSkipAfter(s => !s); setAfterPhotos([]) }} label="📷 整理後照片" color={sg} />
         {!afterReady && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 6 }}>請上傳照片或選擇「不上傳照片」才能儲存</div>}
         <div style={{ height: 1, background: cr, margin: '16px 0' }} />
         <div style={{ fontSize: 13, color: ml, marginBottom: 4, fontWeight: 500 }}>📝 整理紀錄（可略過）</div>
@@ -408,7 +354,6 @@ export default function ChecklistTab() {
           style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 80, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
       </div>
 
-      {/* Save — show what's blocking */}
       {!canSave && (
         <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 8, padding: '8px 12px', background: '#FDF5F0', borderRadius: 8, border: '1px solid #E8B89A' }}>
           儲存前需完成：{!checklistDone && `整理清單（還有 ${total - done} 項）`}{!checklistDone && !afterReady && '、'}{!afterReady && '整理後照片（上傳或選擇不上傳）'}
@@ -421,9 +366,9 @@ export default function ChecklistTab() {
     </div>
   )
 
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════
   // PAGE 3
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
@@ -448,7 +393,6 @@ export default function ChecklistTab() {
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               <span style={{ fontSize: 12, color: mf, alignSelf: 'center' }}>{fmtMins(entry.duration)}</span>
-              {/* 檢視 button */}
               <button onClick={() => setShareEntry(entry)} style={{ fontSize: 12, color: 'white', background: sg, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontWeight: 500 }}>檢視</button>
               <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }} style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>編輯</button>
               <button onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: '1px solid #C47B5A', borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>刪除</button>
@@ -481,7 +425,7 @@ export default function ChecklistTab() {
                   <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(122,158,138,0.85)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>A</span>
                 </div>
               ))}
-              {entry.beforePhotos.length + entry.afterPhotos.length > 4 && (
+              {(entry.beforePhotos.length + entry.afterPhotos.length > 4) && (
                 <div style={{ width: 64, height: 48, borderRadius: 6, background: cr, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: mf }}>
                   +{entry.beforePhotos.length + entry.afterPhotos.length - 4}
                 </div>
@@ -524,11 +468,10 @@ export default function ChecklistTab() {
             )}
 
             {shareEntry.note && <div style={{ background: cr, borderRadius: 10, padding: '14px 16px', marginBottom: 20, fontSize: 14, color: ink, lineHeight: 1.8 }}>{shareEntry.note}</div>}
-
             <div style={{ background: '#F5F0E8', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: ml, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{shareText(shareEntry)}</div>
 
             {SHARE_BTNS.map(p => (
-              <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry), siteUrl)}
+              <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry))}
                 style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', marginBottom: 8, fontWeight: 500 }}>
                 {p.label}
               </button>
@@ -538,7 +481,6 @@ export default function ChecklistTab() {
         </div>
       )}
 
-      {/* Delete confirm */}
       {confirmDeleteId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: ww, borderRadius: 14, padding: 28, maxWidth: 320, width: '100%' }}>
