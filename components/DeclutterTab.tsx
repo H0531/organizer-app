@@ -29,6 +29,9 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   // Donate flow
   const [donateDate, setDonateDate] = useState('')
   const [donateCalAdded, setDonateCalAdded] = useState(false)
+  // Per-item donate dates (review page list mode)
+  const [donateDates, setDonateDates] = useState<Record<string, string>>({})
+  const [donateCalItems, setDonateCalItems] = useState<Set<string>>(new Set())
   // Toss flow
   const [tossWrite, setTossWrite] = useState(false)
   const [tossMemo, setTossMemo] = useState('')
@@ -129,10 +132,10 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>新增物品</div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          <input style={{ flex: 1, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, background: 'white', color: ink, outline: 'none' }}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center' }}>
+          <input style={{ flex: 1, minWidth: 0, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, background: 'white', color: ink, outline: 'none' }}
             value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="例：三年沒穿的外套" />
-          <button style={{ padding: '10px 18px', borderRadius: 8, border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500, background: ink, color: 'white' }} onClick={() => addItem()}>加入</button>
+          <button style={{ flexShrink: 0, padding: '10px 18px', borderRadius: 8, border: 'none', fontSize: 14, cursor: 'pointer', fontWeight: 500, background: ink, color: 'white' }} onClick={() => addItem()}>加入</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: mf }}>快速加：</span>
@@ -148,7 +151,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
           {items.map(item => (
             <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: `1px solid ${cr}`, gap: 12 }}>
               <span style={{ fontSize: 14, flex: 1, color: ink }}>{item.name}</span>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {(['keep', 'donate', 'toss'] as const).map(d => {
                   const ac = item.decision === d
                   const col = d === 'keep' ? sg : d === 'donate' ? '#C47B5A' : mf
@@ -158,6 +161,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
                     </button>
                   )
                 })}
+                <button onClick={() => setItems(prev => prev.filter(x => x.id !== item.id))}
+                  style={{ padding: '4px 8px', borderRadius: 20, border: `1px solid ${bd}`, background: 'white', color: mf, fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>✕</button>
               </div>
             </div>
           ))}
@@ -225,15 +230,38 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       {donateItems.length > 0 && (
         <div style={{ background: '#FDF5F0', border: '1px solid #C47B5A', borderRadius: 12, padding: '20px 24px', marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#C47B5A', marginBottom: 4 }}>📦 選送 — {donateItems.length} 件</div>
-          <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>設定送出日，加入行事曆提醒</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-            {donateItems.map(item => (
-              <span key={item.id} style={{ padding: '3px 10px', background: 'white', borderRadius: 20, fontSize: 12, color: ink }}>
-                {item.name}{item.disposeDate ? ` · ${item.disposeDate}` : ''}
-              </span>
-            ))}
+          <div style={{ fontSize: 13, color: ml, marginBottom: 14 }}>可自行決定是否為每件設定送出日或加入提醒</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {donateItems.map(item => {
+              const dateVal = donateDates[item.id] || ''
+              const calAdded = donateCalItems.has(item.id)
+              return (
+                <div key={item.id} style={{ background: 'white', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 14, color: ink, fontWeight: 500, marginBottom: 10 }}>{item.name}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input type="date" value={dateVal} min={todayStr()}
+                      onChange={e => {
+                        const d = e.target.value
+                        setDonateDates(prev => ({ ...prev, [item.id]: d }))
+                        setItems(prev => prev.map(x => x.id === item.id ? { ...x, disposeDate: d } : x))
+                      }}
+                      style={{ border: `1px solid ${bd}`, borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', color: ink, background: 'white', cursor: 'pointer' }} />
+                    {dateVal && !calAdded && (
+                      <button onClick={() => {
+                        setDonateCalItems(prev => new Set([...prev, item.id]))
+                        alert(`✅ 已設定提醒：${dateVal}\n（部署後需完成 Google Calendar API 串接）`)
+                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid #4285F4', background: 'white', color: '#4285F4', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        📅 加入提醒
+                      </button>
+                    )}
+                    {calAdded && (
+                      <span style={{ fontSize: 12, color: sg, padding: '6px 10px', background: '#EAF2EE', borderRadius: 8 }}>✅ 已加入行事曆</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          <button onClick={() => startFlow('donate')} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#C47B5A', color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>設定送出日 →</button>
         </div>
       )}
 
@@ -250,7 +278,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
                     <span style={{ fontSize: 14, color: ink, fontWeight: 500 }}>{item.name}</span>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {entry?.memo && !editTossId && (
-                        <button onClick={() => setShareTossEntry(entry)} style={{ fontSize: 12, color: 'white', background: sg, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontWeight: 500 }}>分享</button>
+                        <button onClick={() => shareToSocial('threads', `我放手了一件「${item.name}」。\n${entry.memo}\n\n#斷捨離 #整理小幫手`)}
+                          style={{ fontSize: 12, color: 'white', background: '#000', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontWeight: 500 }}>分享到 Threads</button>
                       )}
                       <button onClick={() => { setEditTossId(item.id); setEditTossMemo(entry?.memo || '') }}
                         style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>
