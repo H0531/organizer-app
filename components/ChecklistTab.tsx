@@ -17,6 +17,7 @@ const SN: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen
 
 const PRESET_MINS = [10, 30, 60, 90, 120]
 const MAX_PHOTOS = 5
+const LOGS_KEY = 'checklist_logs'
 
 type PhotoSet = string[]
 type LogEntry = { id: string; date: string; space: string; note: string; beforePhotos: PhotoSet; afterPhotos: PhotoSet; duration: number; targetMinutes: number }
@@ -24,6 +25,43 @@ type LogEntry = { id: string; date: string; space: string; note: string; beforeP
 const fmtSecs = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+
+// 產生 .ics 檔案內容
+function generateIcs(date: string, time: string, spaceName: string, durationMins: number): string {
+  const start = new Date(`${date}T${time}`)
+  const end = new Date(start.getTime() + durationMins * 60 * 1000)
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  const uid = `organizer-${Date.now()}@organizer-app`
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//整理小幫手//ZH',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${fmt(new Date())}`,
+    `DTSTART:${fmt(start)}`,
+    `DTEND:${fmt(end)}`,
+    `SUMMARY:整理${spaceName} — 整理小幫手`,
+    'DESCRIPTION:整理小幫手提醒：今天要整理了！',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT1D',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:明天要整理囉！',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n')
+}
+
+function downloadIcs(icsContent: string) {
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'organizer-schedule.ics'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function PhotoStrip({ photos, onAdd, onRemove, skipped, onSkip, label, color }: {
   photos: string[]; onAdd: (f: FileList) => void; onRemove: (i: number) => void
@@ -112,8 +150,6 @@ export default function ChecklistTab() {
   const [showCalModal, setShowCalModal] = useState(false)
   const [calDate,      setCalDate]      = useState('')
   const [calTime,      setCalTime]      = useState('')
-  const [calConnected, setCalConnected] = useState(false)
-  const [calLoading,   setCalLoading]   = useState(false)
   const [calSaved,     setCalSaved]     = useState(false)
   const [calError,     setCalError]     = useState('')
 
@@ -122,6 +158,22 @@ export default function ChecklistTab() {
   const [editingId,       setEditingId]       = useState<string | null>(null)
   const [editNote,        setEditNote]        = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // 載入 localStorage logs
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOGS_KEY)
+      if (saved) setLogs(JSON.parse(saved))
+    } catch { /* ignore */ }
+  }, [])
+
+  // 儲存 logs 到 localStorage（排除照片以免超出容量限制）
+  useEffect(() => {
+    try {
+      const toSave = logs.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] }))
+      localStorage.setItem(LOGS_KEY, JSON.stringify(toSave))
+    } catch { /* ignore */ }
+  }, [logs])
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
   const totalSecs     = effectiveMins * 60
@@ -168,18 +220,22 @@ export default function ChecklistTab() {
       afterPhotos:  skipAfter  ? [] : afterPhotos,
       duration: elapsedSecs, targetMinutes: effectiveMins,
     }
-    setLogs([entry, ...logs])
+    setLogs(prev => [entry, ...prev])
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: SP[space].items.map(() => false) })
     setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
     setPage(3); window.scrollTo(0, 0)
   }
 
-  const validateAndSaveCal = () => {
+  // 產生 .ics 並下載
+  const validateAndDownloadIcs = () => {
     setCalError('')
     if (!calDate || !calTime) { setCalError('請選擇日期和時間'); return }
     if (new Date(`${calDate}T${calTime}`) <= new Date()) { setCalError('請選擇當下之後的時間'); return }
-    setCalSaved(true); setShowCalModal(false)
+    const ics = generateIcs(calDate, calTime, SN[space], effectiveMins)
+    downloadIcs(ics)
+    setCalSaved(true)
+    setShowCalModal(false)
   }
 
   const saveEdit = () => { setLogs(logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)); setEditingId(null) }
@@ -262,7 +318,7 @@ export default function ChecklistTab() {
 
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 8 }}>📅 提前安排整理時間</div>
-        <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>排進行事曆後，前一天會收到通知提醒</div>
+        <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>選好日期時間，下載行事曆檔案加入手機行事曆</div>
         {calSaved ? (
           <div style={{ padding: '10px 14px', borderRadius: 8, background: '#EAF2EE', color: '#2E6B50', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>✅ 已排程：{calDate} {calTime}</span>
@@ -270,7 +326,7 @@ export default function ChecklistTab() {
           </div>
         ) : (
           <button onClick={() => setShowCalModal(true)} style={{ padding: '9px 18px', border: '1.5px solid #4285F4', borderRadius: 8, background: 'white', color: '#4285F4', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-            加入 Google 行事曆
+            📅 加入行事曆
           </button>
         )}
       </div>
@@ -283,33 +339,22 @@ export default function ChecklistTab() {
       {showCalModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 28, maxWidth: 380, width: '100%' }}>
-            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 6 }}>加入 Google 行事曆</div>
-            <p style={{ fontSize: 13, color: ml, marginBottom: 20, lineHeight: 1.6 }}>設定整理日期與時間，前一天會傳送提醒通知</p>
-            {!calConnected ? (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: ink, marginBottom: 16 }}>需要先授權 Google 帳號</div>
-                <button onClick={() => { setCalLoading(true); setTimeout(() => { setCalLoading(false); setCalConnected(true) }, 1400) }} disabled={calLoading}
-                  style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#4285F4', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                  {calLoading ? '連結中…' : '🔗 連結 Google 帳號'}
-                </button>
-                <div style={{ fontSize: 11, color: mf, marginTop: 8 }}>（部署後需完成 OAuth 設定）</div>
-              </div>
-            ) : (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, color: ink, marginBottom: 6, fontWeight: 500 }}>整理日期</div>
-                  <input type="date" value={calDate} min={todayStr()} onChange={e => setCalDate(e.target.value)}
-                    style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 13, color: ink, marginBottom: 6, fontWeight: 500 }}>開始時間</div>
-                  <input type="time" value={calTime} onChange={e => setCalTime(e.target.value)}
-                    style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
-                </div>
-                {calError && <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 10 }}>⚠️ {calError}</div>}
-                <button onClick={validateAndSaveCal} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>確認排程</button>
-              </>
-            )}
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 6 }}>加入行事曆</div>
+            <p style={{ fontSize: 13, color: ml, marginBottom: 20, lineHeight: 1.6 }}>設定日期與時間，下載 .ics 檔案後點開即可加入手機行事曆，系統會在前一天發出提醒</p>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 13, color: ink, marginBottom: 6, fontWeight: 500 }}>整理日期</div>
+              <input type="date" value={calDate} min={todayStr()} onChange={e => setCalDate(e.target.value)}
+                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: ink, marginBottom: 6, fontWeight: 500 }}>開始時間</div>
+              <input type="time" value={calTime} onChange={e => setCalTime(e.target.value)}
+                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
+            </div>
+            {calError && <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 10 }}>⚠️ {calError}</div>}
+            <button onClick={validateAndDownloadIcs} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+              📥 下載行事曆檔案
+            </button>
             <button onClick={() => { setShowCalModal(false); setCalError('') }} style={{ width: '100%', marginTop: 10, padding: '8px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>取消</button>
           </div>
         </div>
@@ -416,14 +461,12 @@ export default function ChecklistTab() {
       ) : logs.map(entry => (
         <div key={entry.id} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
 
-          {/* 標題列：空間名稱 + 日期 + 時間 */}
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: ink }}>{entry.space}整理</span>
               <span style={{ fontSize: 12, color: mf }}>{entry.date}</span>
               <span style={{ fontSize: 12, color: mf }}>· {fmtMins(entry.duration)}</span>
             </div>
-            {/* 按鈕列：三個等寬按鈕 */}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShareEntry(entry)}
                 style={{ flex: 1, fontSize: 13, color: 'white', background: sg, border: 'none', borderRadius: 8, cursor: 'pointer', padding: '8px 0', fontWeight: 500 }}>
