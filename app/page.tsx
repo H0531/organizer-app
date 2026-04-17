@@ -29,7 +29,6 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Shared state: declutter records saved to member area
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
 
   const handleDeclutterSave = (record: DeclutterRecord) => {
@@ -71,12 +70,22 @@ export default function Home() {
       }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => handleTabChange(t.id)} style={{
-            flex: 1, padding: '8px 4px 6px', border: 'none',
+            flex: 1,
+            padding: '10px 4px 8px',
+            border: 'none',
             background: 'transparent',
             color: tab === t.id ? sg : ml,
-            fontSize: 10, cursor: 'pointer', fontWeight: tab === t.id ? 600 : 400,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+            fontSize: 10,
+            cursor: 'pointer',
+            fontWeight: tab === t.id ? 600 : 400,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 3,
             borderTop: tab === t.id ? `2px solid ${sg}` : '2px solid transparent',
+            minHeight: 56,
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation',
           }}>
             <span style={{ fontSize: 18 }}>{t.icon}</span>
             <span>{t.label}</span>
