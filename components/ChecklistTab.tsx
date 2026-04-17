@@ -172,7 +172,7 @@ export default function ChecklistTab() {
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: SP[space].items.map(() => false) })
     setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
-    setPage(3); window.scrollTo(0, 0); window.scrollTo(0, 0)
+    setPage(3); window.scrollTo(0, 0)
   }
 
   const validateAndSaveCal = () => {
@@ -204,7 +204,6 @@ export default function ChecklistTab() {
         if (navigator.share && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], text: shareText(entry) })
         } else {
-          // Fallback: download the image
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url; a.download = 'organizer-diary.png'; a.click()
@@ -416,16 +415,28 @@ export default function ChecklistTab() {
         </div>
       ) : logs.map(entry => (
         <div key={entry.id} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-            <div>
+
+          {/* 標題列：空間名稱 + 日期 + 時間 */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: ink }}>{entry.space}整理</span>
-              <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{entry.date}</span>
+              <span style={{ fontSize: 12, color: mf }}>{entry.date}</span>
+              <span style={{ fontSize: 12, color: mf }}>· {fmtMins(entry.duration)}</span>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <span style={{ fontSize: 12, color: mf, alignSelf: 'center' }}>{fmtMins(entry.duration)}</span>
-              <button onClick={() => setShareEntry(entry)} style={{ fontSize: 12, color: 'white', background: sg, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontWeight: 500 }}>檢視</button>
-              <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }} style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>編輯</button>
-              <button onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: '1px solid #C47B5A', borderRadius: 6, cursor: 'pointer', padding: '3px 8px' }}>刪除</button>
+            {/* 按鈕列：三個等寬按鈕 */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShareEntry(entry)}
+                style={{ flex: 1, fontSize: 13, color: 'white', background: sg, border: 'none', borderRadius: 8, cursor: 'pointer', padding: '8px 0', fontWeight: 500 }}>
+                檢視
+              </button>
+              <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }}
+                style={{ flex: 1, fontSize: 13, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>
+                編輯
+              </button>
+              <button onClick={() => setConfirmDeleteId(entry.id)}
+                style={{ flex: 1, fontSize: 13, color: '#C47B5A', background: 'none', border: '1px solid #C47B5A', borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>
+                刪除
+              </button>
             </div>
           </div>
 
@@ -470,7 +481,6 @@ export default function ChecklistTab() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.52)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
 
-            {/* Shareable card — this gets captured */}
             <div ref={shareCardRef} style={{ background: ww, borderRadius: 12, padding: '20px 20px 16px' }}>
               <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 2 }}>{shareEntry.space}整理紀錄</div>
               <div style={{ fontSize: 12, color: mf, marginBottom: 16 }}>{shareEntry.date} · 用時 {fmtMins(shareEntry.duration)}</div>
@@ -504,7 +514,6 @@ export default function ChecklistTab() {
               <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #生活整理</div>
             </div>
 
-            {/* Share actions */}
             <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button onClick={() => captureAndShare(shareEntry)}
                 style={{ display: 'block', width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
