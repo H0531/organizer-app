@@ -1,10 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
 type ChallengeMode = 7 | 30 | 60 | 100
 type TossEntry = { day: number; item: string; origin: string; reason: string; feeling: string; date: string }
+
+const STORAGE_KEY = 'challenge_data'
 
 // Fixed memorial templates
 const MEMORIAL_TEMPLATES = [
@@ -27,6 +29,29 @@ export default function ChallengeTab() {
   const [fReason, setFReason] = useState('')
   const [fFeeling, setFFeeling] = useState('')
 
+  // ── FIX 2: Load persisted data on mount ──────────────────────────
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const { mode: savedMode, entries: savedEntries } = JSON.parse(saved)
+        if (savedMode) setMode(savedMode)
+        if (savedEntries) setEntries(savedEntries)
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [])
+
+  // ── FIX 2: Persist whenever mode or entries change ────────────────
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ mode, entries }))
+    } catch {
+      // ignore storage errors
+    }
+  }, [mode, entries])
+
   const today = new Date().toLocaleDateString('zh-TW')
   const currentDay = entries.length + 1
   const todayDone = entries[entries.length - 1]?.date === today
@@ -36,10 +61,13 @@ export default function ChallengeTab() {
     const entry: TossEntry = { day: currentDay, item: fItem, origin: fOrigin, reason: fReason, feeling: fFeeling, date: today }
     const newEntries = [...entries, entry]
     setEntries(newEntries)
+
+    // ── FIX 1: Clear form & hide it first, then open modal in next tick ──
     setShowForm(false)
     setFItem(''); setFOrigin(''); setFReason(''); setFFeeling('')
-    setShowMemorial(entry)
-    setTemplateIdx(Math.floor(Math.random() * MEMORIAL_TEMPLATES.length))
+    const idx = Math.floor(Math.random() * MEMORIAL_TEMPLATES.length)
+    setTemplateIdx(idx)
+    setTimeout(() => setShowMemorial(entry), 0)
   }
 
   const handleShare = (text: string, platform: string) => {
@@ -47,6 +75,12 @@ export default function ChallengeTab() {
     const full = `${text}\n\n${tag}`
     if (platform === 'copy') { navigator.clipboard.writeText(full); alert('已複製！') }
     else if (platform === 'threads') window.open(`https://www.threads.net/intent/post?text=${encodeURIComponent(full)}`)
+  }
+
+  const handleResetChallenge = () => {
+    setMode(null)
+    setEntries([])
+    localStorage.removeItem(STORAGE_KEY)
   }
 
   const pct = mode ? Math.round((entries.length / mode) * 100) : 0
@@ -112,7 +146,7 @@ export default function ChallengeTab() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: sg }}>{pct}%</div>
-                <button onClick={() => setMode(null)} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', marginTop: 2 }}>重新選擇</button>
+                <button onClick={handleResetChallenge} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', marginTop: 2 }}>重新選擇</button>
               </div>
             </div>
 
