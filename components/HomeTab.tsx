@@ -1,15 +1,57 @@
 'use client'
+import type { OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 type Tab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
-export default function HomeTab({ onNavigate }: { onNavigate: (t: Tab) => void }) {
+export default function HomeTab({
+  onNavigate,
+  user,
+  onLoginClick,
+}: {
+  onNavigate: (t: Tab) => void
+  user: OAuthUser | null
+  onLoginClick: () => void
+}) {
   const NavLink = ({ target, children }: { target: Tab; children: string }) => (
     <span onClick={() => onNavigate(target)} style={{ color: sg, textDecoration: 'underline', cursor: 'pointer', fontWeight: 500 }}>{children}</span>
   )
 
   return (
     <div>
+      {/* Login banner - show only when not logged in */}
+      {!user && (
+        <div style={{
+          background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12,
+          padding: '14px 18px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 2 }}>尚未登入</div>
+            <div style={{ fontSize: 12, color: ml, lineHeight: 1.6 }}>未登入仍可使用全部功能，但資料存在本機，離開頁面後將消失。登入後資料可跨裝置保存。</div>
+          </div>
+          <button
+            onClick={onLoginClick}
+            style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap' }}>
+            登入
+          </button>
+        </div>
+      )}
+
+      {user && (
+        <div style={{
+          background: ww, border: `1px solid ${bd}`, borderRadius: 12,
+          padding: '12px 18px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          {user.picture
+            ? <img src={user.picture} alt="" style={{ width: 32, height: 32, borderRadius: '50%', border: `1.5px solid ${sg}` }} />
+            : <div style={{ width: 32, height: 32, borderRadius: '50%', background: sg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'white', fontWeight: 700 }}>{user.name.charAt(0)}</div>
+          }
+          <div style={{ fontSize: 13, color: ink }}>嗨，<strong>{user.name}</strong>！今天要整理哪裡？</div>
+        </div>
+      )}
+
       {/* Hero */}
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>H 的收整沙龍</p>
@@ -25,18 +67,18 @@ export default function HomeTab({ onNavigate }: { onNavigate: (t: Tab) => void }
       {[
         {
           icon: '🗂', tab: 'checklist' as Tab, title: '整理清單',
-          desc: '選空間、設計時器、逐項打勾，完成後拍 Before / After 對比照、記打卡日記，並可排進 Google 行事曆。',
-          steps: ['選擇今天要整理的空間', '（可選）拍整理前照片', '開始倒數計時，逐項打勾', '整理後拍照、寫日記，儲存打卡'],
+          desc: '選空間、設計時器、逐項打勾，完成後拍 Before / After 對比照、記打卡日記，並可排進行事曆。',
+          steps: ['選擇今天要整理的空間', '（可選）拍整理前照片，支援裁切旋轉', '開始倒數計時，逐項打勾', '整理後拍照、寫日記，按儲存打卡', '預約下次整理會顯示在最上方'],
         },
         {
           icon: '♻️', tab: 'declutter' as Tab, title: '斷捨離決策',
           desc: '把物品逐一加入清單，標記「留」「送」「丟」後進入三條分流：留下指定分類、送出設定行事曆提醒、丟棄可寫告別紀念文。',
-          steps: ['新增物品並標記留／送／丟', '全部完成後進入分流處理', '留 → 指定收納分類', '送 → 設定送出日＋行事曆提醒', '丟 → 寫告別紀念文（可略過）'],
+          steps: ['新增物品並標記留／送／丟', '全部完成後按「進入分流」', '留 → 指定收納分類', '送 → 選日期加入行事曆提醒', '丟 → 寫告別紀念文（可略）', '按儲存紀錄，在會員頁查看明細'],
         },
         {
           icon: '🎯', tab: 'challenge' as Tab, title: '每日丟一物挑戰',
-          desc: '選擇 30、60 或 100 天挑戰，每天放手一件東西，記錄故事，系統生成告別紀念文可分享到社群。',
-          steps: ['選擇挑戰天數', '每天記錄一件物品的故事', '系統生成 3 種告別紀念文', '達成里程碑可分享'],
+          desc: '選擇 7、30、60 或 100 天挑戰，每天放手一件東西，記錄故事，系統生成告別紀念文可分享到社群。',
+          steps: ['選擇挑戰天數', '每天記錄一件物品的故事', '系統生成 3 種告別紀念文', '達成里程碑可分享，進度自動保存'],
         },
         {
           icon: '📦', tab: 'recommend' as Tab, title: '收納品推薦',
@@ -87,10 +129,13 @@ export default function HomeTab({ onNavigate }: { onNavigate: (t: Tab) => void }
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '22px 24px' }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>常見問題</div>
         {[
-          ['我的資料會被儲存嗎？', '打卡日記、每日挑戰紀錄暫存在瀏覽器本機。登入會員後資料將同步至帳號，不怕遺失。'],
-          ['可以在手機上使用嗎？', '可以。支援手機瀏覽器，建議使用 Safari 或 Chrome。'],
-          ['Google 行事曆功能為什麼沒有作用？', '行事曆連動需部署後完成 Google OAuth 授權設定，目前為開發中狀態。'],
-          ['每日丟一物中斷了怎麼辦？', '登入會員後進度雲端保存，不受瀏覽器清除影響。'],
+          ['重整頁面後資料還在嗎？', '有的。整理清單、斷捨離紀錄、每日丟一物進度都自動存在瀏覽器，重整頁面不會消失。但換裝置或清除瀏覽器資料就會遺失，建議登入會員以跨裝置保存。'],
+          ['未登入可以用嗎？', '可以，全部功能都能正常使用。唯一差別是資料只存在本機，清除瀏覽器或換裝置後資料會消失。'],
+          ['每日挑戰中斷了怎麼辦？', '進度存在瀏覽器，只要不清除資料就不會中斷。若已清除，重新選擇天數後可繼續累積。'],
+          ['行事曆功能怎麼用？', '整理清單頁可預約下次整理時間，會下載 .ics 檔案，點開即可加入手機行事曆，系統會提前一天提醒。斷捨離送出的物品也可設定提醒日期。'],
+          ['照片可以裁切或旋轉嗎？', '可以！在整理清單的拍照步驟，上傳後可以進行裁切和旋轉，調整到最佳角度再儲存。'],
+          ['可以在手機上使用嗎？', '可以，支援手機瀏覽器，建議使用 Safari 或 Chrome，介面專為手機螢幕優化。'],
+          ['會員頁面有什麼資料？', '登入後，整理日記、斷捨離紀錄（含每件物品明細）、每日丟一物挑戰進度，都會在「我的整理」頁面完整呈現。'],
         ].map(([q, a], i, arr) => (
           <div key={i} style={{ padding: '12px 0', borderBottom: i < arr.length - 1 ? `1px solid ${cr}` : 'none' }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: ink, marginBottom: 4 }}>Q：{q}</div>

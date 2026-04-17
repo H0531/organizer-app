@@ -21,6 +21,27 @@ export type DeclutterRecord = {
   items: DeclutterItem[]
   tossEntries: TossEntry[]
 }
+
+export type ChecklistLog = {
+  id: string
+  date: string
+  space: string
+  note: string
+  beforePhotos: string[]
+  afterPhotos: string[]
+  duration: number
+  targetMinutes: number
+}
+
+export type ChallengeEntry = {
+  day: number
+  item: string
+  origin: string
+  reason: string
+  feeling: string
+  date: string
+}
+
 export const SHARE_BTNS = [
   { id: 'threads', label: 'Threads', color: '#000000' },
   { id: 'line', label: 'LINE', color: '#06C755' },
@@ -35,4 +56,27 @@ export function shareToSocial(platform: string, text: string) {
   } else if (platform === 'copy') {
     navigator.clipboard.writeText(text)
   }
+}
+
+// ── LocalStorage keys ──────────────────────────────────────────
+export const LS_CHECKLIST_LOGS = 'checklist_logs'
+export const LS_DECLUTTER_RECORDS = 'declutter_records'
+export const LS_CHALLENGE_DATA = 'challenge_data'
+
+// ── Persist helpers ────────────────────────────────────────────
+export function loadLS<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+export function saveLS<T>(key: string, value: T) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch { /* ignore quota */ }
 }

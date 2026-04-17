@@ -1,12 +1,14 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import HomeTab from '@/components/HomeTab'
 import ChecklistTab from '@/components/ChecklistTab'
 import DeclutterTab from '@/components/DeclutterTab'
 import ChallengeTab from '@/components/ChallengeTab'
 import RecommendTab from '@/components/RecommendTab'
 import MemberTab from '@/components/MemberTab'
-import type { DeclutterRecord } from '@/lib/types'
+import type { DeclutterRecord, ChecklistLog } from '@/lib/types'
+import { loadLS, saveLS, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
+import { getUserFromCookie, type OAuthUser } from '@/lib/auth'
 
 export type AppTab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
@@ -21,18 +23,50 @@ const TABS: { id: AppTab; label: string; icon: string }[] = [
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358'
 
+// Persist tab in sessionStorage so refresh restores it
+const TAB_KEY = 'active_tab'
+
 export default function Home() {
   const [tab, setTab] = useState<AppTab>('home')
+  const [user, setUser] = useState<OAuthUser | null>(null)
+
+  // Global shared state persisted in localStorage
+  const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
+  const [checklistLogs, setChecklistLogs] = useState<ChecklistLog[]>([])
+
+  // Restore tab + load persisted data on mount
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
+    if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
+
+    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
+    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []).map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+
+    const u = getUserFromCookie()
+    if (u) setUser(u)
+  }, [])
 
   const handleTabChange = (newTab: AppTab) => {
     setTab(newTab)
+    sessionStorage.setItem(TAB_KEY, newTab)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
-
   const handleDeclutterSave = (record: DeclutterRecord) => {
-    setDeclutterRecords(prev => [record, ...prev])
+    setDeclutterRecords(prev => {
+      const next = [record, ...prev]
+      saveLS(LS_DECLUTTER_RECORDS, next)
+      return next
+    })
+  }
+
+  const handleChecklistSave = (log: ChecklistLog) => {
+    setChecklistLogs(prev => {
+      const next = [log, ...prev]
+      // Save without photos to stay within localStorage limits
+      saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+      return next
+    })
   }
 
   return (
@@ -53,12 +87,12 @@ export default function Home() {
 
       {/* Main content */}
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
-        {tab === 'home'      && <HomeTab onNavigate={handleTabChange} />}
-        {tab === 'checklist' && <ChecklistTab />}
+        {tab === 'home'      && <HomeTab onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
+        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} />}
         {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={() => handleTabChange('member')} />}
         {tab === 'challenge' && <ChallengeTab />}
         {tab === 'recommend' && <RecommendTab />}
-        {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} />}
+        {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} checklistLogs={checklistLogs} user={user} onUserChange={setUser} />}
       </div>
 
       {/* Bottom navigation */}

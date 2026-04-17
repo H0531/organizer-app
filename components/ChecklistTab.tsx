@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { SHARE_BTNS, shareToSocial } from '@/lib/types'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS } from '@/lib/types'
+import type { ChecklistLog } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
@@ -17,39 +18,32 @@ const SN: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen
 
 const PRESET_MINS = [10, 30, 60, 90, 120]
 const MAX_PHOTOS = 5
-const LOGS_KEY = 'checklist_logs'
+const APP_URL = typeof window !== 'undefined' ? window.location.origin + '/?tab=checklist' : 'https://organizer-app.vercel.app/?tab=checklist'
 
 type PhotoSet = string[]
-type LogEntry = { id: string; date: string; space: string; note: string; beforePhotos: PhotoSet; afterPhotos: PhotoSet; duration: number; targetMinutes: number }
 
 const fmtSecs = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
-// 產生 .ics 檔案內容
-function generateIcs(date: string, time: string, spaceName: string, durationMins: number): string {
+type ScheduledItem = { id: string; space: string; date: string; time: string; durationMins: number }
+
+function generateIcs(date: string, time: string, spaceName: string, durationMins: number, appUrl: string): string {
   const start = new Date(`${date}T${time}`)
   const end = new Date(start.getTime() + durationMins * 60 * 1000)
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const uid = `organizer-${Date.now()}@organizer-app`
   return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//整理小幫手//ZH',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//整理小幫手//ZH',
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${fmt(new Date())}`,
     `DTSTART:${fmt(start)}`,
     `DTEND:${fmt(end)}`,
     `SUMMARY:整理${spaceName} — 整理小幫手`,
-    'DESCRIPTION:整理小幫手提醒：今天要整理了！',
-    'BEGIN:VALARM',
-    'TRIGGER:-PT1D',
-    'ACTION:DISPLAY',
-    'DESCRIPTION:明天要整理囉！',
-    'END:VALARM',
-    'END:VEVENT',
-    'END:VCALENDAR',
+    `DESCRIPTION:整理小幫手提醒：今天要整理了！\\n開啟整理清單：${appUrl}`,
+    'BEGIN:VALARM', 'TRIGGER:-PT1D', 'ACTION:DISPLAY', 'DESCRIPTION:明天要整理囉！', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR',
   ].join('\r\n')
 }
 
@@ -57,14 +51,108 @@ function downloadIcs(icsContent: string) {
   const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
-  a.download = 'organizer-schedule.ics'
-  a.click()
+  a.href = url; a.download = 'organizer-schedule.ics'; a.click()
   URL.revokeObjectURL(url)
 }
 
-function PhotoStrip({ photos, onAdd, onRemove, skipped, onSkip, label, color }: {
-  photos: string[]; onAdd: (f: FileList) => void; onRemove: (i: number) => void
+// ── Photo Editor Modal ─────────────────────────────────────────────────────
+function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: string) => void; onCancel: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [rotation, setRotation] = useState(0)
+  const [crop, setCrop] = useState({ x: 0, y: 0, w: 1, h: 1 }) // normalized 0-1
+  const [dragging, setDragging] = useState<null | { startX: number; startY: number; ox: number; oy: number }>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => { imgRef.current = img; drawPreview() }
+    img.src = src
+  }, [src])
+
+  const drawPreview = useCallback(() => {
+    const canvas = canvasRef.current
+    const img = imgRef.current
+    if (!canvas || !img) return
+    const ctx = canvas.getContext('2d')!
+    const size = 280
+    canvas.width = size; canvas.height = size
+    ctx.clearRect(0, 0, size, size)
+    ctx.save()
+    ctx.translate(size / 2, size / 2)
+    ctx.rotate((rotation * Math.PI) / 180)
+    ctx.drawImage(img, -size / 2, -size / 2, size, size)
+    ctx.restore()
+    // crop overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'
+    const cx = crop.x * size, cy = crop.y * size, cw = crop.w * size, ch = crop.h * size
+    ctx.fillRect(0, 0, size, cy)
+    ctx.fillRect(0, cy + ch, size, size - cy - ch)
+    ctx.fillRect(0, cy, cx, ch)
+    ctx.fillRect(cx + cw, cy, size - cx - cw, ch)
+    ctx.strokeStyle = sg; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cw, ch)
+  }, [rotation, crop])
+
+  useEffect(() => { drawPreview() }, [drawPreview])
+
+  const applyAndDone = () => {
+    const img = imgRef.current
+    if (!img) return
+    const out = document.createElement('canvas')
+    const size = 560
+    out.width = size; out.height = size
+    const ctx = out.getContext('2d')!
+    ctx.save()
+    ctx.translate(size / 2, size / 2)
+    ctx.rotate((rotation * Math.PI) / 180)
+    ctx.drawImage(img, -size / 2, -size / 2, size, size)
+    ctx.restore()
+    const cx = crop.x * size, cy = crop.y * size, cw = crop.w * size, ch = crop.h * size
+    const cropped = document.createElement('canvas')
+    cropped.width = cw; cropped.height = ch
+    cropped.getContext('2d')!.drawImage(out, cx, cy, cw, ch, 0, 0, cw, ch)
+    onDone(cropped.toDataURL('image/jpeg', 0.85))
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.7)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 340, width: '100%' }}>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 16 }}>裁切 / 旋轉照片</div>
+        <canvas ref={canvasRef} style={{ width: 280, height: 280, borderRadius: 10, display: 'block', margin: '0 auto 14px', border: `1px solid ${bd}` }} />
+        {/* Crop sliders */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          {([['左邊界', 'x', 0, 1 - crop.w], ['上邊界', 'y', 0, 1 - crop.h], ['寬度', 'w', 0.2, 1 - crop.x], ['高度', 'h', 0.2, 1 - crop.y]] as [string, keyof typeof crop, number, number][]).map(([label, key, min, max]) => (
+            <div key={key}>
+              <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>{label}</div>
+              <input type="range" min={min} max={max} step={0.01} value={crop[key]}
+                onChange={e => setCrop(c => ({ ...c, [key]: parseFloat(e.target.value) }))}
+                style={{ width: '100%' }} />
+            </div>
+          ))}
+        </div>
+        {/* Rotation */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>旋轉 {rotation}°</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[-90, -45, 0, 45, 90].map(r => (
+              <button key={r} onClick={() => setRotation(r)}
+                style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: `1px solid ${rotation === r ? sg : bd}`, background: rotation === r ? '#EAF2EE' : 'white', color: rotation === r ? sg : ml, fontSize: 11, cursor: 'pointer' }}>
+                {r}°
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={applyAndDone} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>套用</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>取消</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, color }: {
+  photos: string[]; onAdd: (f: FileList) => void; onRemove: (i: number) => void; onEdit: (i: number) => void
   skipped: boolean; onSkip: () => void; label: string; color: string
 }) {
   const ref = useRef<HTMLInputElement>(null)
@@ -89,7 +177,7 @@ function PhotoStrip({ photos, onAdd, onRemove, skipped, onSkip, label, color }: 
                 <rect x="17" y="4" width="18" height="8" rx="2.5" fill={bd} />
                 <circle cx="41" cy="14" r="2.5" fill={mf} />
               </svg>
-              <div style={{ fontSize: 12, color: mf, lineHeight: 1.7 }}>站在空間正前方，平行拍攝整體<br />光線充足對比效果更明顯</div>
+              <div style={{ fontSize: 12, color: mf, lineHeight: 1.7 }}>站在空間正前方，平行拍攝整體<br />上傳後可裁切旋轉</div>
             </div>
           )}
           {photos.length > 0 && (
@@ -97,6 +185,7 @@ function PhotoStrip({ photos, onAdd, onRemove, skipped, onSkip, label, color }: 
               {photos.map((p, i) => (
                 <div key={i} style={{ position: 'relative' }}>
                   <img src={p} alt="" style={{ width: 82, height: 82, objectFit: 'cover', borderRadius: 8, border: `2px solid ${color}`, display: 'block' }} />
+                  <button onClick={() => onEdit(i)} style={{ position: 'absolute', bottom: -7, left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `1px solid ${sg}`, borderRadius: 8, fontSize: 10, color: sg, padding: '1px 6px', cursor: 'pointer' }}>✂ 編輯</button>
                   <button onClick={() => onRemove(i)} style={{ position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%', background: '#777', color: 'white', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                 </div>
               ))}
@@ -126,7 +215,9 @@ function PageDots({ page }: { page: number }) {
   )
 }
 
-export default function ChecklistTab() {
+type Props = { onSaveLog: (log: ChecklistLog) => void }
+
+export default function ChecklistTab({ onSaveLog }: Props) {
   const [page, setPage] = useState<1 | 2 | 3>(1)
   const [space, setSpace] = useState('desk')
   const [checked, setChecked] = useState<Record<string, boolean[]>>({})
@@ -135,6 +226,9 @@ export default function ChecklistTab() {
   const [afterPhotos, setAfterPhotos]   = useState<PhotoSet>([])
   const [skipBefore, setSkipBefore] = useState(false)
   const [skipAfter,  setSkipAfter]  = useState(false)
+
+  // Photo editor state
+  const [editingPhoto, setEditingPhoto] = useState<{ type: 'before' | 'after'; index: number; src: string } | null>(null)
 
   const [targetMins, setTargetMins] = useState(30)
   const [customMins, setCustomMins] = useState('')
@@ -146,34 +240,28 @@ export default function ChecklistTab() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [note, setNote] = useState('')
+  const [saveFlash, setSaveFlash] = useState(false)
 
   const [showCalModal, setShowCalModal] = useState(false)
   const [calDate,      setCalDate]      = useState('')
   const [calTime,      setCalTime]      = useState('')
-  const [calSaved,     setCalSaved]     = useState(false)
   const [calError,     setCalError]     = useState('')
 
-  const [logs,            setLogs]            = useState<LogEntry[]>([])
-  const [shareEntry,      setShareEntry]      = useState<LogEntry | null>(null)
+  const [scheduledItems, setScheduledItems] = useState<ScheduledItem[]>([])
+  const [expandScheduled, setExpandScheduled] = useState(false)
+
+  const [logs, setLogs] = useState<ChecklistLog[]>([])
+  const [shareEntry,      setShareEntry]      = useState<ChecklistLog | null>(null)
   const [editingId,       setEditingId]       = useState<string | null>(null)
   const [editNote,        setEditNote]        = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  // 載入 localStorage logs
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LOGS_KEY)
-      if (saved) setLogs(JSON.parse(saved))
-    } catch { /* ignore */ }
+    const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [])
+    setLogs(saved.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
+    setScheduledItems(sched)
   }, [])
-
-  // 儲存 logs 到 localStorage（排除照片以免超出容量限制）
-  useEffect(() => {
-    try {
-      const toSave = logs.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] }))
-      localStorage.setItem(LOGS_KEY, JSON.stringify(toSave))
-    } catch { /* ignore */ }
-  }, [logs])
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
   const totalSecs     = effectiveMins * 60
@@ -207,53 +295,76 @@ export default function ChecklistTab() {
     if (type === 'before') setBeforePhotos(p => p.filter((_, idx) => idx !== i))
     else setAfterPhotos(p => p.filter((_, idx) => idx !== i))
   }
+  const openPhotoEditor = (type: 'before' | 'after', i: number) => {
+    const photos = type === 'before' ? beforePhotos : afterPhotos
+    setEditingPhoto({ type, index: i, src: photos[i] })
+  }
+  const applyPhotoEdit = (edited: string) => {
+    if (!editingPhoto) return
+    const { type, index } = editingPhoto
+    if (type === 'before') setBeforePhotos(p => p.map((x, i) => i === index ? edited : x))
+    else setAfterPhotos(p => p.map((x, i) => i === index ? edited : x))
+    setEditingPhoto(null)
+  }
 
   const startTimer = () => { setTimeLeft(totalSecs); setElapsedSecs(0); setTimerDone(false); setTimerRunning(true); setPage(2) }
 
   const saveLog = () => {
     if (!canSave) return
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
-    const entry: LogEntry = {
+    const entry: ChecklistLog = {
       id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
       space: SN[space], note: note.trim() || defaultNote,
       beforePhotos: skipBefore ? [] : beforePhotos,
       afterPhotos:  skipAfter  ? [] : afterPhotos,
       duration: elapsedSecs, targetMinutes: effectiveMins,
     }
-    setLogs(prev => [entry, ...prev])
+    const next = [entry, ...logs]
+    setLogs(next)
+    saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    onSaveLog(entry)
+
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: SP[space].items.map(() => false) })
     setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
-    setPage(3); window.scrollTo(0, 0)
+
+    setSaveFlash(true)
+    setTimeout(() => { setSaveFlash(false); setPage(3) }, 600)
   }
 
-  // 產生 .ics 並下載
   const validateAndDownloadIcs = () => {
     setCalError('')
     if (!calDate || !calTime) { setCalError('請選擇日期和時間'); return }
     if (new Date(`${calDate}T${calTime}`) <= new Date()) { setCalError('請選擇當下之後的時間'); return }
-    const ics = generateIcs(calDate, calTime, SN[space], effectiveMins)
+    const appUrl = typeof window !== 'undefined' ? `${window.location.origin}/?tab=checklist` : 'https://organizer-app.vercel.app/?tab=checklist'
+    const ics = generateIcs(calDate, calTime, SN[space], effectiveMins, appUrl)
     downloadIcs(ics)
-    setCalSaved(true)
+
+    // Save scheduled item
+    const newItem: ScheduledItem = { id: Date.now().toString(), space: SN[space], date: calDate, time: calTime, durationMins: effectiveMins }
+    const next = [newItem, ...scheduledItems]
+    setScheduledItems(next)
+    saveLS('checklist_scheduled', next)
     setShowCalModal(false)
+  }
+
+  const removeScheduled = (id: string) => {
+    const next = scheduledItems.filter(s => s.id !== id)
+    setScheduledItems(next)
+    saveLS('checklist_scheduled', next)
   }
 
   const saveEdit = () => { setLogs(logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)); setEditingId(null) }
   const deleteLog = (id: string) => { setLogs(logs.filter(l => l.id !== id)); setConfirmDeleteId(null); if (shareEntry?.id === id) setShareEntry(null) }
 
-  const shareText = (e: LogEntry) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
+  const shareText = (e: ChecklistLog) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
 
   const shareCardRef = useRef<HTMLDivElement>(null)
-
-  const captureAndShare = async (entry: LogEntry) => {
+  const captureAndShare = async (entry: ChecklistLog) => {
     if (!shareCardRef.current) return
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(shareCardRef.current, {
-        useCORS: true,
-        backgroundColor: '#FAF8F4',
-        scale: 2,
-      })
+      const canvas = await html2canvas(shareCardRef.current, { useCORS: true, backgroundColor: '#FAF8F4', scale: 2 })
       canvas.toBlob(async (blob) => {
         if (!blob) return
         const file = new File([blob], 'organizer-diary.png', { type: 'image/png' })
@@ -266,20 +377,37 @@ export default function ChecklistTab() {
           URL.revokeObjectURL(url)
         }
       }, 'image/png')
-    } catch (err) {
-      console.error('截圖失敗', err)
-      shareToSocial('copy', shareText(entry))
-    }
+    } catch { shareToSocial('copy', shareText(entry)) }
   }
 
-  // ══════════════════════════════════════
-  // PAGE 1
-  // ══════════════════════════════════════
+  // ── PAGE 1 ──────────────────────────────────────────────────────
   if (page === 1) return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>今天整理哪裡？</h1>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>選空間、拍整理前照片、設好時間，再開始</p>
       <PageDots page={1} />
+
+      {/* Scheduled items at top */}
+      {scheduledItems.length > 0 && (
+        <div style={{ background: '#EAF2EE', border: `1.5px solid ${sg}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50' }}>📅 預約整理（{scheduledItems.length} 筆）</div>
+            <button onClick={() => setExpandScheduled(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
+              {expandScheduled ? '收起' : '查看'}
+            </button>
+          </div>
+          {expandScheduled && scheduledItems.map(s => (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderTop: `1px solid ${sg}22` }}>
+              <div>
+                <span style={{ fontSize: 13, color: ink, fontWeight: 500 }}>{s.space}</span>
+                <span style={{ fontSize: 12, color: ml, marginLeft: 8 }}>{s.date} {s.time}</span>
+                <span style={{ fontSize: 11, color: mf, marginLeft: 6 }}>· {s.durationMins} 分</span>
+              </div>
+              <button onClick={() => removeScheduled(s.id)} style={{ fontSize: 11, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>移除</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
         {Object.keys(SP).map(k => (
@@ -291,7 +419,7 @@ export default function ChecklistTab() {
       </div>
 
       <div style={{ background: ww, border: `1px solid ${beforeReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-        <PhotoStrip photos={beforePhotos} onAdd={f => addPhotos('before', f)} onRemove={i => removePhoto('before', i)}
+        <PhotoStrip photos={beforePhotos} onAdd={f => addPhotos('before', f)} onRemove={i => removePhoto('before', i)} onEdit={i => openPhotoEditor('before', i)}
           skipped={skipBefore} onSkip={() => { setSkipBefore(s => !s); setBeforePhotos([]) }} label="📷 整理前照片" color={mf} />
         {!beforeReady && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 8 }}>請上傳照片或選擇「不上傳照片」才能繼續</div>}
       </div>
@@ -310,25 +438,18 @@ export default function ChecklistTab() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <input type="number" min={1} value={customMins} onChange={e => setCustomMins(e.target.value)} placeholder="輸入分鐘數"
               style={{ width: 120, border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', color: ink }} />
-            <span style={{ fontSize: 13, color: ml }}>分鐘（最小 1 分鐘）</span>
+            <span style={{ fontSize: 13, color: ml }}>分鐘</span>
           </div>
         )}
         <div style={{ fontSize: 12, color: mf, marginTop: 6 }}>已設定：<strong style={{ color: ink }}>{effectiveMins} 分鐘</strong></div>
       </div>
 
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 8 }}>📅 提前安排整理時間</div>
-        <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>選好日期時間，下載行事曆檔案加入手機行事曆</div>
-        {calSaved ? (
-          <div style={{ padding: '10px 14px', borderRadius: 8, background: '#EAF2EE', color: '#2E6B50', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>✅ 已排程：{calDate} {calTime}</span>
-            <button onClick={() => { setCalSaved(false); setShowCalModal(true) }} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>修改</button>
-          </div>
-        ) : (
-          <button onClick={() => setShowCalModal(true)} style={{ padding: '9px 18px', border: '1.5px solid #4285F4', borderRadius: 8, background: 'white', color: '#4285F4', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-            📅 加入行事曆
-          </button>
-        )}
+        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 8 }}>📅 預約整理時間</div>
+        <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>選好日期時間，下載行事曆檔案加入手機行事曆（含整理清單連結）</div>
+        <button onClick={() => setShowCalModal(true)} style={{ padding: '9px 18px', border: '1.5px solid #4285F4', borderRadius: 8, background: 'white', color: '#4285F4', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+          📅 預約並加入行事曆
+        </button>
       </div>
 
       <button onClick={startTimer} disabled={!beforeReady}
@@ -339,8 +460,8 @@ export default function ChecklistTab() {
       {showCalModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 28, maxWidth: 380, width: '100%' }}>
-            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 6 }}>加入行事曆</div>
-            <p style={{ fontSize: 13, color: ml, marginBottom: 20, lineHeight: 1.6 }}>設定日期與時間，下載 .ics 檔案後點開即可加入手機行事曆，系統會在前一天發出提醒</p>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 6 }}>預約整理</div>
+            <p style={{ fontSize: 13, color: ml, marginBottom: 20, lineHeight: 1.6 }}>設定日期與時間，下載 .ics 後點開加入行事曆，系統前一天提醒，行事曆內含整理清單連結</p>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 13, color: ink, marginBottom: 6, fontWeight: 500 }}>整理日期</div>
               <input type="date" value={calDate} min={todayStr()} onChange={e => setCalDate(e.target.value)}
@@ -353,18 +474,20 @@ export default function ChecklistTab() {
             </div>
             {calError && <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 10 }}>⚠️ {calError}</div>}
             <button onClick={validateAndDownloadIcs} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-              📥 下載行事曆檔案
+              📥 下載行事曆並儲存預約
             </button>
             <button onClick={() => { setShowCalModal(false); setCalError('') }} style={{ width: '100%', marginTop: 10, padding: '8px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>取消</button>
           </div>
         </div>
       )}
+
+      {editingPhoto && (
+        <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />
+      )}
     </div>
   )
 
-  // ══════════════════════════════════════
-  // PAGE 2
-  // ══════════════════════════════════════
+  // ── PAGE 2 ──────────────────────────────────────────────────────
   if (page === 2) return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
@@ -416,7 +539,7 @@ export default function ChecklistTab() {
       </div>
 
       <div style={{ background: ww, border: `1px solid ${afterReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-        <PhotoStrip photos={afterPhotos} onAdd={f => addPhotos('after', f)} onRemove={i => removePhoto('after', i)}
+        <PhotoStrip photos={afterPhotos} onAdd={f => addPhotos('after', f)} onRemove={i => removePhoto('after', i)} onEdit={i => openPhotoEditor('after', i)}
           skipped={skipAfter} onSkip={() => { setSkipAfter(s => !s); setAfterPhotos([]) }} label="📷 整理後照片" color={sg} />
         {!afterReady && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 6 }}>請上傳照片或選擇「不上傳照片」才能儲存</div>}
         <div style={{ height: 1, background: cr, margin: '16px 0' }} />
@@ -434,15 +557,17 @@ export default function ChecklistTab() {
         </div>
       )}
       <button onClick={saveLog} disabled={!canSave}
-        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: canSave ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
-        💾 儲存日記 →
+        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: canSave ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.3s' }}>
+        {saveFlash ? '✅ 已儲存！' : '💾 儲存日記'}
       </button>
+
+      {editingPhoto && (
+        <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />
+      )}
     </div>
   )
 
-  // ══════════════════════════════════════
-  // PAGE 3
-  // ══════════════════════════════════════
+  // ── PAGE 3 ──────────────────────────────────────────────────────
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
@@ -460,7 +585,6 @@ export default function ChecklistTab() {
         </div>
       ) : logs.map(entry => (
         <div key={entry.id} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: ink }}>{entry.space}整理</span>
@@ -509,25 +633,17 @@ export default function ChecklistTab() {
                   <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(122,158,138,0.85)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>A</span>
                 </div>
               ))}
-              {(entry.beforePhotos.length + entry.afterPhotos.length > 4) && (
-                <div style={{ width: 64, height: 48, borderRadius: 6, background: cr, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: mf }}>
-                  +{entry.beforePhotos.length + entry.afterPhotos.length - 4}
-                </div>
-              )}
             </div>
           )}
         </div>
       ))}
 
-      {/* Share popup */}
       {shareEntry && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.52)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-
             <div ref={shareCardRef} style={{ background: ww, borderRadius: 12, padding: '20px 20px 16px' }}>
               <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 2 }}>{shareEntry.space}整理紀錄</div>
               <div style={{ fontSize: 12, color: mf, marginBottom: 16 }}>{shareEntry.date} · 用時 {fmtMins(shareEntry.duration)}</div>
-
               {shareEntry.beforePhotos.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -536,7 +652,7 @@ export default function ChecklistTab() {
                     <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {shareEntry.beforePhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.beforePhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, filter: 'grayscale(10%)' }} />)}
+                    {shareEntry.beforePhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.beforePhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10 }} />)}
                   </div>
                 </div>
               )}
@@ -552,14 +668,11 @@ export default function ChecklistTab() {
                   </div>
                 </div>
               )}
-
               {shareEntry.note && <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 12, fontSize: 13, color: ink, lineHeight: 1.8 }}>{shareEntry.note}</div>}
               <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #生活整理</div>
             </div>
-
             <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button onClick={() => captureAndShare(shareEntry)}
-                style={{ display: 'block', width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => captureAndShare(shareEntry)} style={{ display: 'block', width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
                 📸 儲存 / 分享圖片
               </button>
               {SHARE_BTNS.map(p => (

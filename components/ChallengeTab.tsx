@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { loadLS, saveLS, LS_CHALLENGE_DATA } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
 type ChallengeMode = 7 | 30 | 60 | 100
 type TossEntry = { day: number; item: string; origin: string; reason: string; feeling: string; date: string }
 
-const STORAGE_KEY = 'challenge_data'
+const STORAGE_KEY = LS_CHALLENGE_DATA
 
 // Fixed memorial templates
 const MEMORIAL_TEMPLATES = [
@@ -29,27 +30,16 @@ export default function ChallengeTab() {
   const [fReason, setFReason] = useState('')
   const [fFeeling, setFFeeling] = useState('')
 
-  // ── FIX 2: Load persisted data on mount ──────────────────────────
+  // Load persisted data on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const { mode: savedMode, entries: savedEntries } = JSON.parse(saved)
-        if (savedMode) setMode(savedMode)
-        if (savedEntries) setEntries(savedEntries)
-      }
-    } catch {
-      // ignore parse errors
-    }
+    const saved = loadLS<{mode: ChallengeMode|null; entries: TossEntry[]}>(STORAGE_KEY, {mode: null, entries: []})
+    if (saved.mode) setMode(saved.mode)
+    if (saved.entries) setEntries(saved.entries)
   }, [])
 
-  // ── FIX 2: Persist whenever mode or entries change ────────────────
+  // Persist whenever mode or entries change
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ mode, entries }))
-    } catch {
-      // ignore storage errors
-    }
+    saveLS(STORAGE_KEY, { mode, entries })
   }, [mode, entries])
 
   const today = new Date().toLocaleDateString('zh-TW')
@@ -80,7 +70,7 @@ export default function ChallengeTab() {
   const handleResetChallenge = () => {
     setMode(null)
     setEntries([])
-    localStorage.removeItem(STORAGE_KEY)
+    saveLS(STORAGE_KEY, { mode: null, entries: [] })
   }
 
   const pct = mode ? Math.round((entries.length / mode) * 100) : 0

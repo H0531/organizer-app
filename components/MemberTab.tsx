@@ -1,56 +1,70 @@
 'use client'
 import { useState, useEffect } from 'react'
-import type { DeclutterRecord } from '@/lib/types'
+import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
+import { loadLS, LS_CHALLENGE_DATA } from '@/lib/types'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
-type Props = { declutterRecords: DeclutterRecord[] }
+const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
 
-export default function MemberTab({ declutterRecords }: Props) {
-  const [user, setUser] = useState<OAuthUser | null>(null)
+type Props = {
+  declutterRecords: DeclutterRecord[]
+  checklistLogs: ChecklistLog[]
+  user: OAuthUser | null
+  onUserChange: (u: OAuthUser | null) => void
+}
+
+export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
-  const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
   const [authError, setAuthError] = useState(false)
 
-  useEffect(() => {
-    const existing = getUserFromCookie()
-    if (existing) setUser(existing)
+  // Expandable state
+  const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
+  const [expandedLog, setExpandedLog] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge'>('diary')
 
+  // Challenge data from localStorage
+  const [challengeMode, setChallengeMode] = useState<number | null>(null)
+  const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('auth') === 'success') {
       const fresh = getUserFromCookie()
-      if (fresh) setUser(fresh)
+      if (fresh) onUserChange(fresh)
       window.history.replaceState({}, '', '/')
     } else if (params.get('auth') === 'error') {
       setAuthError(true)
       window.history.replaceState({}, '', '/')
     }
+
+    // Load challenge data
+    const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] })
+    setChallengeMode(saved.mode)
+    setChallengeEntries(saved.entries)
   }, [])
 
-  const handleGoogleLogin = () => {
-    window.location.href = getGoogleAuthUrl()
-  }
-
-  const handleLogout = () => {
-    clearUserCookie()
-    setUser(null)
-  }
+  const handleGoogleLogin = () => { window.location.href = getGoogleAuthUrl() }
+  const handleLogout = () => { clearUserCookie(); onUserChange(null) }
 
   const saveName = () => {
     if (!draftName.trim() || !user) return
     const updated = { ...user, name: draftName.trim() }
-    setUser(updated)
+    onUserChange(updated)
     document.cookie = `organizer_user=${encodeURIComponent(JSON.stringify(updated))}; Max-Age=${60 * 60 * 24 * 7}; path=/; SameSite=Lax`
     setEditingName(false)
   }
 
+  const challengePct = challengeMode ? Math.round((challengeEntries.length / challengeMode) * 100) : 0
+
+  // ── NOT LOGGED IN ───────────────────────────────────────────
   if (!user) return (
     <div>
-      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>會員登入</h1>
-      <p style={{ color: ml, fontSize: 14, marginBottom: 28, lineHeight: 1.7 }}>
-        登入後，打卡日記與斷捨離紀錄都會同步到你的帳號，不怕換裝置或清除瀏覽器資料。
+      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>我的整理</h1>
+      <p style={{ color: ml, fontSize: 14, marginBottom: 20, lineHeight: 1.7 }}>
+        登入後，整理日記、斷捨離紀錄和每日挑戰進度都會同步到帳號，不怕換裝置或清除瀏覽器。
       </p>
 
       {authError && (
@@ -59,9 +73,29 @@ export default function MemberTab({ declutterRecords }: Props) {
         </div>
       )}
 
+      {/* Guest data summary */}
+      <div style={{ background: cr, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: ml, marginBottom: 8 }}>目前本機資料</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {[
+            { label: '整理日記', value: `${checklistLogs.length} 筆`, icon: '📓' },
+            { label: '斷捨離', value: `${declutterRecords.reduce((a, r) => a + r.items.length, 0)} 件`, icon: '♻️' },
+            { label: '每日挑戰', value: challengeMode ? `${challengeEntries.length}/${challengeMode}天` : '未開始', icon: '🎯' },
+          ].map(s => (
+            <div key={s.label} style={{ background: ww, borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: sg }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: mf }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: mf, marginTop: 10 }}>⚠️ 未登入資料只存在本機，清除瀏覽器後將消失</div>
+      </div>
+
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '32px 24px', marginBottom: 16, textAlign: 'center' }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
-        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 24 }}>使用 Google 登入</div>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 8 }}>使用 Google 登入</div>
+        <div style={{ fontSize: 13, color: ml, marginBottom: 24, lineHeight: 1.6 }}>登入後資料跨裝置同步，不怕遺失</div>
 
         <button onClick={handleGoogleLogin}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: '100%', padding: '13px 20px', borderRadius: 10, border: '1.5px solid #DADCE0', background: 'white', cursor: 'pointer', fontSize: 15, color: '#3C4043', fontWeight: 500, marginBottom: 16 }}>
@@ -75,24 +109,15 @@ export default function MemberTab({ declutterRecords }: Props) {
         </button>
         <div style={{ fontSize: 12, color: mf }}>登入即表示同意儲存您的基本資料（姓名、Email）</div>
       </div>
-
-      <div style={{ background: cr, borderRadius: 12, padding: '16px 20px' }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: ml, marginBottom: 8 }}>⚙️ Vercel 部署設定</div>
-        <div style={{ fontSize: 12, color: mf, lineHeight: 2 }}>
-          需在 Vercel 環境變數中加入：<br/>
-          <code style={{ background: 'white', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>GOOGLE_CLIENT_ID</code><br/>
-          <code style={{ background: 'white', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>GOOGLE_CLIENT_SECRET</code><br/>
-          <code style={{ background: 'white', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code><br/>
-          <code style={{ background: 'white', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>NEXT_PUBLIC_BASE_URL</code>（例：https://organizer-app-mauve.vercel.app）
-        </div>
-      </div>
     </div>
   )
 
+  // ── LOGGED IN ───────────────────────────────────────────────
   return (
     <div>
-      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 20, color: ink }}>我的帳號</h1>
+      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 20, color: ink }}>我的整理</h1>
 
+      {/* User card */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {user.picture
@@ -123,54 +148,152 @@ export default function MemberTab({ declutterRecords }: Props) {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
         {[
-          { label: '整理日記', value: `${declutterRecords.length} 筆`, icon: '📓' },
-          { label: '斷捨離物品', value: `${declutterRecords.reduce((a, r) => a + r.items.length, 0)} 件`, icon: '♻️' },
+          { label: '整理日記', value: `${checklistLogs.length}`, unit: '筆', icon: '📓', section: 'diary' as const },
+          { label: '斷捨離物品', value: `${declutterRecords.reduce((a, r) => a + r.items.length, 0)}`, unit: '件', icon: '♻️', section: 'declutter' as const },
+          { label: '每日挑戰', value: challengeMode ? `${challengePct}` : '—', unit: challengeMode ? '%' : '', icon: '🎯', section: 'challenge' as const },
         ].map(s => (
-          <div key={s.label} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 22 }}>{s.icon}</div>
-            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: sg, margin: '4px 0 2px' }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: mf }}>{s.label}</div>
-          </div>
+          <button key={s.label} onClick={() => setActiveSection(s.section)}
+            style={{ background: activeSection === s.section ? '#EAF2EE' : ww, border: `1px solid ${activeSection === s.section ? sg : bd}`, borderRadius: 12, padding: '14px 8px', textAlign: 'center', cursor: 'pointer' }}>
+            <div style={{ fontSize: 20 }}>{s.icon}</div>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: sg, margin: '4px 0 1px' }}>{s.value}<span style={{ fontSize: 12 }}>{s.unit}</span></div>
+            <div style={{ fontSize: 11, color: mf }}>{s.label}</div>
+          </button>
         ))}
       </div>
 
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄</div>
-        {declutterRecords.length === 0 ? (
-          <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
-            還沒有斷捨離紀錄
-          </div>
-        ) : declutterRecords.map((record, i) => (
-          <div key={i} style={{ borderBottom: i < declutterRecords.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontSize: 14, fontWeight: 500, color: ink }}>{record.items.length} 件物品</span>
-                <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{record.savedAt}</span>
-              </div>
-              <button onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}
-                style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
-                {expandedRecord === record.savedAt ? '收起' : '查看'}
-              </button>
+      {/* Section: Diary */}
+      {activeSection === 'diary' && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>整理日記（{checklistLogs.length} 筆）</div>
+          {checklistLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📓</div>完成整理後紀錄會出現在這裡
             </div>
-            {expandedRecord === record.savedAt && (
-              <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {record.items.map((item, j) => (
-                  <span key={j} style={{
-                    padding: '3px 10px', borderRadius: 20, fontSize: 12,
-                    background: item.decision === 'keep' ? '#EAF2EE' : item.decision === 'toss' ? cr : '#FDF5F0',
-                    color: item.decision === 'keep' ? '#2E6B50' : item.decision === 'toss' ? ml : '#C47B5A',
-                  }}>
-                    {item.decision === 'keep' ? '✓ ' : item.decision === 'toss' ? '🗑 ' : '📦 '}{item.name}
-                  </span>
-                ))}
+          ) : checklistLogs.map((log, i) => (
+            <div key={log.id} style={{ borderBottom: i < checklistLogs.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
+                <div>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: ink }}>{log.space}整理</span>
+                  <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{log.date}</span>
+                  <span style={{ fontSize: 12, color: mf, marginLeft: 6 }}>· {fmtMins(log.duration)}</span>
+                </div>
+                <span style={{ fontSize: 13, color: sg }}>{expandedLog === log.id ? '▲' : '▼'}</span>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+              {expandedLog === log.id && (
+                <div style={{ marginTop: 10 }}>
+                  <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: '0 0 8px' }}>{log.note}</p>
+                  <div style={{ fontSize: 12, color: mf }}>目標 {log.targetMinutes} 分鐘</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Section: Declutter */}
+      {activeSection === 'declutter' && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄（{declutterRecords.length} 次）</div>
+          {declutterRecords.length === 0 ? (
+            <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>還沒有斷捨離紀錄
+            </div>
+          ) : declutterRecords.map((record, i) => (
+            <div key={i} style={{ borderBottom: i < declutterRecords.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
+                <div>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: ink }}>{record.items.length} 件物品</span>
+                  <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{record.savedAt}</span>
+                </div>
+                <span style={{ fontSize: 13, color: sg }}>{expandedRecord === record.savedAt ? '▲' : '▼'}</span>
+              </div>
+              {expandedRecord === record.savedAt && (
+                <div style={{ marginTop: 12 }}>
+                  {/* Decision counts */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    {(['keep', 'donate', 'toss'] as const).map(d => {
+                      const count = record.items.filter(x => x.decision === d).length
+                      if (!count) return null
+                      return (
+                        <span key={d} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, background: d === 'keep' ? '#EAF2EE' : d === 'donate' ? '#EEF3FE' : '#FDF5F0', color: d === 'keep' ? '#2E6B50' : d === 'donate' ? '#4285F4' : '#C47B5A' }}>
+                          {d === 'keep' ? '留' : d === 'donate' ? '送' : '丟'} {count}件
+                        </span>
+                      )
+                    })}
+                  </div>
+                  {/* Items list - clickable to expand detail */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {record.items.map((item, j) => (
+                      <div key={j} style={{
+                        padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'default',
+                        background: item.decision === 'keep' ? '#EAF2EE' : item.decision === 'toss' ? cr : '#FDF5F0',
+                        color: item.decision === 'keep' ? '#2E6B50' : item.decision === 'toss' ? ml : '#C47B5A',
+                        border: `1px solid ${item.decision === 'keep' ? '#C0DDD0' : item.decision === 'toss' ? bd : '#E8C0A8'}`,
+                      }}>
+                        {item.decision === 'keep' ? '✓' : item.decision === 'toss' ? '🗑' : '📦'} {item.name}
+                        {item.category && <span style={{ color: mf }}> · {item.category}</span>}
+                        {item.disposeDate && <span style={{ color: mf }}> · {item.disposeDate}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Toss memos */}
+                  {record.tossEntries.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, color: mf, marginBottom: 6 }}>告別紀念文</div>
+                      {record.tossEntries.map(e => (
+                        <div key={e.id} style={{ background: cr, borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 12, color: ink, lineHeight: 1.7 }}>
+                          <strong>{e.name}</strong>：{e.memo}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Section: Challenge */}
+      {activeSection === 'challenge' && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>每日丟一物挑戰</div>
+          {!challengeMode ? (
+            <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🎯</div>尚未開始挑戰
+            </div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 14, color: ink, fontWeight: 500 }}>{challengeMode} 天挑戰</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: sg }}>{challengeEntries.length}/{challengeMode} 天 ({challengePct}%)</span>
+                </div>
+                <div style={{ background: cr, borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 4, background: sg, width: `${challengePct}%`, transition: 'width 0.5s' }} />
+                </div>
+              </div>
+              {challengeEntries.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, color: mf, marginBottom: 8 }}>最近紀錄</div>
+                  {[...challengeEntries].reverse().slice(0, 5).map((entry, i) => (
+                    <div key={i} style={{ padding: '8px 0', borderBottom: `1px solid ${cr}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 13, color: ink, fontWeight: 500 }}>Day {entry.day}：{entry.item}</span>
+                        <span style={{ fontSize: 11, color: mf }}>{entry.date}</span>
+                      </div>
+                      {entry.feeling && <div style={{ fontSize: 12, color: ml, marginTop: 2 }}>{entry.feeling}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
