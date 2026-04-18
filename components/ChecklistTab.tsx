@@ -332,7 +332,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
     }
     const next = [entry, ...logs]
     setLogs(next)
-    
+    saveLS(LS_CHECKLIST_LOGS, next, userId)  // ← 修正：新增時也寫入 localStorage
     onSaveLog(entry)
 
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
