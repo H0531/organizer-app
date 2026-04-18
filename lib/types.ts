@@ -74,8 +74,8 @@ export function loadLS<T>(key: string, fallback: T, userId?: string): T {
   }
 }
 
-export function saveLS<T>(key: string, value: T, userId?: string) {
-  if (typeof window === 'undefined') return
+export function saveLS<T>(key: string, value: T, userId?: string): boolean {
+  if (typeof window === 'undefined') return false
   try {
     const k = userId ? `${key}__${userId}` : key
     if (value === null || value === undefined) {
@@ -83,5 +83,19 @@ export function saveLS<T>(key: string, value: T, userId?: string) {
     } else {
       localStorage.setItem(k, JSON.stringify(value))
     }
-  } catch { /* ignore quota */ }
+    return true
+  } catch (e) {
+    // Quota exceeded: try removing the key first then retry once
+    try {
+      const k = userId ? `${key}__${userId}` : key
+      localStorage.removeItem(k)
+      if (value !== null && value !== undefined) {
+        localStorage.setItem(k, JSON.stringify(value))
+      }
+      return true
+    } catch {
+      console.warn('saveLS: localStorage quota exceeded for key:', key)
+      return false
+    }
+  }
 }

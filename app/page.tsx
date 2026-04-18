@@ -49,8 +49,13 @@ export default function Home() {
   }
 
   const handleDeclutterSave = (record: DeclutterRecord) => {
+    // Strip photos before saving to localStorage to avoid quota errors
+    const recordToSave: DeclutterRecord = {
+      ...record,
+      tossEntries: record.tossEntries.map(e => ({ ...e, photo: undefined })),
+    }
     setDeclutterRecords(prev => {
-      const next = [record, ...prev]
+      const next = [recordToSave, ...prev]
       saveLS(LS_DECLUTTER_RECORDS, next)
       return next
     })
