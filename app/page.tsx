@@ -89,7 +89,7 @@ export default function Home() {
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
         {tab === 'home'      && <HomeTab onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
         {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} />}
-        {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={() => handleTabChange('member')} />}
+        {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
         {tab === 'challenge' && <ChallengeTab />}
         {tab === 'recommend' && <RecommendTab />}
         {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} checklistLogs={checklistLogs} user={user} onUserChange={setUser} />}

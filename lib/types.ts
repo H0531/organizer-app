@@ -14,6 +14,7 @@ export type TossEntry = {
   name: string
   memo: string
   date: string
+  photo?: string   // base64, optional
 }
 
 export type DeclutterRecord = {

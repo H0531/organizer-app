@@ -105,6 +105,9 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] })
     setChallengeMode(saved.mode)
     setChallengeEntries(saved.entries)
+    // Restore section from sessionStorage (set by DeclutterTab)
+    const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | null
+    if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
   }, [])
 
   const handleGoogleLogin = () => { window.location.href = getGoogleAuthUrl() }
@@ -334,8 +337,19 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 12, color: mf, marginBottom: 6 }}>告別紀念文</div>
                       {record.tossEntries.map(e => (
-                        <div key={e.id} style={{ background: cr, borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 12, color: ink, lineHeight: 1.7 }}>
-                          <strong>{e.name}</strong>：{e.memo}
+                        <div key={e.id} style={{ background: cr, borderRadius: 8, padding: '10px 12px', marginBottom: 8, fontSize: 12, color: ink, lineHeight: 1.7 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                            <div style={{ flex: 1 }}>
+                              <strong>{e.name}</strong>
+                              {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
+                              {e.photo && <img src={e.photo} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 6, marginTop: 8 }} />}
+                            </div>
+                            <button
+                              onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: true })}
+                              style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+                              分享
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
