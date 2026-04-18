@@ -77,14 +77,17 @@ export default function Home() {
   }
 
   const handleUserChange = (u: OAuthUser | null) => {
-    setUser(u)
-    if (!u) {
-      setDeclutterRecords([])
-      setChecklistLogs([])
-      saveLS(LS_DECLUTTER_RECORDS, [])
-      saveLS(LS_CHECKLIST_LOGS, [])
-    }
+  setUser(u)
+  if (!u) {
+    setDeclutterRecords([])
+    setChecklistLogs([])
+    saveLS(LS_DECLUTTER_RECORDS, [])
+    saveLS(LS_CHECKLIST_LOGS, [])
+  } else {
+    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
+    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
   }
+}
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0E8', fontFamily: "'Noto Sans TC', sans-serif" }}>
