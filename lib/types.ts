@@ -65,19 +65,28 @@ export const LS_DECLUTTER_RECORDS = 'declutter_records'
 export const LS_CHALLENGE_DATA = 'challenge_data'
 
 // ── Persist helpers ────────────────────────────────────────────
-export function loadLS<T>(key: string, fallback: T): T {
+// userId 可傳入以區隔帳號資料；value 為 null 時刪除該 key
+// 使用 sessionStorage：關閉頁面後資料消失
+
+export function loadLS<T>(key: string, fallback: T, userId?: string): T {
   if (typeof window === 'undefined') return fallback
   try {
-    const raw = localStorage.getItem(key)
+    const scopedKey = userId ? `${key}__${userId}` : key
+    const raw = sessionStorage.getItem(scopedKey)
     return raw ? (JSON.parse(raw) as T) : fallback
   } catch {
     return fallback
   }
 }
 
-export function saveLS<T>(key: string, value: T) {
+export function saveLS<T>(key: string, value: T, userId?: string) {
   if (typeof window === 'undefined') return
   try {
-    localStorage.setItem(key, JSON.stringify(value))
+    const scopedKey = userId ? `${key}__${userId}` : key
+    if (value === null || value === undefined) {
+      sessionStorage.removeItem(scopedKey)
+    } else {
+      sessionStorage.setItem(scopedKey, JSON.stringify(value))
+    }
   } catch { /* ignore quota */ }
 }

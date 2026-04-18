@@ -13,6 +13,8 @@ type Props = {
   checklistLogs: ChecklistLog[]
   user: OAuthUser | null
   onUserChange: (u: OAuthUser | null) => void
+  onDeleteDeclutter: (savedAt: string) => void
+  onDeleteDiary: (id: string) => void
 }
 
 // ── Share modal with image capture ──────────────────────────────
@@ -75,7 +77,7 @@ function ShareModal({ title, text, captureRef, onClose }: { title: string; text:
   )
 }
 
-export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange }: Props) {
+export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange, onDeleteDeclutter, onDeleteDiary }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
@@ -262,6 +264,11 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                     style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
                     分享
                   </button>
+                  <button
+                    onClick={() => { if (window.confirm('確定刪除這筆日記？刪除後無法復原。')) onDeleteDiary(log.id) }}
+                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    刪除
+                  </button>
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
                     {expandedLog === log.id ? '▲' : '▼'}
                   </span>
@@ -301,6 +308,11 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                       分享
                     </button>
                   )}
+                  <button
+                    onClick={() => { if (window.confirm('確定刪除這筆斷捨離紀錄？刪除後無法復原。')) onDeleteDeclutter(record.savedAt) }}
+                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    刪除
+                  </button>
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
                     {expandedRecord === record.savedAt ? '▲' : '▼'}
                   </span>

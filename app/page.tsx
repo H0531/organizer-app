@@ -39,11 +39,13 @@ export default function Home() {
     const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
     if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
 
-    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
-    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []).map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
-
     const u = getUserFromCookie()
     if (u) setUser(u)
+
+    // Load data scoped to the current user (or anonymous scope if not logged in)
+    const uid = u?.email ?? undefined
+    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid))
+    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid).map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
   }, [])
 
   const handleTabChange = (newTab: AppTab) => {
@@ -55,7 +57,7 @@ export default function Home() {
   const handleDeclutterSave = (record: DeclutterRecord) => {
     setDeclutterRecords(prev => {
       const next = [record, ...prev]
-      saveLS(LS_DECLUTTER_RECORDS, next)
+      saveLS(LS_DECLUTTER_RECORDS, next, user?.email ?? undefined)
       return next
     })
   }
@@ -63,10 +65,34 @@ export default function Home() {
   const handleChecklistSave = (log: ChecklistLog) => {
     setChecklistLogs(prev => {
       const next = [log, ...prev]
-      // Save without photos to stay within localStorage limits
-      saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+      // Save without photos to stay within sessionStorage limits
+      saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })), user?.email ?? undefined)
       return next
     })
+  }
+
+  const handleDeleteDeclutterRecord = (savedAt: string) => {
+    setDeclutterRecords(prev => {
+      const next = prev.filter(r => r.savedAt !== savedAt)
+      saveLS(LS_DECLUTTER_RECORDS, next, user?.email ?? undefined)
+      return next
+    })
+  }
+
+  const handleDeleteChecklistLog = (id: string) => {
+    setChecklistLogs(prev => {
+      const next = prev.filter(l => l.id !== id)
+      saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })), user?.email ?? undefined)
+      return next
+    })
+  }
+
+  // When user changes (login / logout), reload scoped data
+  const handleUserChange = (u: typeof user) => {
+    setUser(u)
+    const uid = u?.email ?? undefined
+    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid))
+    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid).map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
   }
 
   return (
@@ -92,7 +118,7 @@ export default function Home() {
         {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
         {tab === 'challenge' && <ChallengeTab />}
         {tab === 'recommend' && <RecommendTab />}
-        {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} checklistLogs={checklistLogs} user={user} onUserChange={setUser} />}
+        {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} checklistLogs={checklistLogs} user={user} onUserChange={handleUserChange} onDeleteDeclutter={handleDeleteDeclutterRecord} onDeleteDiary={handleDeleteChecklistLog} />}
       </div>
 
       {/* Bottom navigation */}
