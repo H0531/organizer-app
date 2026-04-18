@@ -49,12 +49,12 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const uid = user?.email ?? undefined
+  
 
   const handleDeclutterSave = (record: DeclutterRecord) => {
     setDeclutterRecords(prev => {
       const next = [record, ...prev]
-      saveLS(LS_DECLUTTER_RECORDS, next, uid)
+      saveLS(LS_DECLUTTER_RECORDS, next, user?.email ?? undefined)
       return next
     })
   }
@@ -70,7 +70,7 @@ export default function Home() {
   const handleDeleteDeclutterRecord = (savedAt: string) => {
     setDeclutterRecords(prev => {
       const next = prev.filter(r => r.savedAt !== savedAt)
-      saveLS(LS_DECLUTTER_RECORDS, next, uid)
+      saveLS(LS_DECLUTTER_RECORDS, next, user?.email ?? undefined)
       return next
     })
   }
@@ -78,7 +78,7 @@ export default function Home() {
   const handleDeleteChecklistLog = (id: string) => {
     setChecklistLogs(prev => {
       const next = prev.filter(l => l.id !== id)
-      saveLS(LS_CHECKLIST_LOGS, next, uid)
+      saveLS(LS_CHECKLIST_LOGS, next, user?.email ?? undefined)
       return next
     })
   }
@@ -107,7 +107,7 @@ export default function Home() {
 
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
         {tab === 'home'      && <HomeTab onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
-        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} userId={uid} />}
+        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} userId={user?.email ?? undefined} />}
         {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
         {tab === 'challenge' && <ChallengeTab />}
         {tab === 'recommend' && <RecommendTab />}
