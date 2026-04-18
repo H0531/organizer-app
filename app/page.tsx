@@ -60,12 +60,8 @@ export default function Home() {
   }
 
   const handleChecklistSave = (log: ChecklistLog) => {
-    setChecklistLogs(prev => {
-      const next = [log, ...prev]
-      saveLS(LS_CHECKLIST_LOGS, next, user?.email ?? undefined)
-      return next
-    })
-  }
+  setChecklistLogs(prev => [log, ...prev])
+}
 
   const handleDeleteDeclutterRecord = (savedAt: string) => {
     setDeclutterRecords(prev => {

@@ -332,7 +332,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
     }
     const next = [entry, ...logs]
     setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next, userId)
+    
     onSaveLog(entry)
 
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
