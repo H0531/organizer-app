@@ -217,9 +217,9 @@ function PageDots({ page }: { page: number }) {
 
 const CL_PAGE_KEY = 'checklist_page'
 
-type Props = { onSaveLog: (log: ChecklistLog) => void }
+type Props = { onSaveLog: (log: ChecklistLog) => void; userId?: string }
 
-export default function ChecklistTab({ onSaveLog }: Props) {
+export default function ChecklistTab({ onSaveLog, userId }: Props) {
   const [page, setPageRaw] = useState<1 | 2 | 3>(1)
 
   const setPage = (p: 1 | 2 | 3) => {
@@ -264,7 +264,7 @@ export default function ChecklistTab({ onSaveLog }: Props) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
-    const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [])
+   const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], userId)
     const restoredLogs = saved.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] }))
     setLogs(restoredLogs)
     const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
@@ -332,7 +332,7 @@ export default function ChecklistTab({ onSaveLog }: Props) {
     }
     const next = [entry, ...logs]
     setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    saveLS(LS_CHECKLIST_LOGS, next, userId)
     onSaveLog(entry)
 
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
@@ -368,13 +368,13 @@ export default function ChecklistTab({ onSaveLog }: Props) {
   const saveEdit = () => {
     const next = logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)
     setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    saveLS(LS_CHECKLIST_LOGS, next, userId)
     setEditingId(null)
   }
   const deleteLog = (id: string) => {
     const next = logs.filter(l => l.id !== id)
     setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    saveLS(LS_CHECKLIST_LOGS, next, userId)
     setConfirmDeleteId(null)
     if (shareEntry?.id === id) setShareEntry(null)
   }
