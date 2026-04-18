@@ -90,8 +90,16 @@ setChecklistLogs(
   const handleUserChange = (u: OAuthUser | null) => {
     setUser(u)
     const newUid = u?.email ?? undefined
-    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], newUid))
-    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], newUid))
+setDeclutterRecords(
+  loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], newUid).length > 0
+    ? loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], newUid)
+    : loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
+)
+setChecklistLogs(
+  loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], newUid).length > 0
+    ? loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], newUid)
+    : loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [])
+)
   }
 
   return (
