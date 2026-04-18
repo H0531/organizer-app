@@ -39,8 +39,16 @@ export default function Home() {
     if (u) setUser(u)
 
     const uid = u?.email ?? undefined
-    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid))
-    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid))
+  setDeclutterRecords(
+  loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid).length > 0
+    ? loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid)
+    : loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
+)
+setChecklistLogs(
+  loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid).length > 0
+    ? loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid)
+    : loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [])
+)
   }, [])
 
   const handleTabChange = (newTab: AppTab) => {
