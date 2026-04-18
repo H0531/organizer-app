@@ -23,18 +23,14 @@ const TABS: { id: AppTab; label: string; icon: string }[] = [
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358'
 
-// Persist tab in sessionStorage so refresh restores it
 const TAB_KEY = 'active_tab'
 
 export default function Home() {
   const [tab, setTab] = useState<AppTab>('home')
   const [user, setUser] = useState<OAuthUser | null>(null)
-
-  // Global shared state persisted in localStorage
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
   const [checklistLogs, setChecklistLogs] = useState<ChecklistLog[]>([])
 
-  // Restore tab + load persisted data on mount
   useEffect(() => {
     const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
     if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
@@ -42,10 +38,9 @@ export default function Home() {
     const u = getUserFromCookie()
     if (u) setUser(u)
 
-    // Load data scoped to the current user (or anonymous scope if not logged in)
     const uid = u?.email ?? undefined
     setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid))
-    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid).map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid))
   }, [])
 
   const handleTabChange = (newTab: AppTab) => {
@@ -54,10 +49,12 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const uid = user?.email ?? undefined
+
   const handleDeclutterSave = (record: DeclutterRecord) => {
     setDeclutterRecords(prev => {
       const next = [record, ...prev]
-      saveLS(LS_DECLUTTER_RECORDS, next, user?.email ?? undefined)
+      saveLS(LS_DECLUTTER_RECORDS, next, uid)
       return next
     })
   }
@@ -65,8 +62,7 @@ export default function Home() {
   const handleChecklistSave = (log: ChecklistLog) => {
     setChecklistLogs(prev => {
       const next = [log, ...prev]
-      // Save without photos to stay within sessionStorage limits
-      saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })), user?.email ?? undefined)
+      saveLS(LS_CHECKLIST_LOGS, next, uid)
       return next
     })
   }
@@ -74,7 +70,7 @@ export default function Home() {
   const handleDeleteDeclutterRecord = (savedAt: string) => {
     setDeclutterRecords(prev => {
       const next = prev.filter(r => r.savedAt !== savedAt)
-      saveLS(LS_DECLUTTER_RECORDS, next, user?.email ?? undefined)
+      saveLS(LS_DECLUTTER_RECORDS, next, uid)
       return next
     })
   }
@@ -82,24 +78,22 @@ export default function Home() {
   const handleDeleteChecklistLog = (id: string) => {
     setChecklistLogs(prev => {
       const next = prev.filter(l => l.id !== id)
-      saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })), user?.email ?? undefined)
+      saveLS(LS_CHECKLIST_LOGS, next, uid)
       return next
     })
   }
 
-  // When user changes (login / logout), reload scoped data
-  const handleUserChange = (u: typeof user) => {
+  const handleUserChange = (u: OAuthUser | null) => {
     setUser(u)
-    const uid = u?.email ?? undefined
-    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], uid))
-    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], uid).map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    const newUid = u?.email ?? undefined
+    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], newUid))
+    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], newUid))
   }
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0E8', fontFamily: "'Noto Sans TC', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet" />
 
-      {/* Top title bar */}
       <div style={{
         background: '#FAF8F4', borderBottom: `1px solid ${bd}`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
@@ -111,17 +105,24 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Main content */}
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
         {tab === 'home'      && <HomeTab onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
-        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} />}
+        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} userId={uid} />}
         {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
         {tab === 'challenge' && <ChallengeTab />}
         {tab === 'recommend' && <RecommendTab />}
-        {tab === 'member'    && <MemberTab declutterRecords={declutterRecords} checklistLogs={checklistLogs} user={user} onUserChange={handleUserChange} onDeleteDeclutter={handleDeleteDeclutterRecord} onDeleteDiary={handleDeleteChecklistLog} />}
+        {tab === 'member'    && (
+          <MemberTab
+            declutterRecords={declutterRecords}
+            checklistLogs={checklistLogs}
+            user={user}
+            onUserChange={handleUserChange}
+            onDeleteDeclutter={handleDeleteDeclutterRecord}
+            onDeleteDiary={handleDeleteChecklistLog}
+          />
+        )}
       </div>
 
-      {/* Bottom navigation */}
       <nav style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         background: '#FAF8F4', borderTop: `1px solid ${bd}`,
