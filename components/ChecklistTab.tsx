@@ -320,16 +320,28 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
 
   const startTimer = () => { setTimeLeft(totalSecs); setElapsedSecs(0); setTimerDone(false); setTimerRunning(true); setPage(2) }
 
-  const saveLog = () => {
+  const saveLog = async () => {
     if (!canSave) return
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
-    const entry: ChecklistLog = {
-      id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
-      space: SN[space], note: note.trim() || defaultNote,
-      beforePhotos: skipBefore ? [] : beforePhotos,
-      afterPhotos:  skipAfter  ? [] : afterPhotos,
-      duration: elapsedSecs, targetMinutes: effectiveMins,
-    }
+   const compressPhoto = (src: string): Promise<string> => new Promise(res => {
+  const img = new Image(); img.onload = () => {
+    const c = document.createElement('canvas')
+    const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
+    c.width = img.width * r; c.height = img.height * r
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+    res(c.toDataURL('image/jpeg', 0.5))
+  }; img.src = src
+})
+
+const bp = skipBefore ? [] : await Promise.all(beforePhotos.map(compressPhoto))
+const ap = skipAfter  ? [] : await Promise.all(afterPhotos.map(compressPhoto))
+
+const entry: ChecklistLog = {
+  id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
+  space: SN[space], note: note.trim() || defaultNote,
+  beforePhotos: bp, afterPhotos: ap,
+  duration: elapsedSecs, targetMinutes: effectiveMins,
+}
     const next = [entry, ...logs]
     setLogs(next)
     saveLS(LS_CHECKLIST_LOGS, next, userId)  // ← 修正：新增時也寫入 localStorage
