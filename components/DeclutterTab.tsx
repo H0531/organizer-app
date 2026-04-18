@@ -5,6 +5,11 @@ import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 const KEEP_CATS = ['日常用品', '季節性', '紀念品', '備用品', '工作用品']
+const DRAFT_KEY = 'declutter_draft'
+const STAGE_KEY = 'declutter_stage'
+
+// Concrete quick-add suggestions
+const QUICK_ITEMS = ['手機充電線', '彩妝品', '衣服', '包包', '過期食品', '重複備品', '書籍', '電子產品']
 
 const todayStr = () => {
   const d = new Date()
@@ -38,6 +43,8 @@ function downloadIcs(icsContent: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+type Stage = 'input' | 'review' | 'flow' | 'tosslist'
+
 type Props = {
   onSaveToMember: (record: DeclutterRecord) => void
   onGoToMember: () => void
@@ -46,17 +53,20 @@ type Props = {
 export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   const [items, setItems] = useState<DeclutterItem[]>([])
   const [input, setInput] = useState('')
-  const [stage, setStage] = useState<'input' | 'review' | 'flow' | 'tosslist'>('input')
+  const [stage, setStageRaw] = useState<Stage>('input')
   const [flowIndex, setFlowIndex] = useState(0)
   const [flowType, setFlowType] = useState<'keep' | 'donate' | 'toss'>('keep')
   const [justSaved, setJustSaved] = useState(false)
+
+  // Inline editing of item names in list
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [editingItemName, setEditingItemName] = useState('')
 
   const [keepCat, setKeepCat] = useState('')
   const [donateDate, setDonateDate] = useState('')
   const [donateCalAdded, setDonateCalAdded] = useState(false)
   const [donateDates, setDonateDates] = useState<Record<string, string>>({})
   const [donateCalItems, setDonateCalItems] = useState<Set<string>>(new Set())
-  const [tossWrite, setTossWrite] = useState(false)
   const [tossMemo, setTossMemo] = useState('')
   const [tossEntries, setTossEntries] = useState<TossEntry[]>([])
   const [editTossId, setEditTossId] = useState<string | null>(null)
@@ -64,12 +74,21 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   const [shareTossEntry, setShareTossEntry] = useState<TossEntry | null>(null)
   const [saveFlash, setSaveFlash] = useState(false)
 
-  // Draft key — auto-save draft to localStorage so refresh restores
-  const DRAFT_KEY = 'declutter_draft'
+  // Persist stage across refresh
+  const setStage = (s: Stage) => {
+    setStageRaw(s)
+    saveLS(STAGE_KEY, s)
+  }
+
+  // Load draft + stage on mount
   useEffect(() => {
     const draft = loadLS<{ items: DeclutterItem[]; tossEntries: TossEntry[] } | null>(DRAFT_KEY, null)
     if (draft) { setItems(draft.items); setTossEntries(draft.tossEntries) }
+    const savedStage = loadLS<Stage | null>(STAGE_KEY, null)
+    if (savedStage) setStageRaw(savedStage)
   }, [])
+
+  // Auto-save draft
   useEffect(() => {
     if (items.length > 0) saveLS(DRAFT_KEY, { items, tossEntries })
   }, [items, tossEntries])
@@ -86,6 +105,13 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
   const removeItem = (id: string) => setItems(prev => prev.filter(x => x.id !== id))
 
+  const saveItemName = (id: string) => {
+    const name = editingItemName.trim()
+    if (!name) return
+    setItems(prev => prev.map(x => x.id === id ? { ...x, name } : x))
+    setEditingItemId(null)
+  }
+
   const undecided = items.filter(x => !x.decision)
   const keepItems = items.filter(x => x.decision === 'keep')
   const donateItems = items.filter(x => x.decision === 'donate')
@@ -97,13 +123,13 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
   const startFlow = (type: 'keep' | 'donate' | 'toss') => {
     setFlowType(type); setFlowIndex(0); setStage('flow')
-    setKeepCat(''); setDonateDate(''); setDonateCalAdded(false); setTossWrite(false); setTossMemo('')
+    setKeepCat(''); setDonateDate(''); setDonateCalAdded(false); setTossMemo('')
   }
 
   const nextFlowItem = () => {
     if (flowIndex < flowItems.length - 1) {
       setFlowIndex(i => i + 1)
-      setKeepCat(''); setDonateCalAdded(false); setTossWrite(false); setTossMemo('')
+      setKeepCat(''); setDonateCalAdded(false); setTossMemo('')
     } else {
       setStage(flowType === 'toss' ? 'tosslist' : 'review')
     }
@@ -112,7 +138,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   const saveFlowItem = () => {
     let nextTossEntries = tossEntries
     setItems(prev => prev.map(x => {
-      if (x.name !== currentFlowItem?.name) return x
+      if (x.id !== currentFlowItem?.id) return x
       if (flowType === 'keep')   return { ...x, category: keepCat }
       if (flowType === 'donate') return { ...x, disposeDate: donateDate }
       if (flowType === 'toss') {
@@ -148,12 +174,13 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       setSaveFlash(false)
       setJustSaved(true)
       saveLS(DRAFT_KEY, null)
+      saveLS(STAGE_KEY, 'review')
     }, 600)
   }
 
   const resetAll = () => {
     setItems([]); setTossEntries([]); setStage('input'); setJustSaved(false)
-    saveLS(DRAFT_KEY, null)
+    saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, 'input')
   }
 
   const shareText = (e: TossEntry) => `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`
@@ -179,9 +206,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
             style={{ flex: 1, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, outline: 'none', color: ink, background: 'white' }} />
           <button onClick={() => addItem()} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>新增</button>
         </div>
-
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {['舊衣服', '過期食品', '重複備品', '壞掉的東西', '久未使用品'].map(q => (
+          {QUICK_ITEMS.map(q => (
             <button key={q} onClick={() => addItem(q)}
               style={{ padding: '5px 12px', borderRadius: 16, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>
               + {q}
@@ -193,19 +219,45 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       {items.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
           {items.map((item, i) => (
-            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: i < items.length - 1 ? `1px solid ${cr}` : 'none' }}>
-              <span style={{ flex: 1, fontSize: 14, color: ink }}>{item.name}</span>
-              {(['keep', 'donate', 'toss'] as Decision[]).map(d => (
-                <button key={d} onClick={() => setDec(item.id, d)} style={{
-                  padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: item.decision === d ? 600 : 400,
-                  border: `1px solid ${item.decision === d ? (d === 'keep' ? sg : d === 'donate' ? '#4285F4' : '#C47B5A') : bd}`,
-                  background: item.decision === d ? (d === 'keep' ? '#EAF2EE' : d === 'donate' ? '#EEF3FE' : '#FDF5F0') : 'white',
-                  color: item.decision === d ? (d === 'keep' ? sg : d === 'donate' ? '#4285F4' : '#C47B5A') : ml,
-                }}>
-                  {d === 'keep' ? '留' : d === 'donate' ? '送' : '丟'}
-                </button>
-              ))}
-              <button onClick={() => removeItem(item.id)} style={{ fontSize: 13, color: mf, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+            <div key={item.id} style={{ padding: '10px 0', borderBottom: i < items.length - 1 ? `1px solid ${cr}` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Inline name editing */}
+                {editingItemId === item.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      value={editingItemName}
+                      onChange={e => setEditingItemName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveItemName(item.id); if (e.key === 'Escape') setEditingItemId(null) }}
+                      style={{ flex: 1, border: `1px solid ${sg}`, borderRadius: 6, padding: '4px 8px', fontSize: 14, outline: 'none', color: ink }}
+                    />
+                    <button onClick={() => saveItemName(item.id)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>✓</button>
+                    <button onClick={() => setEditingItemId(null)} style={{ fontSize: 12, color: mf, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      style={{ flex: 1, fontSize: 14, color: ink, cursor: 'text' }}
+                      onClick={() => { setEditingItemId(item.id); setEditingItemName(item.name) }}>
+                      {item.name}
+                    </span>
+                    {(['keep', 'donate', 'toss'] as Decision[]).map(d => (
+                      <button key={d} onClick={() => setDec(item.id, d)} style={{
+                        padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: item.decision === d ? 600 : 400,
+                        border: `1px solid ${item.decision === d ? (d === 'keep' ? sg : d === 'donate' ? '#4285F4' : '#C47B5A') : bd}`,
+                        background: item.decision === d ? (d === 'keep' ? '#EAF2EE' : d === 'donate' ? '#EEF3FE' : '#FDF5F0') : 'white',
+                        color: item.decision === d ? (d === 'keep' ? sg : d === 'donate' ? '#4285F4' : '#C47B5A') : ml,
+                      }}>
+                        {d === 'keep' ? '留' : d === 'donate' ? '送' : '丟'}
+                      </button>
+                    ))}
+                    <button onClick={() => removeItem(item.id)} style={{ fontSize: 13, color: mf, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                  </>
+                )}
+              </div>
+              {editingItemId !== item.id && (
+                <div style={{ fontSize: 11, color: mf, marginTop: 3, paddingLeft: 2 }}>點名稱可編輯文字</div>
+              )}
             </div>
           ))}
         </div>
@@ -235,6 +287,13 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         <button onClick={() => setStage('input')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0 }}>分流處理</h1>
       </div>
+
+      {justSaved && (
+        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: '#2E6B50' }}>✅ 紀錄已儲存到會員頁</span>
+          <button onClick={onGoToMember} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>前往查看 →</button>
+        </div>
+      )}
 
       {/* Keep */}
       {keepItems.length > 0 && (
@@ -311,97 +370,118 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* Save button */}
       <button onClick={handleSave}
         style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600, marginTop: 8, transition: 'background 0.3s' }}>
         {saveFlash ? '✅ 已儲存！' : '💾 儲存斷捨離紀錄'}
       </button>
-      {justSaved && (
-        <button onClick={onGoToMember} style={{ width: '100%', marginTop: 8, padding: '11px', borderRadius: 12, border: `1px solid ${sg}`, background: 'white', color: sg, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-          前往會員頁查看紀錄 →
-        </button>
-      )}
     </div>
   )
 
   // ── STAGE: flow ───────────────────────────────────────────────
-  if (stage === 'flow') return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
-        <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
-        <div style={{ fontSize: 13, color: mf }}>{flowIndex + 1} / {flowItems.length}</div>
-      </div>
+  if (stage === 'flow') {
+    const isLast = flowIndex >= flowItems.length - 1
+    const isDone = !currentFlowItem
 
-      {!currentFlowItem ? (
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-          <div style={{ fontSize: 16, color: sg }}>全部處理完成！</div>
-          <button onClick={() => setStage(flowType === 'toss' ? 'tosslist' : 'review')} style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer' }}>返回總覽</button>
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+          <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回分流處理總覽</button>
+          {!isDone && <div style={{ fontSize: 13, color: mf, marginLeft: 'auto' }}>{flowIndex + 1} / {flowItems.length}</div>}
         </div>
-      ) : (
-        <div>
-          <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '28px 24px', marginBottom: 20 }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: ink, marginBottom: 4, fontFamily: "'Noto Serif TC', serif" }}>{currentFlowItem.name}</div>
-            <div style={{ fontSize: 12, color: mf }}>
-              {flowType === 'keep' ? '留下' : flowType === 'donate' ? '送出' : '丟棄'}
+
+        {isDone ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+            <div style={{ fontSize: 18, color: sg, fontFamily: "'Noto Serif TC', serif", marginBottom: 6 }}>全部處理完成！</div>
+            {flowType === 'donate' && (
+              <div style={{ fontSize: 14, color: ml, marginBottom: 20, lineHeight: 1.8, padding: '12px 16px', background: '#EEF3FE', borderRadius: 10, display: 'inline-block' }}>
+                廣結善緣並把愛傳下去，你超棒的 💙
+              </div>
+            )}
+            {flowType === 'toss' && (
+              <div style={{ fontSize: 14, color: ml, marginBottom: 20, lineHeight: 1.8, padding: '12px 16px', background: cr, borderRadius: 10, display: 'inline-block' }}>
+                辛苦了！道別是為迎接更美好的未來，你做的很棒 🌱
+              </div>
+            )}
+            <div style={{ marginTop: 16 }}>
+              <button onClick={() => setStage(flowType === 'toss' ? 'tosslist' : 'review')} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer' }}>
+                {flowType === 'toss' ? '查看告別紀念文' : '返回分流處理總覽'}
+              </button>
             </div>
           </div>
-
-          {flowType === 'keep' && (
-            <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>這件物品要放在哪一區？</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {KEEP_CATS.map(cat => (
-                  <button key={cat} onClick={() => setKeepCat(cat)} style={{ padding: '8px 14px', borderRadius: 20, border: `1px solid ${keepCat === cat ? sg : bd}`, background: keepCat === cat ? '#EAF2EE' : 'white', color: keepCat === cat ? sg : ml, fontSize: 13, cursor: 'pointer' }}>
-                    {cat}
-                  </button>
-                ))}
+        ) : (
+          <div>
+            <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '28px 24px', marginBottom: 20 }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: ink, marginBottom: 4, fontFamily: "'Noto Serif TC', serif" }}>{currentFlowItem.name}</div>
+              <div style={{ fontSize: 12, color: mf }}>
+                {flowType === 'keep' ? '留下' : flowType === 'donate' ? '送出' : '丟棄'}
               </div>
             </div>
-          )}
 
-          {flowType === 'donate' && (
-            <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: ml, marginBottom: 10 }}>預計送出日期</div>
-              <input type="date" min={todayStr()} value={donateDate} onChange={e => setDonateDate(e.target.value)}
-                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, color: ink, outline: 'none', background: 'white', boxSizing: 'border-box' }} />
-              {donateDate && (
-                <button
-                  onClick={() => {
-                    const ics = generateDonateIcs(donateDate, currentFlowItem.name)
-                    downloadIcs(ics, `donate-${currentFlowItem.name}.ics`)
-                    setDonateCalAdded(true)
-                  }}
-                  style={{ marginTop: 10, width: '100%', padding: '10px', borderRadius: 10, border: `1.5px solid ${donateCalAdded ? sg : '#4285F4'}`, background: donateCalAdded ? '#EAF2EE' : 'white', color: donateCalAdded ? sg : '#4285F4', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-                  {donateCalAdded ? '✅ 行事曆已加入' : '📅 加入行事曆提醒'}
-                </button>
-              )}
-            </div>
-          )}
+            {flowType === 'keep' && (
+              <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: ml, marginBottom: 12 }}>這件物品要放在哪一區？</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {KEEP_CATS.map(cat => (
+                    <button key={cat} onClick={() => setKeepCat(cat)} style={{ padding: '8px 14px', borderRadius: 20, border: `1px solid ${keepCat === cat ? sg : bd}`, background: keepCat === cat ? '#EAF2EE' : 'white', color: keepCat === cat ? sg : ml, fontSize: 13, cursor: 'pointer' }}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {flowType === 'toss' && (
-            <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: ml, marginBottom: 4 }}>寫一句告別的話（可略過）</div>
-              <div style={{ fontSize: 11, color: mf, marginBottom: 10 }}>例：謝謝你陪伴了我三年，現在換個地方繼續發揮你的用處吧。</div>
-              <textarea value={tossMemo} onChange={e => setTossMemo(e.target.value)} placeholder="感謝、回憶、或祝福…"
-                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 80, resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-            </div>
-          )}
+            {flowType === 'donate' && (
+              <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: ml, marginBottom: 10 }}>預計送出日期</div>
+                <input type="date" min={todayStr()} value={donateDate} onChange={e => setDonateDate(e.target.value)}
+                  style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, color: ink, outline: 'none', background: 'white', boxSizing: 'border-box' }} />
+                {donateDate && (
+                  <button
+                    onClick={() => {
+                      const ics = generateDonateIcs(donateDate, currentFlowItem.name)
+                      downloadIcs(ics, `donate-${currentFlowItem.name}.ics`)
+                      setDonateCalAdded(true)
+                    }}
+                    style={{ marginTop: 10, width: '100%', padding: '10px', borderRadius: 10, border: `1.5px solid ${donateCalAdded ? sg : '#4285F4'}`, background: donateCalAdded ? '#EAF2EE' : 'white', color: donateCalAdded ? sg : '#4285F4', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                    {donateCalAdded ? '✅ 行事曆已加入' : '📅 加入行事曆提醒'}
+                  </button>
+                )}
+              </div>
+            )}
 
-          <button onClick={saveFlowItem} style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
-            {flowIndex < flowItems.length - 1 ? '下一件 →' : '完成'}
-          </button>
-        </div>
-      )}
-    </div>
-  )
+            {flowType === 'toss' && (
+              <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: ml, marginBottom: 4 }}>寫一句告別的話（可略過）</div>
+                <div style={{ fontSize: 11, color: mf, marginBottom: 10 }}>例：謝謝你陪伴了我三年，現在換個地方繼續發揮你的用處吧。</div>
+                <textarea value={tossMemo} onChange={e => setTossMemo(e.target.value)} placeholder="感謝、回憶、或祝福…"
+                  style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 80, resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+              </div>
+            )}
+
+            <button onClick={saveFlowItem} style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
+              {isLast ? '完成' : '下一件 →'}
+            </button>
+
+            {/* Encourage copy shown as subtle note during flow */}
+            {isLast && flowType === 'donate' && (
+              <div style={{ textAlign: 'center', fontSize: 12, color: mf, marginTop: 12 }}>廣結善緣並把愛傳下去，你超棒的 💙</div>
+            )}
+            {isLast && flowType === 'toss' && (
+              <div style={{ textAlign: 'center', fontSize: 12, color: mf, marginTop: 12 }}>辛苦了！道別是為迎接更美好的未來，你做的很棒 🌱</div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // ── STAGE: tosslist ──────────────────────────────────────────
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
-        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0 }}>告別紀念文</h1>
+        <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回分流處理總覽</button>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: ink, margin: 0 }}>告別紀念文</h1>
       </div>
 
       {tossEntries.length === 0 ? (
@@ -435,8 +515,12 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       ))}
 
       <button onClick={() => setStage('review')} style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
-        返回分流總覽 →
+        返回分流處理總覽 →
       </button>
+
+      <div style={{ textAlign: 'center', fontSize: 13, color: ml, marginTop: 14, lineHeight: 1.8 }}>
+        辛苦了！道別是為迎接更美好的未來，你做的很棒 🌱
+      </div>
 
       {shareTossEntry && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>

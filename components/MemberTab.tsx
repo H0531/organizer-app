@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
-import { loadLS, LS_CHALLENGE_DATA } from '@/lib/types'
+import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA } from '@/lib/types'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -15,15 +15,38 @@ type Props = {
   onUserChange: (u: OAuthUser | null) => void
 }
 
+// ── Share modal ─────────────────────────────────────────────────
+function ShareModal({ title, text, onClose }: { title: string; text: string; onClose: () => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 360, width: '100%' }}>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
+        <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {SHARE_BTNS.map(p => (
+            <button key={p.id} onClick={() => shareToSocial(p.id, text)}
+              style={{ width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+              {p.label}
+            </button>
+          ))}
+          <button onClick={onClose} style={{ width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
 
-  // Expandable state
   const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge'>('diary')
+
+  // Share modal
+  const [shareModal, setShareModal] = useState<{ title: string; text: string } | null>(null)
 
   // Challenge data from localStorage
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
@@ -39,8 +62,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       setAuthError(true)
       window.history.replaceState({}, '', '/')
     }
-
-    // Load challenge data
     const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] })
     setChallengeMode(saved.mode)
     setChallengeEntries(saved.entries)
@@ -59,7 +80,21 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
 
   const challengePct = challengeMode ? Math.round((challengeEntries.length / challengeMode) * 100) : 0
 
-  // ── NOT LOGGED IN ───────────────────────────────────────────
+  // Share text builders
+  const diaryShareText = (log: ChecklistLog) =>
+    `我完成了${log.space}整理！用時 ${fmtMins(log.duration)} ✨\n${log.note}\n#整理小幫手 #生活整理`
+
+  const declutterShareText = (record: DeclutterRecord) => {
+    const keep = record.items.filter(x => x.decision === 'keep').length
+    const donate = record.items.filter(x => x.decision === 'donate').length
+    const toss = record.items.filter(x => x.decision === 'toss').length
+    return `完成了一輪斷捨離！共 ${record.items.length} 件\n留 ${keep} 件・送 ${donate} 件・丟 ${toss} 件\n#斷捨離 #整理小幫手`
+  }
+
+  const challengeShareText = () =>
+    `每日丟一物挑戰 ${challengeEntries.length}/${challengeMode} 天，達成率 ${challengePct}%！\n繼續努力中 💪\n#每日丟一物 #整理小幫手`
+
+  // ── NOT LOGGED IN ────────────────────────────────────────────
   if (!user) return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>我的整理</h1>
@@ -73,7 +108,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
-      {/* Guest data summary */}
       <div style={{ background: cr, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: ml, marginBottom: 8 }}>目前本機資料</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -96,7 +130,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 8 }}>使用 Google 登入</div>
         <div style={{ fontSize: 13, color: ml, marginBottom: 24, lineHeight: 1.6 }}>登入後資料跨裝置同步，不怕遺失</div>
-
         <button onClick={handleGoogleLogin}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: '100%', padding: '13px 20px', borderRadius: 10, border: '1.5px solid #DADCE0', background: 'white', cursor: 'pointer', fontSize: 15, color: '#3C4043', fontWeight: 500, marginBottom: 16 }}>
           <svg width="20" height="20" viewBox="0 0 48 48">
@@ -112,7 +145,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     </div>
   )
 
-  // ── LOGGED IN ───────────────────────────────────────────────
+  // ── LOGGED IN ─────────────────────────────────────────────────
   return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 20, color: ink }}>我的整理</h1>
@@ -148,7 +181,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Section tabs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
         {[
           { label: '整理日記', value: `${checklistLogs.length}`, unit: '筆', icon: '📓', section: 'diary' as const },
@@ -164,7 +197,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         ))}
       </div>
 
-      {/* Section: Diary */}
+      {/* ── Diary ── */}
       {activeSection === 'diary' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>整理日記（{checklistLogs.length} 筆）</div>
@@ -174,17 +207,26 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             </div>
           ) : checklistLogs.map((log, i) => (
             <div key={log.id} style={{ borderBottom: i < checklistLogs.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
-                <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: ink }}>{log.space}整理</span>
                   <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{log.date}</span>
                   <span style={{ fontSize: 12, color: mf, marginLeft: 6 }}>· {fmtMins(log.duration)}</span>
                 </div>
-                <span style={{ fontSize: 13, color: sg }}>{expandedLog === log.id ? '▲' : '▼'}</span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log) })}
+                    style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
+                    分享
+                  </button>
+                  <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
+                    {expandedLog === log.id ? '▲' : '▼'}
+                  </span>
+                </div>
               </div>
               {expandedLog === log.id && (
                 <div style={{ marginTop: 10 }}>
-                  <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: '0 0 8px' }}>{log.note}</p>
+                  <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: '0 0 6px' }}>{log.note}</p>
                   <div style={{ fontSize: 12, color: mf }}>目標 {log.targetMinutes} 分鐘</div>
                 </div>
               )}
@@ -193,7 +235,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
-      {/* Section: Declutter */}
+      {/* ── Declutter ── */}
       {activeSection === 'declutter' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄（{declutterRecords.length} 次）</div>
@@ -203,16 +245,24 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             </div>
           ) : declutterRecords.map((record, i) => (
             <div key={i} style={{ borderBottom: i < declutterRecords.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
-                <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
                   <span style={{ fontSize: 14, fontWeight: 500, color: ink }}>{record.items.length} 件物品</span>
                   <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{record.savedAt}</span>
                 </div>
-                <span style={{ fontSize: 13, color: sg }}>{expandedRecord === record.savedAt ? '▲' : '▼'}</span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
+                    style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
+                    分享
+                  </button>
+                  <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
+                    {expandedRecord === record.savedAt ? '▲' : '▼'}
+                  </span>
+                </div>
               </div>
               {expandedRecord === record.savedAt && (
                 <div style={{ marginTop: 12 }}>
-                  {/* Decision counts */}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                     {(['keep', 'donate', 'toss'] as const).map(d => {
                       const count = record.items.filter(x => x.decision === d).length
@@ -224,11 +274,10 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                       )
                     })}
                   </div>
-                  {/* Items list - clickable to expand detail */}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {record.items.map((item, j) => (
                       <div key={j} style={{
-                        padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'default',
+                        padding: '5px 12px', borderRadius: 20, fontSize: 12,
                         background: item.decision === 'keep' ? '#EAF2EE' : item.decision === 'toss' ? cr : '#FDF5F0',
                         color: item.decision === 'keep' ? '#2E6B50' : item.decision === 'toss' ? ml : '#C47B5A',
                         border: `1px solid ${item.decision === 'keep' ? '#C0DDD0' : item.decision === 'toss' ? bd : '#E8C0A8'}`,
@@ -239,7 +288,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                       </div>
                     ))}
                   </div>
-                  {/* Toss memos */}
                   {record.tossEntries.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 12, color: mf, marginBottom: 6 }}>告別紀念文</div>
@@ -257,10 +305,18 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
-      {/* Section: Challenge */}
+      {/* ── Challenge ── */}
       {activeSection === 'challenge' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>每日丟一物挑戰</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>每日丟一物挑戰</div>
+            {challengeMode && (
+              <button onClick={() => setShareModal({ title: '分享挑戰進度', text: challengeShareText() })}
+                style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
+                分享進度
+              </button>
+            )}
+          </div>
           {!challengeMode ? (
             <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🎯</div>尚未開始挑戰
@@ -280,12 +336,22 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 <div>
                   <div style={{ fontSize: 12, color: mf, marginBottom: 8 }}>最近紀錄</div>
                   {[...challengeEntries].reverse().slice(0, 5).map((entry, i) => (
-                    <div key={i} style={{ padding: '8px 0', borderBottom: `1px solid ${cr}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 13, color: ink, fontWeight: 500 }}>Day {entry.day}：{entry.item}</span>
-                        <span style={{ fontSize: 11, color: mf }}>{entry.date}</span>
+                    <div key={i} style={{ padding: '8px 0', borderBottom: `1px solid ${cr}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 13, color: ink, fontWeight: 500 }}>Day {entry.day}：{entry.item}</span>
+                          <span style={{ fontSize: 11, color: mf }}>{entry.date}</span>
+                        </div>
+                        {entry.feeling && <div style={{ fontSize: 12, color: ml, marginTop: 2 }}>{entry.feeling}</div>}
                       </div>
-                      {entry.feeling && <div style={{ fontSize: 12, color: ml, marginTop: 2 }}>{entry.feeling}</div>}
+                      <button
+                        onClick={() => setShareModal({
+                          title: `Day ${entry.day} 分享`,
+                          text: `每日丟一物 Day ${entry.day}：「${entry.item}」\n${entry.feeling || ''}\n#每日丟一物 #整理小幫手`
+                        })}
+                        style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', marginLeft: 8, flexShrink: 0 }}>
+                        分享
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -293,6 +359,10 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             </>
           )}
         </div>
+      )}
+
+      {shareModal && (
+        <ShareModal title={shareModal.title} text={shareModal.text} onClose={() => setShareModal(null)} />
       )}
     </div>
   )

@@ -134,10 +134,10 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>旋轉 {rotation}°</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {[-90, -45, 0, 45, 90].map(r => (
+            {[0, 90, 180, 270].map(r => (
               <button key={r} onClick={() => setRotation(r)}
                 style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: `1px solid ${rotation === r ? sg : bd}`, background: rotation === r ? '#EAF2EE' : 'white', color: rotation === r ? sg : ml, fontSize: 11, cursor: 'pointer' }}>
-                {r}°
+                {r === 270 ? '270°' : r === 0 ? '原圖' : `${r}°`}
               </button>
             ))}
           </div>
@@ -185,7 +185,7 @@ function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, c
               {photos.map((p, i) => (
                 <div key={i} style={{ position: 'relative' }}>
                   <img src={p} alt="" style={{ width: 82, height: 82, objectFit: 'cover', borderRadius: 8, border: `2px solid ${color}`, display: 'block' }} />
-                  <button onClick={() => onEdit(i)} style={{ position: 'absolute', bottom: -7, left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `1px solid ${sg}`, borderRadius: 8, fontSize: 10, color: sg, padding: '1px 6px', cursor: 'pointer' }}>✂ 編輯</button>
+                  <button onClick={() => onEdit(i)} style={{ position: 'absolute', bottom: -7, left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `1px solid ${sg}`, borderRadius: 8, fontSize: 10, color: sg, padding: '1px 6px', cursor: 'pointer' }}>編輯</button>
                   <button onClick={() => onRemove(i)} style={{ position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%', background: '#777', color: 'white', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                 </div>
               ))}
@@ -215,10 +215,17 @@ function PageDots({ page }: { page: number }) {
   )
 }
 
+const CL_PAGE_KEY = 'checklist_page'
+
 type Props = { onSaveLog: (log: ChecklistLog) => void }
 
 export default function ChecklistTab({ onSaveLog }: Props) {
-  const [page, setPage] = useState<1 | 2 | 3>(1)
+  const [page, setPageRaw] = useState<1 | 2 | 3>(1)
+
+  const setPage = (p: 1 | 2 | 3) => {
+    setPageRaw(p)
+    saveLS(CL_PAGE_KEY, p)
+  }
   const [space, setSpace] = useState('desk')
   const [checked, setChecked] = useState<Record<string, boolean[]>>({})
 
@@ -261,6 +268,8 @@ export default function ChecklistTab({ onSaveLog }: Props) {
     setLogs(saved.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
     const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
     setScheduledItems(sched)
+    const savedPage = loadLS<number>(CL_PAGE_KEY, 1)
+    if (savedPage === 3) setPageRaw(3) // only restore page 3 (log view), not mid-session pages
   }, [])
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
@@ -576,6 +585,12 @@ export default function ChecklistTab({ onSaveLog }: Props) {
         <div style={{ fontSize: 13, color: mf }}>{logs.length} 筆</div>
       </div>
       <PageDots page={3} />
+
+      {/* Quick link to start new session */}
+      <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 13, color: '#2E6B50' }}>要開始新的整理嗎？</span>
+        <button onClick={() => setPage(1)} style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>前往 →</button>
+      </div>
 
       {logs.length === 0 ? (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '40px 24px', textAlign: 'center' }}>
