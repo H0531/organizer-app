@@ -34,6 +34,17 @@ function downloadIcs(content: string, filename: string) {
 function readFile(file: File): Promise<string> {
   return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(file) })
 }
+async function compressPhoto(src: string): Promise<string> {
+  return new Promise(res => {
+    const img = new Image(); img.onload = () => {
+      const c = document.createElement('canvas')
+      const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
+      c.width = img.width * r; c.height = img.height * r
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      res(c.toDataURL('image/jpeg', 0.5))
+    }; img.src = src
+  })
+}
 
 // ── Single photo uploader ─────────────────────────────────────
 function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p: string | undefined) => void; label: string }) {
@@ -206,21 +217,26 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
     }
   }
 
-  const saveFlowItem = () => {
+  const saveFlowItem = async () => {
     const id = currentFlowItem?.id
     if (!id) return
     let nextTossEntries = tossEntries
+
+    // Pre-compress photos before entering sync callbacks
+    const compressedTossPhoto = flowType === 'toss' && tossPhoto ? await compressPhoto(tossPhoto) : undefined
+    const compressedDonatePhoto = flowType === 'donate' && donatePhoto ? await compressPhoto(donatePhoto) : undefined
+
     setItems(prev => prev.map(x => {
       if (x.id !== id) return x
       if (flowType === 'keep') return { ...x, category: keepCat }
       if (flowType === 'donate') {
         // save per-item memo/photo
         if (donateMemo) setDonateMemos(m => ({ ...m, [id]: donateMemo }))
-        if (donatePhoto) setDonatePhotos(p => ({ ...p, [id]: donatePhoto }))
+        if (compressedDonatePhoto) setDonatePhotos(p => ({ ...p, [id]: compressedDonatePhoto }))
         return { ...x, disposeDate: donateDate }
       }
       if (flowType === 'toss') {
-        const entry: TossEntry = { id, name: x.name, memo: tossMemo, date: new Date().toLocaleDateString('zh-TW'), photo: tossPhoto }
+        const entry: TossEntry = { id, name: x.name, memo: tossMemo, date: new Date().toLocaleDateString('zh-TW'), photo: compressedTossPhoto }
         nextTossEntries = [...tossEntries.filter(e => e.id !== id), entry]
         setTossEntries(nextTossEntries)
         return { ...x, tossMemo }
