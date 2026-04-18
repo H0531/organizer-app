@@ -265,13 +265,13 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
 
   useEffect(() => {
    const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], userId)
-    const restoredLogs = saved.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] }))
-    setLogs(restoredLogs)
+    setLogs(saved)
+    
     const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
     setScheduledItems(sched)
     // Default to page 3 (log view) if user has existing logs
     const savedPage = loadLS<number>(CL_PAGE_KEY, 1)
-    if (savedPage === 3 || (restoredLogs.length > 0 && savedPage !== 2)) setPageRaw(3)
+    if (savedPage === 3 || (saved.length > 0 && savedPage !== 2)) setPageRaw(3)
   }, [])
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
