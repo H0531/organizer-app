@@ -17,7 +17,6 @@ type Props = {
   onDeleteDiary: (id: string) => void
 }
 
-// ── Share modal with image capture ──────────────────────────────
 function ShareModal({ title, text, captureRef, onClose }: { title: string; text: string; captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void }) {
   const captureAndShare = async () => {
     if (!captureRef?.current) return
@@ -43,8 +42,6 @@ function ShareModal({ title, text, captureRef, onClose }: { title: string; text:
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
-
-        {/* Preview card for capture */}
         {captureRef && (
           <div ref={captureRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 8 }}>{title}</div>
@@ -52,15 +49,12 @@ function ShareModal({ title, text, captureRef, onClose }: { title: string; text:
             <div style={{ fontSize: 11, color: mf, textAlign: 'right', marginTop: 8 }}>整理小幫手 #生活整理</div>
           </div>
         )}
-
         {!captureRef && (
           <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 14, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
         )}
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {captureRef && (
-            <button onClick={captureAndShare}
-              style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+            <button onClick={captureAndShare} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
               📸 儲存 / 分享圖片
             </button>
           )}
@@ -81,16 +75,11 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
-
   const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge'>('diary')
-
-  // Share modal
   const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean } | null>(null)
   const shareCaptureRef = useRef<HTMLDivElement>(null)
-
-  // Challenge data from localStorage
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
   const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
 
@@ -107,7 +96,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] })
     setChallengeMode(saved.mode)
     setChallengeEntries(saved.entries)
-    // Restore section from sessionStorage (set by DeclutterTab)
     const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | null
     if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
   }, [])
@@ -125,7 +113,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
 
   const challengePct = challengeMode ? Math.round((challengeEntries.length / challengeMode) * 100) : 0
 
-  // Share text builders
   const diaryShareText = (log: ChecklistLog) =>
     `我完成了${log.space}整理！用時 ${fmtMins(log.duration)} ✨\n${log.note}\n#整理小幫手 #生活整理`
 
@@ -139,20 +126,17 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const challengeShareText = () =>
     `每日丟一物挑戰 ${challengeEntries.length}/${challengeMode} 天，達成率 ${challengePct}%！\n繼續努力中 💪\n#每日丟一物 #整理小幫手`
 
-  // ── NOT LOGGED IN ────────────────────────────────────────────
   if (!user) return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>我的整理</h1>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20, lineHeight: 1.7 }}>
         登入後，整理日記、斷捨離紀錄和每日挑戰進度都會同步到帳號，不怕換裝置或清除瀏覽器。
       </p>
-
       {authError && (
         <div style={{ background: '#FDF5F0', border: '1px solid #E8A87C', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#C47B5A' }}>
           ⚠️ 登入失敗，請再試一次
         </div>
       )}
-
       <div style={{ background: cr, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: ml, marginBottom: 8 }}>目前本機資料</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -168,9 +152,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11, color: mf, marginTop: 10 }}>⚠️ 未登入資料只存在本機，清除瀏覽器後將消失</div>
+        <div style={{ fontSize: 11, color: mf, marginTop: 10 }}>⚠️ 未登入資料只存在本機，關閉瀏覽器後將消失</div>
       </div>
-
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '32px 24px', marginBottom: 16, textAlign: 'center' }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 8 }}>使用 Google 登入</div>
@@ -190,12 +173,10 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     </div>
   )
 
-  // ── LOGGED IN ─────────────────────────────────────────────────
   return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 20, color: ink }}>我的整理</h1>
 
-      {/* User card */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {user.picture
@@ -226,7 +207,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </button>
       </div>
 
-      {/* Section tabs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
         {[
           { label: '整理日記', value: `${checklistLogs.length}`, unit: '筆', icon: '📓', section: 'diary' as const },
@@ -242,7 +222,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         ))}
       </div>
 
-      {/* ── Diary ── */}
       {activeSection === 'diary' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>整理日記（{checklistLogs.length} 筆）</div>
@@ -259,16 +238,11 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                   <span style={{ fontSize: 12, color: mf, marginLeft: 6 }}>· {fmtMins(log.duration)}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button
-                    onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log), withCapture: true })}
-                    style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
-                    分享
-                  </button>
-                  <button
-                    onClick={() => { if (window.confirm('確定刪除這筆日記？刪除後無法復原。')) onDeleteDiary(log.id) }}
-                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    刪除
-                  </button>
+                  <button onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log), withCapture: true })}
+                    style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
+                  <button onClick={() => {
+                    if (window.confirm('確定刪除這筆日記？刪除後無法復原。')) onDeleteDiary(log.id)
+                  }} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
                     {expandedLog === log.id ? '▲' : '▼'}
                   </span>
@@ -278,6 +252,16 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 <div style={{ marginTop: 10 }}>
                   <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: '0 0 6px' }}>{log.note}</p>
                   <div style={{ fontSize: 12, color: mf }}>目標 {log.targetMinutes} 分鐘</div>
+                  {(log.beforePhotos?.length > 0 || log.afterPhotos?.length > 0) && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      {log.beforePhotos?.map((p, idx) => (
+                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: `1px solid ${bd}` }} />
+                      ))}
+                      {log.afterPhotos?.map((p, idx) => (
+                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: `2px solid ${sg}` }} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -285,7 +269,6 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
-      {/* ── Declutter ── */}
       {activeSection === 'declutter' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄（{declutterRecords.length} 次）</div>
@@ -302,17 +285,12 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {record.items.length > 0 && (
-                    <button
-                      onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
-                      style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
-                      分享
-                    </button>
+                    <button onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
+                      style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
                   )}
-                  <button
-                    onClick={() => { if (window.confirm('確定刪除這筆斷捨離紀錄？刪除後無法復原。')) onDeleteDeclutter(record.savedAt) }}
-                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    刪除
-                  </button>
+                  <button onClick={() => {
+                    if (window.confirm('確定刪除這筆斷捨離紀錄？刪除後無法復原。')) onDeleteDeclutter(record.savedAt)
+                  }} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
                     {expandedRecord === record.savedAt ? '▲' : '▼'}
                   </span>
@@ -356,11 +334,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                               {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
                               {e.photo && <img src={e.photo} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 6, marginTop: 8 }} />}
                             </div>
-                            <button
-                              onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: true })}
-                              style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
-                              分享
-                            </button>
+                            <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: true })}
+                              style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>分享</button>
                           </div>
                         </div>
                       ))}
@@ -373,16 +348,13 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
-      {/* ── Challenge ── */}
       {activeSection === 'challenge' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>每日丟一物挑戰</div>
             {challengeMode && (
               <button onClick={() => setShareModal({ title: '分享挑戰進度', text: challengeShareText() })}
-                style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
-                分享進度
-              </button>
+                style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享進度</button>
             )}
           </div>
           {!challengeMode ? (
@@ -412,14 +384,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                         </div>
                         {entry.feeling && <div style={{ fontSize: 12, color: ml, marginTop: 2 }}>{entry.feeling}</div>}
                       </div>
-                      <button
-                        onClick={() => setShareModal({
-                          title: `Day ${entry.day} 分享`,
-                          text: `每日丟一物 Day ${entry.day}：「${entry.item}」\n${entry.feeling || ''}\n#每日丟一物 #整理小幫手`
-                        })}
-                        style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', marginLeft: 8, flexShrink: 0 }}>
-                        分享
-                      </button>
+                      <button onClick={() => setShareModal({ title: `Day ${entry.day} 分享`, text: `每日丟一物 Day ${entry.day}：「${entry.item}」\n${entry.feeling || ''}\n#每日丟一物 #整理小幫手` })}
+                        style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', marginLeft: 8, flexShrink: 0 }}>分享</button>
                     </div>
                   ))}
                 </div>
