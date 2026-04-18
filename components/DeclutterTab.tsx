@@ -247,7 +247,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
     }
     onSaveToMember(record)
     setSaveFlash(true)
-    setsetTimeout(() => { setSaveFlash(false); setJustSaved(true); saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null) }, 600)
+    setTimeout(() => { setSaveFlash(false); setJustSaved(true); saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null) }, 600)
   }
 
   const resetAll = () => {
