@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -33,17 +33,6 @@ function downloadIcs(content: string, filename: string) {
 }
 function readFile(file: File): Promise<string> {
   return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(file) })
-}
-async function compressPhoto(src: string): Promise<string> {
-  return new Promise(res => {
-    const img = new Image(); img.onload = () => {
-      const c = document.createElement('canvas')
-      const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
-      c.width = img.width * r; c.height = img.height * r
-      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-      res(c.toDataURL('image/jpeg', 0.5))
-    }; img.src = src
-  })
 }
 
 // ── Single photo uploader ─────────────────────────────────────
@@ -217,26 +206,21 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
     }
   }
 
-  const saveFlowItem = async () => {
+  const saveFlowItem = () => {
     const id = currentFlowItem?.id
     if (!id) return
     let nextTossEntries = tossEntries
-
-    // Pre-compress photos before entering sync callbacks
-    const compressedTossPhoto = flowType === 'toss' && tossPhoto ? await compressPhoto(tossPhoto) : undefined
-    const compressedDonatePhoto = flowType === 'donate' && donatePhoto ? await compressPhoto(donatePhoto) : undefined
-
     setItems(prev => prev.map(x => {
       if (x.id !== id) return x
       if (flowType === 'keep') return { ...x, category: keepCat }
       if (flowType === 'donate') {
         // save per-item memo/photo
         if (donateMemo) setDonateMemos(m => ({ ...m, [id]: donateMemo }))
-        if (compressedDonatePhoto) setDonatePhotos(p => ({ ...p, [id]: compressedDonatePhoto }))
+        if (donatePhoto) setDonatePhotos(p => ({ ...p, [id]: donatePhoto }))
         return { ...x, disposeDate: donateDate }
       }
       if (flowType === 'toss') {
-        const entry: TossEntry = { id, name: x.name, memo: tossMemo, date: new Date().toLocaleDateString('zh-TW'), photo: compressedTossPhoto }
+        const entry: TossEntry = { id, name: x.name, memo: tossMemo, date: new Date().toLocaleDateString('zh-TW'), photo: tossPhoto }
         nextTossEntries = [...tossEntries.filter(e => e.id !== id), entry]
         setTossEntries(nextTossEntries)
         return { ...x, tossMemo }
@@ -254,8 +238,14 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
     setDonateCalItems(prev => new Set([...prev, itemId]))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (items.length === 0) return
+    // Save toss photos to IndexedDB (key: toss_photo_{entryId})
+    await Promise.all(
+      tossEntries
+        .filter(e => e.photo)
+        .map(e => savePhoto(`toss_photo_${e.id}`, e.photo!))
+    )
     const record: DeclutterRecord = {
       savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
       items,

@@ -63,6 +63,50 @@ export const LS_CHECKLIST_LOGS = 'checklist_logs'
 export const LS_DECLUTTER_RECORDS = 'declutter_records'
 export const LS_CHALLENGE_DATA = 'challenge_data'
 
+// ── IndexedDB photo storage ───────────────────────────────────
+const IDB_NAME = 'organizer_photos'
+const IDB_STORE = 'photos'
+const IDB_VERSION = 1
+
+function openPhotoDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION)
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+export async function savePhoto(key: string, dataUrl: string): Promise<void> {
+  const db = await openPhotoDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    tx.objectStore(IDB_STORE).put(dataUrl, key)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+export async function loadPhoto(key: string): Promise<string | undefined> {
+  const db = await openPhotoDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly')
+    const req = tx.objectStore(IDB_STORE).get(key)
+    req.onsuccess = () => resolve(req.result as string | undefined)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+export async function deletePhoto(key: string): Promise<void> {
+  const db = await openPhotoDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    tx.objectStore(IDB_STORE).delete(key)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
 export function loadLS<T>(key: string, fallback: T, userId?: string): T {
   if (typeof window === 'undefined') return fallback
   try {

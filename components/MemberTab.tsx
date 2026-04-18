@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
-import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA } from '@/lib/types'
+import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto } from '@/lib/types'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -82,6 +82,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const shareCaptureRef = useRef<HTMLDivElement>(null)
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
   const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
+  const [tossPhotos, setTossPhotos] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -99,6 +100,14 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | null
     if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
   }, [])
+
+  useEffect(() => {
+    if (declutterRecords.length === 0) return
+    declutterRecords.flatMap(r => r.tossEntries).forEach(async e => {
+      const photo = await loadPhoto(`toss_photo_${e.id}`)
+      if (photo) setTossPhotos(prev => ({ ...prev, [e.id]: photo }))
+    })
+  }, [declutterRecords])
 
   const handleGoogleLogin = () => { window.location.href = getGoogleAuthUrl() }
   const handleLogout = () => { clearUserCookie(); onUserChange(null) }
@@ -332,7 +341,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                             <div style={{ flex: 1 }}>
                               <strong>{e.name}</strong>
                               {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
-                              {e.photo && <img src={e.photo} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 6, marginTop: 8 }} />}
+                              {tossPhotos[e.id] && <img src={tossPhotos[e.id]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 6, marginTop: 8 }} />}
                             </div>
                             <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: true })}
                               style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>分享</button>
