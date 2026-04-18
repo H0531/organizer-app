@@ -63,20 +63,11 @@ export const LS_CHECKLIST_LOGS = 'checklist_logs'
 export const LS_DECLUTTER_RECORDS = 'declutter_records'
 export const LS_CHALLENGE_DATA = 'challenge_data'
 
-function getStorage(userId?: string): Storage | null {
-  if (typeof window === 'undefined') return null
-  return userId ? localStorage : sessionStorage
-}
-
-function scopedKey(key: string, userId?: string): string {
-  return userId ? `${key}__${userId}` : key
-}
-
 export function loadLS<T>(key: string, fallback: T, userId?: string): T {
-  const storage = getStorage(userId)
-  if (!storage) return fallback
+  if (typeof window === 'undefined') return fallback
   try {
-    const raw = storage.getItem(scopedKey(key, userId))
+    const k = userId ? `${key}__${userId}` : key
+    const raw = localStorage.getItem(k)
     return raw ? (JSON.parse(raw) as T) : fallback
   } catch {
     return fallback
@@ -84,14 +75,13 @@ export function loadLS<T>(key: string, fallback: T, userId?: string): T {
 }
 
 export function saveLS<T>(key: string, value: T, userId?: string) {
-  const storage = getStorage(userId)
-  if (!storage) return
+  if (typeof window === 'undefined') return
   try {
-    const k = scopedKey(key, userId)
+    const k = userId ? `${key}__${userId}` : key
     if (value === null || value === undefined) {
-      storage.removeItem(k)
+      localStorage.removeItem(k)
     } else {
-      storage.setItem(k, JSON.stringify(value))
+      localStorage.setItem(k, JSON.stringify(value))
     }
   } catch { /* ignore quota */ }
 }
