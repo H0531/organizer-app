@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
 import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA } from '@/lib/types'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
@@ -15,18 +15,57 @@ type Props = {
   onUserChange: (u: OAuthUser | null) => void
 }
 
-// ── Share modal ─────────────────────────────────────────────────
-function ShareModal({ title, text, onClose }: { title: string; text: string; onClose: () => void }) {
+// ── Share modal with image capture ──────────────────────────────
+function ShareModal({ title, text, captureRef, onClose }: { title: string; text: string; captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void }) {
+  const captureAndShare = async () => {
+    if (!captureRef?.current) return
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(captureRef.current, { useCORS: true, backgroundColor: '#FAF8F4', scale: 2 })
+      canvas.toBlob(async (blob) => {
+        if (!blob) return
+        const file = new File([blob], 'organizer-diary.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text })
+        } else {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = 'organizer-diary.png'; a.click()
+          URL.revokeObjectURL(url)
+        }
+      }, 'image/png')
+    } catch { shareToSocial('copy', text) }
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 360, width: '100%' }}>
+      <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
-        <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
+
+        {/* Preview card for capture */}
+        {captureRef && (
+          <div ref={captureRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 8 }}>{title}</div>
+            <div style={{ fontSize: 13, color: ml, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
+            <div style={{ fontSize: 11, color: mf, textAlign: 'right', marginTop: 8 }}>整理小幫手 #生活整理</div>
+          </div>
+        )}
+
+        {!captureRef && (
+          <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 14, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {captureRef && (
+            <button onClick={captureAndShare}
+              style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+              📸 儲存 / 分享圖片
+            </button>
+          )}
           {SHARE_BTNS.map(p => (
             <button key={p.id} onClick={() => shareToSocial(p.id, text)}
               style={{ width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-              {p.label}
+              {p.label}（純文字）
             </button>
           ))}
           <button onClick={onClose} style={{ width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
@@ -46,7 +85,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge'>('diary')
 
   // Share modal
-  const [shareModal, setShareModal] = useState<{ title: string; text: string } | null>(null)
+  const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean } | null>(null)
+  const shareCaptureRef = useRef<HTMLDivElement>(null)
 
   // Challenge data from localStorage
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
@@ -215,7 +255,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <button
-                    onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log) })}
+                    onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log), withCapture: true })}
                     style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
                     分享
                   </button>
@@ -251,11 +291,13 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                   <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{record.savedAt}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button
-                    onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
-                    style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
-                    分享
-                  </button>
+                  {record.items.length > 0 && (
+                    <button
+                      onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
+                      style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
+                      分享
+                    </button>
+                  )}
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
                     {expandedRecord === record.savedAt ? '▲' : '▼'}
                   </span>
@@ -362,7 +404,12 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       )}
 
       {shareModal && (
-        <ShareModal title={shareModal.title} text={shareModal.text} onClose={() => setShareModal(null)} />
+        <ShareModal
+          title={shareModal.title}
+          text={shareModal.text}
+          captureRef={shareModal.withCapture ? shareCaptureRef : undefined}
+          onClose={() => setShareModal(null)}
+        />
       )}
     </div>
   )

@@ -265,11 +265,13 @@ export default function ChecklistTab({ onSaveLog }: Props) {
 
   useEffect(() => {
     const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [])
-    setLogs(saved.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    const restoredLogs = saved.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] }))
+    setLogs(restoredLogs)
     const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
     setScheduledItems(sched)
+    // Default to page 3 (log view) if user has existing logs
     const savedPage = loadLS<number>(CL_PAGE_KEY, 1)
-    if (savedPage === 3) setPageRaw(3) // only restore page 3 (log view), not mid-session pages
+    if (savedPage === 3 || (restoredLogs.length > 0 && savedPage !== 2)) setPageRaw(3)
   }, [])
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
@@ -363,8 +365,19 @@ export default function ChecklistTab({ onSaveLog }: Props) {
     saveLS('checklist_scheduled', next)
   }
 
-  const saveEdit = () => { setLogs(logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)); setEditingId(null) }
-  const deleteLog = (id: string) => { setLogs(logs.filter(l => l.id !== id)); setConfirmDeleteId(null); if (shareEntry?.id === id) setShareEntry(null) }
+  const saveEdit = () => {
+    const next = logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)
+    setLogs(next)
+    saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    setEditingId(null)
+  }
+  const deleteLog = (id: string) => {
+    const next = logs.filter(l => l.id !== id)
+    setLogs(next)
+    saveLS(LS_CHECKLIST_LOGS, next.map(l => ({ ...l, beforePhotos: [], afterPhotos: [] })))
+    setConfirmDeleteId(null)
+    if (shareEntry?.id === id) setShareEntry(null)
+  }
 
   const shareText = (e: ChecklistLog) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
 
@@ -392,7 +405,14 @@ export default function ChecklistTab({ onSaveLog }: Props) {
   // ── PAGE 1 ──────────────────────────────────────────────────────
   if (page === 1) return (
     <div>
-      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>今天整理哪裡？</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, color: ink, margin: 0 }}>今天整理哪裡？</h1>
+        {logs.length > 0 && (
+          <button onClick={() => setPage(3)} style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}>
+            整理紀錄 {logs.length} 筆 →
+          </button>
+        )}
+      </div>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>選空間、拍整理前照片、設好時間，再開始</p>
       <PageDots page={1} />
 
@@ -580,7 +600,6 @@ export default function ChecklistTab({ onSaveLog }: Props) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setPage(1)} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 新的整理</button>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>整理完成清單</h1>
         <div style={{ fontSize: 13, color: mf }}>{logs.length} 筆</div>
       </div>

@@ -163,6 +163,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   }
 
   const handleSave = () => {
+    if (items.length === 0) return
     const record: DeclutterRecord = {
       savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
       items,
@@ -202,9 +203,9 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <input value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addItem()}
-            placeholder="輸入物品名稱，Enter 新增"
-            style={{ flex: 1, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, outline: 'none', color: ink, background: 'white' }} />
-          <button onClick={() => addItem()} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>新增</button>
+            placeholder="輸入物品名稱後，按新增"
+            style={{ flex: 1, minWidth: 0, border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 14px', fontSize: 14, outline: 'none', color: ink, background: 'white' }} />
+          <button onClick={() => addItem()} style={{ flexShrink: 0, padding: '10px 14px', borderRadius: 8, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>新增</button>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {QUICK_ITEMS.map(q => (
@@ -284,14 +285,26 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   if (stage === 'review') return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setStage('input')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
-        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0 }}>分流處理</h1>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>分流處理</h1>
+        <button onClick={resetAll} style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>開始新的斷捨離</button>
       </div>
 
       {justSaved && (
         <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 13, color: '#2E6B50' }}>✅ 紀錄已儲存到會員頁</span>
           <button onClick={onGoToMember} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>前往查看 →</button>
+        </div>
+      )}
+
+      {/* No items state */}
+      {items.length === 0 && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '40px 24px', textAlign: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>♻️</div>
+          <div style={{ fontSize: 15, color: ink, marginBottom: 6 }}>還沒有斷捨離項目</div>
+          <div style={{ fontSize: 13, color: mf, marginBottom: 20 }}>先加入物品再開始分流</div>
+          <button onClick={() => setStage('input')} style={{ padding: '12px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+            開始斷捨離旅程
+          </button>
         </div>
       )}
 
@@ -370,10 +383,12 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      <button onClick={handleSave}
-        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600, marginTop: 8, transition: 'background 0.3s' }}>
-        {saveFlash ? '✅ 已儲存！' : '💾 儲存斷捨離紀錄'}
-      </button>
+      {items.length > 0 && (
+        <button onClick={handleSave}
+          style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600, marginTop: 8, transition: 'background 0.3s' }}>
+          {saveFlash ? '✅ 已儲存！' : '💾 儲存斷捨離紀錄'}
+        </button>
+      )}
     </div>
   )
 
@@ -384,9 +399,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
-          <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回分流處理總覽</button>
-          {!isDone && <div style={{ fontSize: 13, color: mf, marginLeft: 'auto' }}>{flowIndex + 1} / {flowItems.length}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 24 }}>
+          {!isDone && <div style={{ fontSize: 13, color: mf }}>{flowIndex + 1} / {flowItems.length}</div>}
         </div>
 
         {isDone ? (
@@ -480,7 +494,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回分流處理總覽</button>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: ink, margin: 0 }}>告別紀念文</h1>
       </div>
 
