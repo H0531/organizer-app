@@ -52,6 +52,7 @@ function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p:
           📷 附上照片
         </button>
       )}
+      {/* 移除 capture 屬性，避免 Chrome 桌面黑畫面 */}
       <input ref={ref} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => { if (e.target.files?.[0]) onChange(await readFile(e.target.files[0])) }} />
     </div>
   )
@@ -66,7 +67,12 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
     if (!cardRef.current) return
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(cardRef.current, { useCORS: true, backgroundColor: '#FAF8F4', scale: 2 })
+      const canvas = await html2canvas(cardRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#FAF8F4',
+        scale: 2,
+      })
       canvas.toBlob(async blob => {
         if (!blob) return
         const file = new File([blob], 'farewell.png', { type: 'image/png' })
@@ -74,11 +80,18 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
           await navigator.share({ files: [file], text: shareText })
         } else {
           const url = URL.createObjectURL(blob)
-          const a = document.createElement('a'); a.href = url; a.download = 'farewell.png'; a.click()
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'farewell.png'
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
           URL.revokeObjectURL(url)
         }
       }, 'image/png')
-    } catch { shareToSocial('copy', shareText) }
+    } catch {
+      shareToSocial('copy', shareText)
+    }
   }
 
   return (
@@ -86,7 +99,6 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
       <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>分享告別文</div>
 
-        {/* Capture card */}
         <div ref={cardRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
           <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 6 }}>{entry.name}</div>
           {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
@@ -131,7 +143,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   const [donateDates, setDonateDates] = useState<Record<string, string>>({})
   const [donateCalItems, setDonateCalItems] = useState<Set<string>>(new Set())
 
-  // Flow donate: per-item memo + photo
   const [donateMemo, setDonateMemo] = useState('')
   const [donatePhoto, setDonatePhoto] = useState<string | undefined>()
   const [donateMemos, setDonateMemos] = useState<Record<string, string>>({})
@@ -141,7 +152,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   const [tossPhoto, setTossPhoto] = useState<string | undefined>()
   const [tossEntries, setTossEntries] = useState<TossEntry[]>([])
 
-  // Review editing states
   const [editKeepId, setEditKeepId] = useState<string | null>(null)
   const [editTossId, setEditTossId] = useState<string | null>(null)
   const [editTossMemo, setEditTossMemo] = useState('')
@@ -149,6 +159,9 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
   const [shareTossEntry, setShareTossEntry] = useState<TossEntry | null>(null)
   const [saveFlash, setSaveFlash] = useState(false)
+
+  // 防止重複儲存
+  const isSavingRef = useRef(false)
 
   const setStage = (s: Stage) => { setStageRaw(s); saveLS(STAGE_KEY, s) }
 
@@ -214,7 +227,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
       if (x.id !== id) return x
       if (flowType === 'keep') return { ...x, category: keepCat }
       if (flowType === 'donate') {
-        // save per-item memo/photo
         if (donateMemo) setDonateMemos(m => ({ ...m, [id]: donateMemo }))
         if (donatePhoto) setDonatePhotos(p => ({ ...p, [id]: donatePhoto }))
         return { ...x, disposeDate: donateDate }
@@ -240,20 +252,25 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
   const handleSave = async () => {
     if (items.length === 0) return
-    // Save toss photos to IndexedDB (key: toss_photo_{entryId})
-    await Promise.all(
-      tossEntries
-        .filter(e => e.photo)
-        .map(e => savePhoto(`toss_photo_${e.id}`, e.photo!))
-    )
-    const record: DeclutterRecord = {
-      savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
-      items,
-      tossEntries,
+    if (isSavingRef.current) return
+    isSavingRef.current = true
+    try {
+      await Promise.all(
+        tossEntries
+          .filter(e => e.photo)
+          .map(e => savePhoto(`toss_photo_${e.id}`, e.photo!))
+      )
+      const record: DeclutterRecord = {
+        savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        items,
+        tossEntries,
+      }
+      onSaveToMember(record)
+      setSaveFlash(true)
+      setTimeout(() => { setSaveFlash(false); setJustSaved(true); saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null) }, 600)
+    } finally {
+      isSavingRef.current = false
     }
-    onSaveToMember(record)
-    setSaveFlash(true)
-    setTimeout(() => { setSaveFlash(false); setJustSaved(true); saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null) }, 600)
   }
 
   const resetAll = () => {
@@ -373,7 +390,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* ── Keep ── */}
+      {/* Keep */}
       {keepItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 22px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 10 }}>✓ 留下（{keepItems.length} 件）</div>
@@ -413,7 +430,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* ── Donate ── */}
+      {/* Donate */}
       {donateItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 22px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#4285F4', marginBottom: 10 }}>📦 送出（{donateItems.length} 件）</div>
@@ -422,7 +439,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, color: ink, marginBottom: 6 }}>{item.name}</div>
-                  {/* date + calendar */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
                     <input type="date" min={todayStr()} value={donateDates[item.id] || ''}
                       onChange={e => setDonateDates(prev => ({ ...prev, [item.id]: e.target.value }))}
@@ -432,9 +448,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
                       {donateCalItems.has(item.id) ? '✅ 已加入' : '📅 加入行事曆'}
                     </button>
                   </div>
-                  {/* memo */}
                   {donateMemos[item.id] && <div style={{ fontSize: 12, color: mf, marginTop: 3 }}>{donateMemos[item.id]}</div>}
-                  {/* photo */}
                   {donatePhotos[item.id] && <img src={donatePhotos[item.id]} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, marginTop: 6, border: `1px solid ${bd}` }} />}
                 </div>
                 <button onClick={() => removeItem(item.id)} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>刪除</button>
@@ -444,7 +458,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* ── Toss ── */}
+      {/* Toss */}
       {tossItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 22px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#C47B5A', marginBottom: 10 }}>🗑 丟棄（{tossItems.length} 件）</div>

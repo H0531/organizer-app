@@ -49,14 +49,43 @@ export const SHARE_BTNS = [
   { id: 'copy', label: '複製', color: '#888888' },
 ]
 
+// 修復：分享不開空白頁 + 複製有 fallback
 export function shareToSocial(platform: string, text: string) {
   if (platform === 'threads') {
-    window.open(`https://www.threads.net/intent/post?text=${encodeURIComponent(text)}`)
+    const a = document.createElement('a')
+    a.href = `https://www.threads.net/intent/post?text=${encodeURIComponent(text)}`
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   } else if (platform === 'line') {
-    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(text)}`)
+    const a = document.createElement('a')
+    a.href = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   } else if (platform === 'copy') {
-    navigator.clipboard.writeText(text)
+    try {
+      navigator.clipboard.writeText(text).then(() => alert('已複製！')).catch(() => fallbackCopy(text))
+    } catch {
+      fallbackCopy(text)
+    }
   }
+}
+
+function fallbackCopy(text: string) {
+  const el = document.createElement('textarea')
+  el.value = text
+  el.style.position = 'fixed'
+  el.style.opacity = '0'
+  document.body.appendChild(el)
+  el.focus()
+  el.select()
+  try { document.execCommand('copy'); alert('已複製！') } catch { /* 無法複製 */ }
+  document.body.removeChild(el)
 }
 
 export const LS_CHECKLIST_LOGS = 'checklist_logs'
@@ -129,7 +158,6 @@ export function saveLS<T>(key: string, value: T, userId?: string): boolean {
     }
     return true
   } catch (e) {
-    // Quota exceeded: try removing the key first then retry once
     try {
       const k = userId ? `${key}__${userId}` : key
       localStorage.removeItem(k)
