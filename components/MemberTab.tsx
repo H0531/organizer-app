@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
-import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, saveOrShareImage } from '@/lib/types'
+import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, drawDeclutterCard, saveOrShareImage, isIOSChrome } from '@/lib/types'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -17,12 +17,17 @@ type Props = {
   onDeleteDiary: (id: string) => void
 }
 
-function ShareModal({ title, text, captureRef, onClose }: { title: string; text: string; captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void }) {
+function ShareModal({ title, text, photo, captureRef, onClose }: { title: string; text: string; photo?: string; captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void }) {
 const captureAndShare = async () => {
   if (!captureRef?.current) return
   try {
-    const canvas = await drawTextCard(title, text)
-    await saveOrShareImage(canvas, 'organizer-diary.png', text)
+    // 告別紀念文：有照片時用 drawDeclutterCard，否則用 drawTextCard
+    const itemName = title.replace('告別紀念文 · ', '')
+    const memo = text.split('\n').slice(1, -1).join('\n')
+    const canvas = photo
+      ? await drawDeclutterCard({ name: itemName, memo, photo })
+      : await drawTextCard(title, text)
+    await saveOrShareImage(canvas, 'organizer-share.png', text)
   } catch { shareToSocial('copy', text) }
 }
 
@@ -66,7 +71,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge'>('diary')
-  const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean } | null>(null)
+  const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean; photo?: string } | null>(null)
   const shareCaptureRef = useRef<HTMLDivElement>(null)
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
   const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
@@ -331,7 +336,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                               {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
                               {tossPhotos[e.id] && <img src={tossPhotos[e.id]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 6, marginTop: 8 }} />}
                             </div>
-                            <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: true })}
+                            <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: !isIOSChrome(), photo: isIOSChrome() ? undefined : tossPhotos[e.id] })}
                               style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>分享</button>
                           </div>
                         </div>
@@ -396,6 +401,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         <ShareModal
           title={shareModal.title}
           text={shareModal.text}
+          photo={shareModal.photo}
           captureRef={shareModal.withCapture ? shareCaptureRef : undefined}
           onClose={() => setShareModal(null)}
         />

@@ -39,6 +39,10 @@ export default function RootLayout({
       lang="zh-TW"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* LINE 內建瀏覽器：強制跳轉外部瀏覽器 */}
+        <meta name="x5-orientation" content="portrait" />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

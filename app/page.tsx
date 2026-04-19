@@ -32,6 +32,18 @@ export default function Home() {
   const [checklistLogs, setChecklistLogs] = useState<ChecklistLog[]>([])
 
   useEffect(() => {
+    // LINE 內建瀏覽器偵測：跳轉外部瀏覽器
+    const ua = navigator.userAgent
+    const isLineApp = /Line\//.test(ua)
+    if (isLineApp) {
+      const url = window.location.href
+      // iOS LINE：加 openExternalBrowser=1 參數
+      // Android LINE：加 ?openExternalBrowser=1
+      const separator = url.includes('?') ? '&' : '?'
+      window.location.replace(url + separator + 'openExternalBrowser=1')
+      return
+    }
+
     const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
     if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
 

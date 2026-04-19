@@ -95,6 +95,12 @@ export function isChrome(): boolean {
   return /Chrome/.test(ua) && !/Edg/.test(ua) && !/OPR/.test(ua)
 }
 
+// 偵測是否為 iOS 上的 Chrome（CriOS UA）
+export function isIOSChrome(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /CriOS/.test(navigator.userAgent)
+}
+
 // Chrome 上傳照片的 input props：只開圖庫（不彈相機選擇）
 export function photoInputProps(): { accept: string; capture?: string } {
   if (isChrome()) {
