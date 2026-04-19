@@ -110,9 +110,9 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
 }
 
 type Stage = 'input' | 'review' | 'flow' | 'tosslist'
-type Props = { onSaveToMember: (record: DeclutterRecord) => void; onGoToMember: (section?: string) => void }
+type Props = { onSaveToMember: (record: DeclutterRecord) => void; onGoToMember: (section?: string) => void; userEmail?: string }
 
-export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
+export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }: Props) {
   const [items, setItems] = useState<DeclutterItem[]>([])
   const [input, setInput] = useState('')
   const [stage, setStageRaw] = useState<Stage>('input')
@@ -239,7 +239,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
     isSavingRef.current = true
     try {
       await Promise.all(
-        tossEntries.filter(e => e.photo).map(e => savePhoto(`toss_photo_${e.id}`, e.photo!))
+        tossEntries.filter(e => e.photo).map(e => savePhoto(`toss_photo_${e.id}`, e.photo!, userEmail))
       )
       const record: DeclutterRecord = {
         savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),

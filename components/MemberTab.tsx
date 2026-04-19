@@ -4,6 +4,7 @@ import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
 import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, drawDeclutterCard, saveOrShareImage, isIOSChrome } from '@/lib/types'
 import { sbLoadChallengeData } from '@/lib/supabase'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
+import StatsCharts from './StatsCharts'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
@@ -71,7 +72,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [authError, setAuthError] = useState(false)
   const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge'>('diary')
+  const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge' | 'stats'>('diary')
   const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean; photo?: string } | null>(null)
   const shareCaptureRef = useRef<HTMLDivElement>(null)
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
@@ -104,14 +105,14 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       setChallengeMode(saved.mode)
       setChallengeEntries(saved.entries)
     }
-    const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | null
+    const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | 'stats' | null
     if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
   }, [user?.email])
 
   useEffect(() => {
     if (declutterRecords.length === 0) return
     declutterRecords.flatMap(r => r.tossEntries).forEach(async e => {
-      const photo = await loadPhoto(`toss_photo_${e.id}`)
+      const photo = await loadPhoto(`toss_photo_${e.id}`, user?.email)
       if (photo) setTossPhotos(prev => ({ ...prev, [e.id]: photo }))
     })
   }, [declutterRecords])
@@ -223,11 +224,12 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
         {[
           { label: '整理日記', value: `${checklistLogs.length}`, unit: '筆', icon: '📓', section: 'diary' as const },
           { label: '斷捨離物品', value: `${declutterRecords.reduce((a, r) => a + r.items.length, 0)}`, unit: '件', icon: '♻️', section: 'declutter' as const },
           { label: '每日挑戰', value: challengeMode ? `${challengePct}` : '—', unit: challengeMode ? '%' : '', icon: '🎯', section: 'challenge' as const },
+          { label: '統計圖表', value: '', unit: '', icon: '📊', section: 'stats' as const },
         ].map(s => (
           <button key={s.label} onClick={() => setActiveSection(s.section)}
             style={{ background: activeSection === s.section ? '#EAF2EE' : ww, border: `1px solid ${activeSection === s.section ? sg : bd}`, borderRadius: 12, padding: '14px 8px', textAlign: 'center', cursor: 'pointer' }}>
@@ -409,6 +411,10 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             </>
           )}
         </div>
+      )}
+
+      {activeSection === 'stats' && (
+        <StatsCharts checklistLogs={checklistLogs} declutterRecords={declutterRecords} />
       )}
 
       {shareModal && (

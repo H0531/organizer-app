@@ -183,24 +183,48 @@ function openPhotoDB(): Promise<IDBDatabase> {
   })
 }
 
-export async function savePhoto(key: string, dataUrl: string): Promise<void> {
+export async function savePhoto(
+  key: string,
+  dataUrl: string,
+  email?: string
+): Promise<string | undefined> {
+  // 1. 存 IndexedDB（離線可用）
   const db = await openPhotoDB()
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, 'readwrite')
     tx.objectStore(IDB_STORE).put(dataUrl, key)
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
   })
+  // 2. 有登入則同步上傳雲端，回傳 URL
+  if (email) {
+    const { uploadPhoto } = await import('./photos')
+    return (await uploadPhoto(email, key, dataUrl)) ?? undefined
+  }
 }
 
-export async function loadPhoto(key: string): Promise<string | undefined> {
-  const db = await openPhotoDB()
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readonly')
-    const req = tx.objectStore(IDB_STORE).get(key)
-    req.onsuccess = () => resolve(req.result as string | undefined)
-    req.onerror = () => reject(req.error)
-  })
+export async function loadPhoto(
+  key: string,
+  email?: string
+): Promise<string | undefined> {
+  // 先查 IndexedDB
+  try {
+    const db = await openPhotoDB()
+    const local = await new Promise<string | undefined>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly')
+      const req = tx.objectStore(IDB_STORE).get(key)
+      req.onsuccess = () => resolve(req.result as string | undefined)
+      req.onerror = () => reject(req.error)
+    })
+    if (local) return local
+  } catch {
+    // IDB 失敗時繼續嘗試雲端
+  }
+  // IDB 沒有（換裝置）→ 從 Supabase Storage 取得 URL
+  if (email) {
+    const { getRemotePhotoUrl } = await import('./photos')
+    return getRemotePhotoUrl(email, key)
+  }
 }
 
 export async function deletePhoto(key: string): Promise<void> {
