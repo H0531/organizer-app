@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import HomeTab from '@/components/HomeTab'
 import ChecklistTab from '@/components/ChecklistTab'
 import DeclutterTab from '@/components/DeclutterTab'
@@ -28,11 +28,40 @@ const TABS: { id: AppTab; label: string; icon: string }[] = [
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358'
 const TAB_KEY = 'active_tab'
 
+// ── Toast ──────────────────────────────────────────────────────
+type ToastType = 'error' | 'success'
+function Toast({ message, type, onDone }: { message: string; type: ToastType; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3500)
+    return () => clearTimeout(t)
+  }, [onDone])
+  return (
+    <div style={{
+      position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 9999, background: type === 'error' ? '#C47B5A' : '#7A9E8A',
+      color: 'white', borderRadius: 10, padding: '10px 20px',
+      fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+      animation: 'fadeInUp 0.2s ease',
+    }}>
+      {type === 'error' ? '⚠️ ' : '✅ '}{message}
+      <style>{`@keyframes fadeInUp { from { opacity:0; transform:translateX(-50%) translateY(10px) } to { opacity:1; transform:translateX(-50%) translateY(0) } }`}</style>
+    </div>
+  )
+}
+
 export default function Home() {
   const [tab, setTab]                           = useState<AppTab>('home')
   const [user, setUser]                         = useState<OAuthUser | null>(null)
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
   const [checklistLogs, setChecklistLogs]       = useState<ChecklistLog[]>([])
+  const [toast, setToast]                       = useState<{ message: string; type: ToastType } | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showToast = useCallback((message: string, type: ToastType = 'error') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ message, type })
+  }, [])
 
   const loadUserData = useCallback(async (u: OAuthUser) => {
     const [logs, records] = await Promise.all([
@@ -62,7 +91,6 @@ export default function Home() {
   const handleTabChange = (newTab: AppTab) => {
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
-    // iOS Chrome/Safari 相容：強制置頂
     requestAnimationFrame(() => {
       window.scrollTo(0, 0)
       document.documentElement.scrollTop = 0
@@ -76,26 +104,42 @@ export default function Home() {
       tossEntries: record.tossEntries.map(e => ({ ...e, photo: undefined })),
     }
     setDeclutterRecords(prev => [recordToSave, ...prev])
-    if (user) await sbSaveDeclutterRecord(user.email, recordToSave)
-    else saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])
+    if (user) {
+      const ok = await sbSaveDeclutterRecord(user.email, recordToSave)
+      if (!ok) showToast('儲存失敗，請檢查網路連線')
+    } else {
+      saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])
+    }
   }
 
   const handleChecklistSave = async (log: ChecklistLog) => {
     setChecklistLogs(prev => [log, ...prev])
-    if (user) await sbSaveChecklistLog(user.email, log)
-    else saveLS(LS_CHECKLIST_LOGS, [log, ...checklistLogs])
+    if (user) {
+      const ok = await sbSaveChecklistLog(user.email, log)
+      if (!ok) showToast('儲存失敗，請檢查網路連線')
+    } else {
+      saveLS(LS_CHECKLIST_LOGS, [log, ...checklistLogs])
+    }
   }
 
   const handleDeleteDeclutterRecord = async (savedAt: string) => {
     setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
-    if (user) await sbDeleteDeclutterRecord(user.email, savedAt)
-    else saveLS(LS_DECLUTTER_RECORDS, declutterRecords.filter(r => r.savedAt !== savedAt))
+    if (user) {
+      const ok = await sbDeleteDeclutterRecord(user.email, savedAt)
+      if (!ok) showToast('刪除失敗，請檢查網路連線')
+    } else {
+      saveLS(LS_DECLUTTER_RECORDS, declutterRecords.filter(r => r.savedAt !== savedAt))
+    }
   }
 
   const handleDeleteChecklistLog = async (id: string) => {
     setChecklistLogs(prev => prev.filter(l => l.id !== id))
-    if (user) await sbDeleteChecklistLog(user.email, id)
-    else saveLS(LS_CHECKLIST_LOGS, checklistLogs.filter(l => l.id !== id))
+    if (user) {
+      const ok = await sbDeleteChecklistLog(user.email, id)
+      if (!ok) showToast('刪除失敗，請檢查網路連線')
+    } else {
+      saveLS(LS_CHECKLIST_LOGS, checklistLogs.filter(l => l.id !== id))
+    }
   }
 
   const handleUserChange = async (u: OAuthUser | null) => {
@@ -159,6 +203,14 @@ export default function Home() {
           </button>
         ))}
       </nav>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDone={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }

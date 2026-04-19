@@ -18,20 +18,22 @@ export async function sbLoadChecklistLogs(email: string): Promise<ChecklistLog[]
   return (data ?? []).map((r: { data: unknown }) => r.data as ChecklistLog)
 }
 
-export async function sbSaveChecklistLog(email: string, log: ChecklistLog): Promise<void> {
+export async function sbSaveChecklistLog(email: string, log: ChecklistLog): Promise<boolean> {
   const { error } = await supabase
     .from('checklist_logs')
     .upsert({ id: log.id, user_email: email, data: log, updated_at: new Date().toISOString() })
-  if (error) console.error('sbSaveChecklistLog', error)
+  if (error) { console.error('sbSaveChecklistLog', error); return false }
+  return true
 }
 
-export async function sbDeleteChecklistLog(email: string, id: string): Promise<void> {
+export async function sbDeleteChecklistLog(email: string, id: string): Promise<boolean> {
   const { error } = await supabase
     .from('checklist_logs')
     .delete()
     .eq('user_email', email)
     .eq('id', id)
-  if (error) console.error('sbDeleteChecklistLog', error)
+  if (error) { console.error('sbDeleteChecklistLog', error); return false }
+  return true
 }
 
 // ── Declutter Records ─────────────────────────────────────────
@@ -46,20 +48,22 @@ export async function sbLoadDeclutterRecords(email: string): Promise<DeclutterRe
   return (data ?? []).map((r: { data: unknown }) => r.data as DeclutterRecord)
 }
 
-export async function sbSaveDeclutterRecord(email: string, record: DeclutterRecord): Promise<void> {
+export async function sbSaveDeclutterRecord(email: string, record: DeclutterRecord): Promise<boolean> {
   const { error } = await supabase
     .from('declutter_records')
     .upsert({ saved_at: record.savedAt, user_email: email, data: record, updated_at: new Date().toISOString() })
-  if (error) console.error('sbSaveDeclutterRecord', error)
+  if (error) { console.error('sbSaveDeclutterRecord', error); return false }
+  return true
 }
 
-export async function sbDeleteDeclutterRecord(email: string, savedAt: string): Promise<void> {
+export async function sbDeleteDeclutterRecord(email: string, savedAt: string): Promise<boolean> {
   const { error } = await supabase
     .from('declutter_records')
     .delete()
     .eq('user_email', email)
     .eq('saved_at', savedAt)
-  if (error) console.error('sbDeleteDeclutterRecord', error)
+  if (error) { console.error('sbDeleteDeclutterRecord', error); return false }
+  return true
 }
 
 // ── Challenge Data ────────────────────────────────────────────
@@ -74,9 +78,10 @@ export async function sbLoadChallengeData(email: string): Promise<{ mode: number
   return data?.data ?? null
 }
 
-export async function sbSaveChallengeData(email: string, payload: unknown): Promise<void> {
+export async function sbSaveChallengeData(email: string, payload: unknown): Promise<boolean> {
   const { error } = await supabase
     .from('challenge_data')
     .upsert({ user_email: email, data: payload, updated_at: new Date().toISOString() })
-  if (error) console.error('sbSaveChallengeData', error)
+  if (error) { console.error('sbSaveChallengeData', error); return false }
+  return true
 }
