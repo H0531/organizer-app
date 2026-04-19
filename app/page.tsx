@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import HomeTab from '@/components/HomeTab'
 import ChecklistTab from '@/components/ChecklistTab'
 import DeclutterTab from '@/components/DeclutterTab'
@@ -9,6 +9,10 @@ import MemberTab from '@/components/MemberTab'
 import type { DeclutterRecord, ChecklistLog } from '@/lib/types'
 import { loadLS, saveLS, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
 import { getUserFromCookie, type OAuthUser } from '@/lib/auth'
+import {
+  sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog,
+  sbLoadDeclutterRecords, sbSaveDeclutterRecord, sbDeleteDeclutterRecord,
+} from '@/lib/supabase'
 
 export type AppTab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
@@ -22,98 +26,82 @@ const TABS: { id: AppTab; label: string; icon: string }[] = [
 ]
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358'
-
 const TAB_KEY = 'active_tab'
 
 export default function Home() {
-  const [tab, setTab] = useState<AppTab>('home')
-  const [user, setUser] = useState<OAuthUser | null>(null)
+  const [tab, setTab]                           = useState<AppTab>('home')
+  const [user, setUser]                         = useState<OAuthUser | null>(null)
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
-  const [checklistLogs, setChecklistLogs] = useState<ChecklistLog[]>([])
+  const [checklistLogs, setChecklistLogs]       = useState<ChecklistLog[]>([])
+
+  const loadUserData = useCallback(async (u: OAuthUser) => {
+    const [logs, records] = await Promise.all([
+      sbLoadChecklistLogs(u.email),
+      sbLoadDeclutterRecords(u.email),
+    ])
+    setChecklistLogs(logs.length > 0 ? logs : loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
+    setDeclutterRecords(records.length > 0 ? records : loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
+  }, [])
 
   useEffect(() => {
-    // LINE 內建瀏覽器偵測：跳轉外部瀏覽器
-    const ua = navigator.userAgent
-    const isLineApp = /Line\//.test(ua)
-    if (isLineApp) {
+    if (/Line\//.test(navigator.userAgent)) {
       const url = window.location.href
-      // iOS LINE：加 openExternalBrowser=1 參數
-      // Android LINE：加 ?openExternalBrowser=1
-      const separator = url.includes('?') ? '&' : '?'
-      window.location.replace(url + separator + 'openExternalBrowser=1')
+      window.location.replace(url + (url.includes('?') ? '&' : '?') + 'openExternalBrowser=1')
       return
     }
-
     const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
     if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
-
     const u = getUserFromCookie()
-    if (u) {
-      setUser(u)
-      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
-      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
-    } else {
+    if (u) { setUser(u); loadUserData(u) }
+    else {
       setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
       setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
     }
-  }, [])
+  }, [loadUserData])
 
   const handleTabChange = (newTab: AppTab) => {
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // iOS Chrome/Safari 相容：強制置頂
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+    })
   }
 
-  const handleDeclutterSave = (record: DeclutterRecord) => {
-    // Strip photos before saving to localStorage to avoid quota errors
+  const handleDeclutterSave = async (record: DeclutterRecord) => {
     const recordToSave: DeclutterRecord = {
       ...record,
       tossEntries: record.tossEntries.map(e => ({ ...e, photo: undefined })),
     }
-    const uid = user?.email
-    setDeclutterRecords(prev => {
-      const next = [recordToSave, ...prev]
-      saveLS(LS_DECLUTTER_RECORDS, next, uid)
-      return next
-    })
+    setDeclutterRecords(prev => [recordToSave, ...prev])
+    if (user) await sbSaveDeclutterRecord(user.email, recordToSave)
+    else saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])
   }
 
-  const handleChecklistSave = (log: ChecklistLog) => {
-    const uid = user?.email
-    setChecklistLogs(prev => {
-      const next = [log, ...prev]
-      saveLS(LS_CHECKLIST_LOGS, next, uid)
-      return next
-    })
+  const handleChecklistSave = async (log: ChecklistLog) => {
+    setChecklistLogs(prev => [log, ...prev])
+    if (user) await sbSaveChecklistLog(user.email, log)
+    else saveLS(LS_CHECKLIST_LOGS, [log, ...checklistLogs])
   }
 
-  const handleDeleteDeclutterRecord = (savedAt: string) => {
-    const uid = user?.email
-    setDeclutterRecords(prev => {
-      const next = prev.filter(r => r.savedAt !== savedAt)
-      saveLS(LS_DECLUTTER_RECORDS, next, uid)
-      return next
-    })
+  const handleDeleteDeclutterRecord = async (savedAt: string) => {
+    setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
+    if (user) await sbDeleteDeclutterRecord(user.email, savedAt)
+    else saveLS(LS_DECLUTTER_RECORDS, declutterRecords.filter(r => r.savedAt !== savedAt))
   }
 
-  const handleDeleteChecklistLog = (id: string) => {
-    const uid = user?.email
-    setChecklistLogs(prev => {
-      const next = prev.filter(l => l.id !== id)
-      saveLS(LS_CHECKLIST_LOGS, next, uid)
-      return next
-    })
+  const handleDeleteChecklistLog = async (id: string) => {
+    setChecklistLogs(prev => prev.filter(l => l.id !== id))
+    if (user) await sbDeleteChecklistLog(user.email, id)
+    else saveLS(LS_CHECKLIST_LOGS, checklistLogs.filter(l => l.id !== id))
   }
 
-  const handleUserChange = (u: OAuthUser | null) => {
+  const handleUserChange = async (u: OAuthUser | null) => {
     setUser(u)
-    if (u) {
-      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
-      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
-    } else {
-      setDeclutterRecords([])
-      setChecklistLogs([])
-    }
+    if (u) await loadUserData(u)
+    else { setDeclutterRecords([]); setChecklistLogs([]) }
   }
 
   return (
@@ -132,13 +120,14 @@ export default function Home() {
       </div>
 
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
-        {tab === 'home'      && <HomeTab onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
-        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} userId={user?.email} />}
-        {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
-        {tab === 'challenge' && <ChallengeTab userId={user?.email} />}
-        {tab === 'recommend' && <RecommendTab />}
+        {tab === 'home'      && <HomeTab key="home" onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
+        {tab === 'checklist' && <ChecklistTab key="checklist" onSaveLog={handleChecklistSave} userId={user?.email} />}
+        {tab === 'declutter' && <DeclutterTab key="declutter" onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
+        {tab === 'challenge' && <ChallengeTab key="challenge" userId={user?.email} />}
+        {tab === 'recommend' && <RecommendTab key="recommend" />}
         {tab === 'member'    && (
           <MemberTab
+            key="member"
             declutterRecords={declutterRecords}
             checklistLogs={checklistLogs}
             user={user}
@@ -157,22 +146,13 @@ export default function Home() {
       }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => handleTabChange(t.id)} style={{
-            flex: 1,
-            padding: '10px 4px 8px',
-            border: 'none',
-            background: 'transparent',
-            color: tab === t.id ? sg : ml,
-            fontSize: 10,
-            cursor: 'pointer',
+            flex: 1, padding: '10px 4px 8px', border: 'none',
+            background: 'transparent', color: tab === t.id ? sg : ml,
+            fontSize: 10, cursor: 'pointer',
             fontWeight: tab === t.id ? 600 : 400,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 3,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
             borderTop: tab === t.id ? `2px solid ${sg}` : '2px solid transparent',
-            minHeight: 56,
-            WebkitTapHighlightColor: 'transparent',
-            touchAction: 'manipulation',
+            minHeight: 56, WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
           }}>
             <span style={{ fontSize: 18 }}>{t.icon}</span>
             <span>{t.label}</span>

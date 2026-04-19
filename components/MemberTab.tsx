@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
 import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, drawDeclutterCard, saveOrShareImage, isIOSChrome } from '@/lib/types'
+import { sbLoadChallengeData } from '@/lib/supabase'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -87,9 +88,22 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       setAuthError(true)
       window.history.replaceState({}, '', '/')
     }
-    const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] }, user?.email)
-    setChallengeMode(saved.mode)
-    setChallengeEntries(saved.entries)
+    if (user?.email) {
+      sbLoadChallengeData(user.email).then(remote => {
+        if (remote) {
+          setChallengeMode(remote.mode as number | null)
+          setChallengeEntries(remote.entries as ChallengeEntry[])
+        } else {
+          const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] }, user.email)
+          setChallengeMode(saved.mode)
+          setChallengeEntries(saved.entries)
+        }
+      })
+    } else {
+      const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] })
+      setChallengeMode(saved.mode)
+      setChallengeEntries(saved.entries)
+    }
     const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | null
     if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
   }, [user?.email])

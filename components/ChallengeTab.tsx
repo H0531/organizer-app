@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { loadLS, saveLS, LS_CHALLENGE_DATA } from '@/lib/types'
+import { sbLoadChallengeData, sbSaveChallengeData } from '@/lib/supabase'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
@@ -29,14 +30,36 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const [fReason, setFReason] = useState('')
   const [fFeeling, setFFeeling] = useState('')
 
+  const initialized = useRef(false)
+
   useEffect(() => {
-    const saved = loadLS<{mode: ChallengeMode|null; entries: TossEntry[]}>(STORAGE_KEY, {mode: null, entries: []}, userId)
-    if (saved.mode) setMode(saved.mode)
-    if (saved.entries) setEntries(saved.entries)
+    initialized.current = false
+    const load = async () => {
+      if (userId) {
+        const remote = await sbLoadChallengeData(userId)
+        if (remote) {
+          setMode((remote.mode as ChallengeMode | null))
+          setEntries(remote.entries as TossEntry[])
+          initialized.current = true
+          return
+        }
+      }
+      const saved = loadLS<{mode: ChallengeMode|null; entries: TossEntry[]}>(STORAGE_KEY, {mode: null, entries: []}, userId)
+      if (saved.mode) setMode(saved.mode)
+      if (saved.entries) setEntries(saved.entries)
+      initialized.current = true
+    }
+    load()
   }, [userId])
 
   useEffect(() => {
-    saveLS(STORAGE_KEY, { mode, entries }, userId)
+    if (!initialized.current) return
+    const payload = { mode, entries }
+    if (userId) {
+      sbSaveChallengeData(userId, payload)
+    } else {
+      saveLS(STORAGE_KEY, payload, userId)
+    }
   }, [mode, entries, userId])
 
   const today = new Date().toLocaleDateString('zh-TW')
@@ -84,7 +107,11 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     setMode(null)
     setPendingMode(null)
     setEntries([])
-    saveLS(STORAGE_KEY, { mode: null, entries: [] }, userId)
+    if (userId) {
+      sbSaveChallengeData(userId, { mode: null, entries: [] })
+    } else {
+      saveLS(STORAGE_KEY, { mode: null, entries: [] }, userId)
+    }
   }
 
   const pct = mode ? Math.round((entries.length / mode) * 100) : 0
