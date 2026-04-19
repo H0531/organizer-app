@@ -15,7 +15,7 @@ const MEMORIAL_TEMPLATES = [
   (e: TossEntry) => `今天離開的是：${e.item}\n來自：${e.origin || '不知名的過去'}\n理由：${e.reason || '它完成了它的使命'}\n\n整理第 ${e.day} 天，繼續前行。`,
 ]
 
-export default function ChallengeTab() {
+export default function ChallengeTab({ userId }: { userId?: string }) {
   const [mode, setMode] = useState<ChallengeMode | null>(null)
   const [pendingMode, setPendingMode] = useState<ChallengeMode | null>(null)
   const [entries, setEntries] = useState<TossEntry[]>([])
@@ -30,14 +30,14 @@ export default function ChallengeTab() {
   const [fFeeling, setFFeeling] = useState('')
 
   useEffect(() => {
-    const saved = loadLS<{mode: ChallengeMode|null; entries: TossEntry[]}>(STORAGE_KEY, {mode: null, entries: []})
+    const saved = loadLS<{mode: ChallengeMode|null; entries: TossEntry[]}>(STORAGE_KEY, {mode: null, entries: []}, userId)
     if (saved.mode) setMode(saved.mode)
     if (saved.entries) setEntries(saved.entries)
-  }, [])
+  }, [userId])
 
   useEffect(() => {
-    saveLS(STORAGE_KEY, { mode, entries })
-  }, [mode, entries])
+    saveLS(STORAGE_KEY, { mode, entries }, userId)
+  }, [mode, entries, userId])
 
   const today = new Date().toLocaleDateString('zh-TW')
   const currentDay = entries.length + 1
@@ -84,7 +84,7 @@ export default function ChallengeTab() {
     setMode(null)
     setPendingMode(null)
     setEntries([])
-    saveLS(STORAGE_KEY, { mode: null, entries: [] })
+    saveLS(STORAGE_KEY, { mode: null, entries: [] }, userId)
   }
 
   const pct = mode ? Math.round((entries.length / mode) * 100) : 0

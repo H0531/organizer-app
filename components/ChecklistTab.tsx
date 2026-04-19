@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS, saveOrShareImage } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS, saveOrShareImage, saveShareLabel, isChrome } from '@/lib/types'
 import type { ChecklistLog } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -197,6 +197,7 @@ function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, c
                 ref={ref}
                 type="file"
                 accept="image/*"
+                {...(isChrome() ? {} : { capture: undefined })}
                 multiple
                 style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
                 onChange={e => { if (e.target.files) { onAdd(e.target.files); e.target.value = '' } }}
@@ -715,7 +716,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
             </div>
             <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button onClick={() => captureAndShare(shareEntry)} style={{ display: 'block', width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
-                📸 儲存 / 分享圖片
+                {saveShareLabel()}
               </button>
               {SHARE_BTNS.map(p => (
                 <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry))}

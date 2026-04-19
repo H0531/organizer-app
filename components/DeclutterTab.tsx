@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage, saveShareLabel, isChrome } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -58,6 +58,7 @@ function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p:
         ref={ref}
         type="file"
         accept="image/*"
+        {...(isChrome() ? {} : { capture: undefined })}
         style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
         onChange={async e => { if (e.target.files?.[0]) { onChange(await readFile(e.target.files[0])); e.target.value = '' } }}
       />
@@ -101,7 +102,7 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button onClick={captureAndShare} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
-            📸 儲存 / 分享圖片
+            {saveShareLabel()}
           </button>
           {SHARE_BTNS.map(p => (
             <button key={p.id} onClick={() => shareToSocial(p.id, shareText)}

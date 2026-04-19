@@ -36,10 +36,14 @@ export default function Home() {
     if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
 
     const u = getUserFromCookie()
-    if (u) setUser(u)
-
-    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
-    setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
+    if (u) {
+      setUser(u)
+      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
+      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
+    } else {
+      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
+      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
+    }
   }, [])
 
   const handleTabChange = (newTab: AppTab) => {
@@ -54,33 +58,37 @@ export default function Home() {
       ...record,
       tossEntries: record.tossEntries.map(e => ({ ...e, photo: undefined })),
     }
+    const uid = user?.email
     setDeclutterRecords(prev => {
       const next = [recordToSave, ...prev]
-      saveLS(LS_DECLUTTER_RECORDS, next)
+      saveLS(LS_DECLUTTER_RECORDS, next, uid)
       return next
     })
   }
 
   const handleChecklistSave = (log: ChecklistLog) => {
+    const uid = user?.email
     setChecklistLogs(prev => {
       const next = [log, ...prev]
-      saveLS(LS_CHECKLIST_LOGS, next)
+      saveLS(LS_CHECKLIST_LOGS, next, uid)
       return next
     })
   }
 
   const handleDeleteDeclutterRecord = (savedAt: string) => {
+    const uid = user?.email
     setDeclutterRecords(prev => {
       const next = prev.filter(r => r.savedAt !== savedAt)
-      saveLS(LS_DECLUTTER_RECORDS, next)
+      saveLS(LS_DECLUTTER_RECORDS, next, uid)
       return next
     })
   }
 
   const handleDeleteChecklistLog = (id: string) => {
+    const uid = user?.email
     setChecklistLogs(prev => {
       const next = prev.filter(l => l.id !== id)
-      saveLS(LS_CHECKLIST_LOGS, next)
+      saveLS(LS_CHECKLIST_LOGS, next, uid)
       return next
     })
   }
@@ -88,8 +96,11 @@ export default function Home() {
   const handleUserChange = (u: OAuthUser | null) => {
     setUser(u)
     if (u) {
-      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
-      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
+      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
+      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
+    } else {
+      setDeclutterRecords([])
+      setChecklistLogs([])
     }
   }
 
@@ -110,9 +121,9 @@ export default function Home() {
 
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
         {tab === 'home'      && <HomeTab onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
-        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} />}
+        {tab === 'checklist' && <ChecklistTab onSaveLog={handleChecklistSave} userId={user?.email} />}
         {tab === 'declutter' && <DeclutterTab onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} />}
-        {tab === 'challenge' && <ChallengeTab />}
+        {tab === 'challenge' && <ChallengeTab userId={user?.email} />}
         {tab === 'recommend' && <RecommendTab />}
         {tab === 'member'    && (
           <MemberTab

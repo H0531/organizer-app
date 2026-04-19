@@ -88,7 +88,30 @@ export function shareToSocial(platform: string, text: string) {
   document.body.removeChild(a)
 }
 
-// 將 canvas.toBlob 轉成 Promise
+// 偵測是否為 Chrome 瀏覽器（非 Edge/Safari）
+export function isChrome(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  return /Chrome/.test(ua) && !/Edg/.test(ua) && !/OPR/.test(ua)
+}
+
+// Chrome 上傳照片的 input props：只開圖庫（不彈相機選擇）
+export function photoInputProps(): { accept: string; capture?: string } {
+  if (isChrome()) {
+    // Chrome: 不加 capture，只用 accept image/* 會開圖庫+相機
+    // 要強制只能圖庫，需要用非標準方式：移除 capture 並加 data-type hint
+    // 實際上 Chrome 沒辦法完全禁止相機，但不加 capture 預設會開圖庫
+    return { accept: 'image/*' }
+  }
+  return { accept: 'image/*' }
+}
+
+// 儲存/分享按鈕文字：Chrome 顯示「儲存圖片」，其他顯示「儲存 / 分享圖片」
+export function saveShareLabel(): string {
+  return isChrome() ? '📸 儲存圖片' : '📸 儲存 / 分享圖片'
+}
+
+
 export function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png'): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
@@ -103,6 +126,21 @@ export async function saveOrShareImage(canvas: HTMLCanvasElement, filename: stri
   try {
     const blob = await canvasToBlob(canvas)
     const file = new File([blob], filename, { type: 'image/png' })
+
+    // Chrome：直接觸發下載存到圖庫，不走 share sheet
+    if (isChrome()) {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return
+    }
+
+    // 非 Chrome：優先 Web Share API（iOS Safari 等）
     if (shareText && navigator.share && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], text: shareText })
       return
