@@ -18,25 +18,21 @@ type Props = {
 }
 
 function ShareModal({ title, text, captureRef, onClose }: { title: string; text: string; captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void }) {
-  const captureAndShare = async () => {
-    if (!captureRef?.current) return
-    try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(captureRef.current, { useCORS: true, backgroundColor: '#FAF8F4', scale: 2 })
-      canvas.toBlob(async (blob) => {
-        if (!blob) return
-        const file = new File([blob], 'organizer-diary.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], text })
-        } else {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url; a.download = 'organizer-diary.png'; a.click()
-          URL.revokeObjectURL(url)
-        }
-      }, 'image/png')
-    } catch { shareToSocial('copy', text) }
-  }
+const captureAndShare = async () => {
+  if (!captureRef?.current) return
+  try {
+    const { saveOrShareImage } = await import('@/lib/types')
+    const html2canvas = (await import('html2canvas')).default
+    const canvas = await html2canvas(captureRef.current, {
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#FAF8F4',
+      scale: 2,
+      logging: false,
+    })
+    await saveOrShareImage(canvas, 'organizer-diary.png', text)
+  } catch { shareToSocial('copy', text) }
+}
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>

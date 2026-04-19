@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS, saveOrShareImage } from '@/lib/types'
 import type { ChecklistLog } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -51,7 +51,8 @@ function downloadIcs(icsContent: string) {
   const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = 'organizer-schedule.ics'; a.click()
+  a.href = url; a.download = 'organizer-schedule.ics'
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
 
@@ -59,10 +60,8 @@ function downloadIcs(icsContent: string) {
 function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: string) => void; onCancel: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [rotation, setRotation] = useState(0)
-  const [crop, setCrop] = useState({ x: 0, y: 0, w: 1, h: 1 }) // normalized 0-1
-  const [dragging, setDragging] = useState<null | { startX: number; startY: number; ox: number; oy: number }>(null)
+  const [crop, setCrop] = useState({ x: 0, y: 0, w: 1, h: 1 })
   const imgRef = useRef<HTMLImageElement | null>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const img = new Image()
@@ -83,7 +82,6 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
     ctx.rotate((rotation * Math.PI) / 180)
     ctx.drawImage(img, -size / 2, -size / 2, size, size)
     ctx.restore()
-    // crop overlay
     ctx.fillStyle = 'rgba(0,0,0,0.35)'
     const cx = crop.x * size, cy = crop.y * size, cw = crop.w * size, ch = crop.h * size
     ctx.fillRect(0, 0, size, cy)
@@ -119,7 +117,6 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
       <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 340, width: '100%' }}>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 16 }}>裁切 / 旋轉照片</div>
         <canvas ref={canvasRef} style={{ width: 280, height: 280, borderRadius: 10, display: 'block', margin: '0 auto 14px', border: `1px solid ${bd}` }} />
-        {/* Crop sliders */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
           {([['左邊界', 'x', 0, 1 - crop.w], ['上邊界', 'y', 0, 1 - crop.h], ['寬度', 'w', 0.2, 1 - crop.x], ['高度', 'h', 0.2, 1 - crop.y]] as [string, keyof typeof crop, number, number][]).map(([label, key, min, max]) => (
             <div key={key}>
@@ -130,7 +127,6 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
             </div>
           ))}
         </div>
-        {/* Rotation */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>旋轉 {rotation}°</div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -196,7 +192,15 @@ function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, c
               <button onClick={() => ref.current?.click()} style={{ padding: '7px 16px', border: `1px dashed ${color}`, borderRadius: 8, background: 'white', color: color, cursor: 'pointer', fontSize: 13 }}>
                 ＋ 上傳照片{photos.length > 0 ? `（${photos.length}/${MAX_PHOTOS}）` : ''}
               </button>
-              <input ref={ref} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => e.target.files && onAdd(e.target.files)} />
+              {/* ✅ 修復：改用 opacity:0 fixed 定位，避免 Chrome 行動版全黑 */}
+              <input
+                ref={ref}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+                onChange={e => { if (e.target.files) { onAdd(e.target.files); e.target.value = '' } }}
+              />
             </>
           ) : (
             <div style={{ fontSize: 12, color: mf }}>已達上限（{MAX_PHOTOS} 張）</div>
@@ -234,7 +238,6 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
   const [skipBefore, setSkipBefore] = useState(false)
   const [skipAfter,  setSkipAfter]  = useState(false)
 
-  // Photo editor state
   const [editingPhoto, setEditingPhoto] = useState<{ type: 'before' | 'after'; index: number; src: string } | null>(null)
 
   const [targetMins, setTargetMins] = useState(30)
@@ -264,12 +267,10 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
-   const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], userId)
+    const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], userId)
     setLogs(saved)
-    
     const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
     setScheduledItems(sched)
-    // Default to page 3 (log view) if user has existing logs
     const savedPage = loadLS<number>(CL_PAGE_KEY, 1)
     if (savedPage === 3 || (saved.length > 0 && savedPage !== 2)) setPageRaw(3)
   }, [])
@@ -323,28 +324,28 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
   const saveLog = async () => {
     if (!canSave) return
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
-   const compressPhoto = (src: string): Promise<string> => new Promise(res => {
-  const img = new Image(); img.onload = () => {
-    const c = document.createElement('canvas')
-    const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
-    c.width = img.width * r; c.height = img.height * r
-    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-    res(c.toDataURL('image/jpeg', 0.5))
-  }; img.src = src
-})
+    const compressPhoto = (src: string): Promise<string> => new Promise(res => {
+      const img = new Image(); img.onload = () => {
+        const c = document.createElement('canvas')
+        const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
+        c.width = img.width * r; c.height = img.height * r
+        c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+        res(c.toDataURL('image/jpeg', 0.5))
+      }; img.src = src
+    })
 
-const bp = skipBefore ? [] : await Promise.all(beforePhotos.map(compressPhoto))
-const ap = skipAfter  ? [] : await Promise.all(afterPhotos.map(compressPhoto))
+    const bp = skipBefore ? [] : await Promise.all(beforePhotos.map(compressPhoto))
+    const ap = skipAfter  ? [] : await Promise.all(afterPhotos.map(compressPhoto))
 
-const entry: ChecklistLog = {
-  id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
-  space: SN[space], note: note.trim() || defaultNote,
-  beforePhotos: bp, afterPhotos: ap,
-  duration: elapsedSecs, targetMinutes: effectiveMins,
-}
+    const entry: ChecklistLog = {
+      id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
+      space: SN[space], note: note.trim() || defaultNote,
+      beforePhotos: bp, afterPhotos: ap,
+      duration: elapsedSecs, targetMinutes: effectiveMins,
+    }
     const next = [entry, ...logs]
     setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next, userId)  // ← 修正：新增時也寫入 localStorage
+    saveLS(LS_CHECKLIST_LOGS, next, userId)
     onSaveLog(entry)
 
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
@@ -362,8 +363,6 @@ const entry: ChecklistLog = {
     const appUrl = typeof window !== 'undefined' ? `${window.location.origin}/?tab=checklist` : 'https://organizer-app.vercel.app/?tab=checklist'
     const ics = generateIcs(calDate, calTime, SN[space], effectiveMins, appUrl)
     downloadIcs(ics)
-
-    // Save scheduled item
     const newItem: ScheduledItem = { id: Date.now().toString(), space: SN[space], date: calDate, time: calTime, durationMins: effectiveMins }
     const next = [newItem, ...scheduledItems]
     setScheduledItems(next)
@@ -394,24 +393,23 @@ const entry: ChecklistLog = {
   const shareText = (e: ChecklistLog) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
 
   const shareCardRef = useRef<HTMLDivElement>(null)
+
+  // ✅ 修復：改用 saveOrShareImage，正確 await canvas.toBlob
   const captureAndShare = async (entry: ChecklistLog) => {
     if (!shareCardRef.current) return
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(shareCardRef.current, { useCORS: true, backgroundColor: '#FAF8F4', scale: 2 })
-      canvas.toBlob(async (blob) => {
-        if (!blob) return
-        const file = new File([blob], 'organizer-diary.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], text: shareText(entry) })
-        } else {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url; a.download = 'organizer-diary.png'; a.click()
-          URL.revokeObjectURL(url)
-        }
-      }, 'image/png')
-    } catch { shareToSocial('copy', shareText(entry)) }
+      const canvas = await html2canvas(shareCardRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#FAF8F4',
+        scale: 2,
+        logging: false,
+      })
+      await saveOrShareImage(canvas, 'organizer-diary.png', shareText(entry))
+    } catch {
+      shareToSocial('copy', shareText(entry))
+    }
   }
 
   // ── PAGE 1 ──────────────────────────────────────────────────────
@@ -428,7 +426,6 @@ const entry: ChecklistLog = {
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>選空間、拍整理前照片、設好時間，再開始</p>
       <PageDots page={1} />
 
-      {/* Scheduled items at top */}
       {scheduledItems.length > 0 && (
         <div style={{ background: '#EAF2EE', border: `1.5px solid ${sg}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -617,7 +614,6 @@ const entry: ChecklistLog = {
       </div>
       <PageDots page={3} />
 
-      {/* Quick link to start new session */}
       <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 13, color: '#2E6B50' }}>要開始新的整理嗎？</span>
         <button onClick={() => setPage(1)} style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>前往 →</button>

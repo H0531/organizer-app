@@ -49,38 +49,10 @@ export const SHARE_BTNS = [
   { id: 'copy', label: '複製', color: '#888888' },
 ]
 
-// 修復：分享不開空白頁 + 複製有 fallback
-export function shareToSocial(platform: string, text: string) {
-  if (platform === 'threads') {
-    const a = document.createElement('a')
-    a.href = `https://www.threads.net/intent/post?text=${encodeURIComponent(text)}`
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  } else if (platform === 'line') {
-    const a = document.createElement('a')
-    a.href = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  } else if (platform === 'copy') {
-    try {
-      navigator.clipboard.writeText(text).then(() => alert('已複製！')).catch(() => fallbackCopy(text))
-    } catch {
-      fallbackCopy(text)
-    }
-  }
-}
-
 function fallbackCopy(text: string) {
   const el = document.createElement('textarea')
   el.value = text
-  el.style.position = 'fixed'
-  el.style.opacity = '0'
+  el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
   document.body.appendChild(el)
   el.focus()
   el.select()
@@ -88,11 +60,72 @@ function fallbackCopy(text: string) {
   document.body.removeChild(el)
 }
 
+export function copyText(text: string) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => alert('已複製！')).catch(() => fallbackCopy(text))
+  } else {
+    fallbackCopy(text)
+  }
+}
+
+export function shareToSocial(platform: string, text: string) {
+  if (platform === 'copy') {
+    copyText(text)
+    return
+  }
+  const urls: Record<string, string> = {
+    threads: `https://www.threads.net/intent/post?text=${encodeURIComponent(text)}`,
+    line: `https://line.me/R/msg/text/?${encodeURIComponent(text)}`,
+  }
+  const url = urls[platform]
+  if (!url) return
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+// 將 canvas.toBlob 轉成 Promise
+export function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png'): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob)
+      else reject(new Error('canvas.toBlob failed'))
+    }, type)
+  })
+}
+
+// 儲存/分享圖片：統一入口
+export async function saveOrShareImage(canvas: HTMLCanvasElement, filename: string, shareText?: string) {
+  try {
+    const blob = await canvasToBlob(canvas)
+    const file = new File([blob], filename, { type: 'image/png' })
+    if (shareText && navigator.share && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], text: shareText })
+      return
+    }
+    // 下載
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (err) {
+    console.error('saveOrShareImage error:', err)
+    if (shareText) copyText(shareText)
+  }
+}
+
 export const LS_CHECKLIST_LOGS = 'checklist_logs'
 export const LS_DECLUTTER_RECORDS = 'declutter_records'
 export const LS_CHALLENGE_DATA = 'challenge_data'
 
-// ── IndexedDB photo storage ───────────────────────────────────
 const IDB_NAME = 'organizer_photos'
 const IDB_STORE = 'photos'
 const IDB_VERSION = 1
@@ -157,7 +190,7 @@ export function saveLS<T>(key: string, value: T, userId?: string): boolean {
       localStorage.setItem(k, JSON.stringify(value))
     }
     return true
-  } catch (e) {
+  } catch {
     try {
       const k = userId ? `${key}__${userId}` : key
       localStorage.removeItem(k)

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -28,7 +28,8 @@ function generateDonateIcs(date: string, itemName: string): string {
 function downloadIcs(content: string, filename: string) {
   const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+  const a = document.createElement('a'); a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
 function readFile(file: File): Promise<string> {
@@ -52,8 +53,14 @@ function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p:
           📷 附上照片
         </button>
       )}
-      {/* 移除 capture 屬性，避免 Chrome 桌面黑畫面 */}
-      <input ref={ref} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => { if (e.target.files?.[0]) onChange(await readFile(e.target.files[0])) }} />
+      {/* opacity:0 + 固定尺寸，避免 Chrome 行動版全黑問題 */}
+      <input
+        ref={ref}
+        type="file"
+        accept="image/*"
+        style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+        onChange={async e => { if (e.target.files?.[0]) { onChange(await readFile(e.target.files[0])); e.target.value = '' } }}
+      />
     </div>
   )
 }
@@ -72,23 +79,9 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
         allowTaint: true,
         backgroundColor: '#FAF8F4',
         scale: 2,
+        logging: false,
       })
-      canvas.toBlob(async blob => {
-        if (!blob) return
-        const file = new File([blob], 'farewell.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], text: shareText })
-        } else {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = 'farewell.png'
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
-        }
-      }, 'image/png')
+      await saveOrShareImage(canvas, 'farewell.png', shareText)
     } catch {
       shareToSocial('copy', shareText)
     }
@@ -159,8 +152,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
 
   const [shareTossEntry, setShareTossEntry] = useState<TossEntry | null>(null)
   const [saveFlash, setSaveFlash] = useState(false)
-
-  // 防止重複儲存
   const isSavingRef = useRef(false)
 
   const setStage = (s: Stage) => { setStageRaw(s); saveLS(STAGE_KEY, s) }
@@ -251,14 +242,11 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
   }
 
   const handleSave = async () => {
-    if (items.length === 0) return
-    if (isSavingRef.current) return
+    if (items.length === 0 || isSavingRef.current) return
     isSavingRef.current = true
     try {
       await Promise.all(
-        tossEntries
-          .filter(e => e.photo)
-          .map(e => savePhoto(`toss_photo_${e.id}`, e.photo!))
+        tossEntries.filter(e => e.photo).map(e => savePhoto(`toss_photo_${e.id}`, e.photo!))
       )
       const record: DeclutterRecord = {
         savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
@@ -390,7 +378,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* Keep */}
       {keepItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 22px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 10 }}>✓ 留下（{keepItems.length} 件）</div>
@@ -430,7 +417,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* Donate */}
       {donateItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 22px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#4285F4', marginBottom: 10 }}>📦 送出（{donateItems.length} 件）</div>
@@ -458,7 +444,6 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember }: Props) {
         </div>
       )}
 
-      {/* Toss */}
       {tossItems.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 22px', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#C47B5A', marginBottom: 10 }}>🗑 丟棄（{tossItems.length} 件）</div>
