@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage, saveShareLabel, isChrome } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage, saveShareLabel, isChrome, drawDeclutterCard } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -72,16 +72,8 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
   const shareText = `放手了「${entry.name}」\n${entry.memo}\n#斷捨離 #整理小幫手`
 
   const captureAndShare = async () => {
-    if (!cardRef.current) return
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(cardRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#FAF8F4',
-        scale: 2,
-        logging: false,
-      })
+      const canvas = await drawDeclutterCard({ name: entry.name, memo: entry.memo, photo: entry.photo })
       await saveOrShareImage(canvas, 'farewell.png', shareText)
     } catch {
       shareToSocial('copy', shareText)

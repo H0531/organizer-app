@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
-import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel } from '@/lib/types'
+import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, saveOrShareImage } from '@/lib/types'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -21,15 +21,7 @@ function ShareModal({ title, text, captureRef, onClose }: { title: string; text:
 const captureAndShare = async () => {
   if (!captureRef?.current) return
   try {
-    const { saveOrShareImage } = await import('@/lib/types')
-    const html2canvas = (await import('html2canvas')).default
-    const canvas = await html2canvas(captureRef.current, {
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#FAF8F4',
-      scale: 2,
-      logging: false,
-    })
+    const canvas = await drawTextCard(title, text)
     await saveOrShareImage(canvas, 'organizer-diary.png', text)
   } catch { shareToSocial('copy', text) }
 }

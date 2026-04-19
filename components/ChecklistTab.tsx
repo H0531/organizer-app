@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS, saveOrShareImage, saveShareLabel, isChrome } from '@/lib/types'
+import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS, saveOrShareImage, saveShareLabel, isChrome, drawChecklistCard } from '@/lib/types'
 import type { ChecklistLog } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -395,17 +395,16 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
 
   const shareCardRef = useRef<HTMLDivElement>(null)
 
-  // ✅ 修復：改用 saveOrShareImage，正確 await canvas.toBlob
+  // ✅ 改用 Canvas 手動繪製，iOS 相容
   const captureAndShare = async (entry: ChecklistLog) => {
-    if (!shareCardRef.current) return
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(shareCardRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#FAF8F4',
-        scale: 2,
-        logging: false,
+      const canvas = await drawChecklistCard({
+        space: entry.space,
+        date: entry.date,
+        duration: entry.duration,
+        beforePhotos: entry.beforePhotos,
+        afterPhotos: entry.afterPhotos,
+        note: entry.note,
       })
       await saveOrShareImage(canvas, 'organizer-diary.png', shareText(entry))
     } catch {
