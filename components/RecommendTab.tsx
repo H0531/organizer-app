@@ -122,6 +122,47 @@ export default function RecommendTab() {
         }
       </div>
 
+      {/* 收納選購指南 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginTop: 16, marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>選購原則</div>
+        {[
+          ['先斷捨離再買', '整理前先丟物，才知道真正需要幾個收納盒，避免買多了反而亂'],
+          ['量好尺寸再下單', '收納盒要比空間小 2～3cm，才能順利放入並留通風空間'],
+          ['同系列統一品牌', '混搭品牌難以堆疊，建議同一空間選同系列商品'],
+          ['透明優先', '透明收納盒不必開蓋就能看到內容物，日常取用效率最高'],
+          ['標籤是靈魂', '買再好的收納盒沒貼標籤，三個月後就不知道裡面放什麼'],
+        ].map(([t, d], i, arr) => (
+          <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${cr}` : 'none' }}>
+            <span style={{ color: sg, flexShrink: 0, marginTop: 2 }}>✦</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: ink, marginBottom: 2 }}>{t}</div>
+              <div style={{ fontSize: 12, color: ml }}>{d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 空間別推薦工具 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>空間別必備工具</div>
+        {[
+          { space: '衣櫃', tools: ['隔板收納盒', '掛式收納袋', '防塵衣物袋', 'S 型掛鉤'] },
+          { space: '廚房', tools: ['抽屜分格盤', '轉角旋轉架', '磁吸刀架', '密封罐組'] },
+          { space: '書桌', tools: ['桌面整理架', '線材收納盒', '抽屜分格盤', '標籤機'] },
+          { space: '玄關', tools: ['鞋盒（透明）', '傘架', '掛鉤排', '小物托盤'] },
+          { space: '床底', tools: ['扁型收納箱', '防塵蓋附輪', '真空收納袋', '標籤卡'] },
+        ].map((item, i, arr) => (
+          <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${cr}` : 'none', alignItems: 'flex-start' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: sg, background: '#EAF2EE', borderRadius: 6, padding: '3px 8px', flexShrink: 0, marginTop: 2 }}>{item.space}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {item.tools.map(tool => (
+                <span key={tool} style={{ fontSize: 12, color: ink, background: cr, borderRadius: 6, padding: '3px 8px' }}>{tool}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Crawler placeholder footer */}
       <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 10, border: `1px dashed ${bd}`, background: 'white', display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontSize: 20 }}>🤖</span>

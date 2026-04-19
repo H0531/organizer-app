@@ -52,6 +52,33 @@ export default function HomeTab({
         </div>
       )}
 
+      {/* 從這裡開始 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 20px 16px', marginBottom: 20 }}>
+        <div style={{ fontSize: 12, color: mf, letterSpacing: '0.1em', fontWeight: 500, marginBottom: 12 }}>從這裡開始</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {([
+            { icon: '🗂', label: '今天整理一個空間', tab: 'checklist' as Tab, hint: '選空間 → 計時 → 打卡' },
+            { icon: '♻️', label: '整理囤積物品', tab: 'declutter' as Tab, hint: '留、送、丟三分流' },
+            { icon: '🎯', label: '開始每日丟一物', tab: 'challenge' as Tab, hint: '7 / 30 / 60 / 100 天' },
+            { icon: '📦', label: '找適合的收納品', tab: 'recommend' as Tab, hint: '輸入尺寸自動推薦' },
+          ] as { icon: string; label: string; tab: Tab; hint: string }[]).map(item => (
+            <button
+              key={item.tab}
+              onClick={() => onNavigate(item.tab)}
+              style={{
+                background: '#F5F0E8', border: `1px solid ${bd}`, borderRadius: 10,
+                padding: '14px 12px', cursor: 'pointer', textAlign: 'left',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <div style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: ink, marginBottom: 3, lineHeight: 1.4 }}>{item.label}</div>
+              <div style={{ fontSize: 11, color: mf }}>{item.hint}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Hero */}
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>H 的收整沙龍</p>

@@ -50,11 +50,31 @@ function Toast({ message, type, onDone }: { message: string; type: ToastType; on
   )
 }
 
+// ── Loading Spinner ────────────────────────────────────────────
+function LoadingOverlay() {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(245,240,232,0.85)',
+      zIndex: 200, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 16,
+    }}>
+      <div style={{
+        width: 40, height: 40, border: `3px solid #DDD8CF`,
+        borderTop: `3px solid #7A9E8A`, borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <div style={{ fontSize: 13, color: '#6B6358' }}>載入資料中⋯</div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+}
+
 export default function Home() {
   const [tab, setTab]                           = useState<AppTab>('home')
   const [user, setUser]                         = useState<OAuthUser | null>(null)
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
   const [checklistLogs, setChecklistLogs]       = useState<ChecklistLog[]>([])
+  const [loading, setLoading]                   = useState(false)
   const [toast, setToast]                       = useState<{ message: string; type: ToastType } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -64,13 +84,20 @@ export default function Home() {
   }, [])
 
   const loadUserData = useCallback(async (u: OAuthUser) => {
-    const [logs, records] = await Promise.all([
-      sbLoadChecklistLogs(u.email),
-      sbLoadDeclutterRecords(u.email),
-    ])
-    setChecklistLogs(logs.length > 0 ? logs : loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
-    setDeclutterRecords(records.length > 0 ? records : loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
-  }, [])
+    setLoading(true)
+    try {
+      const [logs, records] = await Promise.all([
+        sbLoadChecklistLogs(u.email),
+        sbLoadDeclutterRecords(u.email),
+      ])
+      setChecklistLogs(logs.length > 0 ? logs : loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
+      setDeclutterRecords(records.length > 0 ? records : loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
+    } catch {
+      showToast('載入資料失敗，請重新整理')
+    } finally {
+      setLoading(false)
+    }
+  }, [showToast])
 
   useEffect(() => {
     if (/Line\//.test(navigator.userAgent)) {
@@ -203,6 +230,8 @@ export default function Home() {
           </button>
         ))}
       </nav>
+
+      {loading && <LoadingOverlay />}
 
       {toast && (
         <Toast
