@@ -534,7 +534,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
       </div>
       <PageDots page={2} />
 
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center' }}>
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center', position: 'sticky', top: 46, zIndex: 50 }}>
         <div style={{ position: 'relative', width: 130, height: 130, margin: '0 auto 12px' }}>
           <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="65" cy="65" r="54" fill="none" stroke={cr} strokeWidth="9" />
