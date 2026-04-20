@@ -222,6 +222,14 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
           style={{ marginTop: 16, width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>
           登出
         </button>
+      <button onClick={() => {
+          Object.keys(localStorage).filter(k =>
+            k.startsWith('declutter_records') || k.startsWith('checklist_logs')
+          ).forEach(k => localStorage.removeItem(k))
+          window.location.reload()
+        }} style={{ marginTop: 8, width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: '#C47B5A', fontSize: 13, cursor: 'pointer' }}>
+          清除本機舊資料
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
