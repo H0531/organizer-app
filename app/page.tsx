@@ -110,7 +110,8 @@ export default function Home() {
     const u = getUserFromCookie()
     if (u) { setUser(u); loadUserData(u) }
     else {
-      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
+      setDeclutterRecords([])
+setChecklistLogs([])
       setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
     }
   }, [loadUserData])
