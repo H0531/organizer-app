@@ -5,6 +5,7 @@ import type { ChecklistLog } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
+// ── 預設清單 ─────────────────────────────────────────────────
 const SP: Record<string, { label: string; items: { text: string; badge?: string }[] }> = {
   desk:     { label: '書桌整理清單', items: [{ text: '清空桌面所有物品', badge: '必做' }, { text: '分類文件文具雜物' }, { text: '丟棄過期收據廢紙' }, { text: '文具只留常用3支筆' }, { text: '電線整理貼上標籤' }, { text: '桌面只留今日必要物品' }] },
   wardrobe: { label: '衣櫃整理清單', items: [{ text: '全部衣物取出攤開', badge: '必做' }, { text: '依類型分堆上衣褲外套' }, { text: '超過一年未穿考慮送出' }, { text: '破損變形衣物直接淘汰' }, { text: '常穿放前方少穿放後方' }, { text: '折疊統一方式直立收納' }] },
@@ -15,12 +16,15 @@ const SP: Record<string, { label: string; items: { text: string; badge?: string 
 }
 const SI: Record<string, string> = { desk: '🗂', wardrobe: '👕', kitchen: '🍳', bathroom: '🪥', bag: '👜', digital: '📱' }
 const SN: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen: '廚房', bathroom: '浴室', bag: '包包', digital: '數位' }
+// 各空間預估時間（分鐘）
+const SE: Record<string, string> = { desk: '20–40 分鐘', wardrobe: '60–90 分鐘', kitchen: '45–60 分鐘', bathroom: '20–30 分鐘', bag: '10–20 分鐘', digital: '30–60 分鐘' }
 
 const PRESET_MINS = [10, 30, 60, 90, 120]
 const MAX_PHOTOS = 5
 const APP_URL = typeof window !== 'undefined' ? window.location.origin + '/?tab=checklist' : 'https://organizer-app.vercel.app/?tab=checklist'
 
 type PhotoSet = string[]
+type CustomItem = { text: string; id: string }
 
 const fmtSecs = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
@@ -36,17 +40,13 @@ function generateIcs(date: string, time: string, spaceName: string, durationMins
   return [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//整理小幫手//ZH',
     'BEGIN:VEVENT',
-    `UID:${uid}`,
-    `DTSTAMP:${fmt(new Date())}`,
-    `DTSTART:${fmt(start)}`,
-    `DTEND:${fmt(end)}`,
+    `UID:${uid}`, `DTSTAMP:${fmt(new Date())}`, `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
     `SUMMARY:整理${spaceName} — 整理小幫手`,
-    `DESCRIPTION:整理小幫手提醒：今天要整理了！\\n開啟整理清單：${appUrl}`,
+    `DESCRIPTION:整理小幫手提醒：今天要整理了！\\\\n開啟整理清單：${appUrl}`,
     'BEGIN:VALARM', 'TRIGGER:-PT1D', 'ACTION:DISPLAY', 'DESCRIPTION:明天要整理囉！', 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR',
   ].join('\r\n')
 }
-
 function downloadIcs(icsContent: string) {
   const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -56,7 +56,7 @@ function downloadIcs(icsContent: string) {
   URL.revokeObjectURL(url)
 }
 
-// ── Photo Editor Modal ─────────────────────────────────────────────────────
+// ── Photo Editor ─────────────────────────────────────────────
 function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: string) => void; onCancel: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [rotation, setRotation] = useState(0)
@@ -70,41 +70,30 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
   }, [src])
 
   const drawPreview = useCallback(() => {
-    const canvas = canvasRef.current
-    const img = imgRef.current
+    const canvas = canvasRef.current; const img = imgRef.current
     if (!canvas || !img) return
     const ctx = canvas.getContext('2d')!
     const size = 280
     canvas.width = size; canvas.height = size
     ctx.clearRect(0, 0, size, size)
-    ctx.save()
-    ctx.translate(size / 2, size / 2)
-    ctx.rotate((rotation * Math.PI) / 180)
-    ctx.drawImage(img, -size / 2, -size / 2, size, size)
-    ctx.restore()
+    ctx.save(); ctx.translate(size / 2, size / 2); ctx.rotate((rotation * Math.PI) / 180)
+    ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore()
     ctx.fillStyle = 'rgba(0,0,0,0.35)'
     const cx = crop.x * size, cy = crop.y * size, cw = crop.w * size, ch = crop.h * size
-    ctx.fillRect(0, 0, size, cy)
-    ctx.fillRect(0, cy + ch, size, size - cy - ch)
-    ctx.fillRect(0, cy, cx, ch)
-    ctx.fillRect(cx + cw, cy, size - cx - cw, ch)
+    ctx.fillRect(0, 0, size, cy); ctx.fillRect(0, cy + ch, size, size - cy - ch)
+    ctx.fillRect(0, cy, cx, ch); ctx.fillRect(cx + cw, cy, size - cx - cw, ch)
     ctx.strokeStyle = sg; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cw, ch)
   }, [rotation, crop])
 
   useEffect(() => { drawPreview() }, [drawPreview])
 
   const applyAndDone = () => {
-    const img = imgRef.current
-    if (!img) return
-    const out = document.createElement('canvas')
-    const size = 560
+    const img = imgRef.current; if (!img) return
+    const out = document.createElement('canvas'); const size = 560
     out.width = size; out.height = size
     const ctx = out.getContext('2d')!
-    ctx.save()
-    ctx.translate(size / 2, size / 2)
-    ctx.rotate((rotation * Math.PI) / 180)
-    ctx.drawImage(img, -size / 2, -size / 2, size, size)
-    ctx.restore()
+    ctx.save(); ctx.translate(size / 2, size / 2); ctx.rotate((rotation * Math.PI) / 180)
+    ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore()
     const cx = crop.x * size, cy = crop.y * size, cw = crop.w * size, ch = crop.h * size
     const cropped = document.createElement('canvas')
     cropped.width = cw; cropped.height = ch
@@ -133,7 +122,7 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
             {[0, 90, 180, 270].map(r => (
               <button key={r} onClick={() => setRotation(r)}
                 style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: `1px solid ${rotation === r ? sg : bd}`, background: rotation === r ? '#EAF2EE' : 'white', color: rotation === r ? sg : ml, fontSize: 11, cursor: 'pointer' }}>
-                {r === 270 ? '270°' : r === 0 ? '原圖' : `${r}°`}
+                {r === 0 ? '原圖' : `${r}°`}
               </button>
             ))}
           </div>
@@ -147,6 +136,7 @@ function PhotoEditor({ src, onDone, onCancel }: { src: string; onDone: (edited: 
   )
 }
 
+// ── Photo Strip ──────────────────────────────────────────────
 function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, color }: {
   photos: string[]; onAdd: (f: FileList) => void; onRemove: (i: number) => void; onEdit: (i: number) => void
   skipped: boolean; onSkip: () => void; label: string; color: string
@@ -192,16 +182,11 @@ function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, c
               <button onClick={() => ref.current?.click()} style={{ padding: '7px 16px', border: `1px dashed ${color}`, borderRadius: 8, background: 'white', color: color, cursor: 'pointer', fontSize: 13 }}>
                 ＋ 上傳照片{photos.length > 0 ? `（${photos.length}/${MAX_PHOTOS}）` : ''}
               </button>
-              {/* ✅ 修復：改用 opacity:0 fixed 定位，避免 Chrome 行動版全黑 */}
-              <input
-                ref={ref}
-                type="file"
-                accept="image/*"
+              <input ref={ref} type="file" accept="image/*"
                 {...(isChrome() ? {} : { capture: undefined })}
                 multiple
                 style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-                onChange={e => { if (e.target.files) { onAdd(e.target.files); e.target.value = '' } }}
-              />
+                onChange={e => { if (e.target.files) { onAdd(e.target.files); e.target.value = '' } }} />
             </>
           ) : (
             <div style={{ fontSize: 12, color: mf }}>已達上限（{MAX_PHOTOS} 張）</div>
@@ -220,51 +205,70 @@ function PageDots({ page }: { page: number }) {
   )
 }
 
-const CL_PAGE_KEY = 'checklist_page'
+// ── 完成慶賀橫幅 ─────────────────────────────────────────────
+function CompletionBanner({ spaceName, onSave, canSave, saving }: {
+  spaceName: string; onSave: () => void; canSave: boolean; saving: boolean
+}) {
+  return (
+    <div style={{ background: '#EAF2EE', border: `1.5px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16, textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+      <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: '#2E6B50', marginBottom: 4 }}>
+        {spaceName}清單全部完成了！
+      </div>
+      <div style={{ fontSize: 13, color: ml, marginBottom: 16, lineHeight: 1.6 }}>
+        你已經做了很好的一步。上傳整理後照片，儲存這次的成果紀錄吧！
+      </div>
+      <button onClick={onSave} disabled={!canSave}
+        style={{ padding: '12px 32px', borderRadius: 10, border: 'none', background: canSave ? sg : '#C8C2B8', color: 'white', fontSize: 15, cursor: canSave ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
+        {saving ? '✅ 已儲存！' : canSave ? '💾 儲存整理成果' : '請先上傳整理後照片'}
+      </button>
+    </div>
+  )
+}
 
+const CL_PAGE_KEY = 'checklist_page'
 type Props = { onSaveLog: (log: ChecklistLog) => void; userId?: string }
 
 export default function ChecklistTab({ onSaveLog, userId }: Props) {
   const [page, setPageRaw] = useState<1 | 2 | 3>(1)
+  const setPage = (p: 1 | 2 | 3) => { setPageRaw(p); saveLS(CL_PAGE_KEY, p) }
 
-  const setPage = (p: 1 | 2 | 3) => {
-    setPageRaw(p)
-    saveLS(CL_PAGE_KEY, p)
-  }
   const [space, setSpace] = useState('desk')
   const [checked, setChecked] = useState<Record<string, boolean[]>>({})
+  // 每個空間的自訂項目
+  const [customItems, setCustomItems] = useState<Record<string, CustomItem[]>>({})
+  const [newItemText, setNewItemText] = useState('')
+  const [showAddItem, setShowAddItem] = useState(false)
 
   const [beforePhotos, setBeforePhotos] = useState<PhotoSet>([])
-  const [afterPhotos, setAfterPhotos]   = useState<PhotoSet>([])
+  const [afterPhotos, setAfterPhotos] = useState<PhotoSet>([])
   const [skipBefore, setSkipBefore] = useState(false)
-  const [skipAfter,  setSkipAfter]  = useState(false)
-
+  const [skipAfter, setSkipAfter] = useState(false)
   const [editingPhoto, setEditingPhoto] = useState<{ type: 'before' | 'after'; index: number; src: string } | null>(null)
 
   const [targetMins, setTargetMins] = useState(30)
   const [customMins, setCustomMins] = useState('')
-  const [useCustom,  setUseCustom]  = useState(false)
-  const [timeLeft,   setTimeLeft]   = useState(0)
+  const [useCustom, setUseCustom] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
-  const [timerDone,    setTimerDone]    = useState(false)
-  const [elapsedSecs,  setElapsedSecs]  = useState(0)
+  const [timerDone, setTimerDone] = useState(false)
+  const [elapsedSecs, setElapsedSecs] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [note, setNote] = useState('')
   const [saveFlash, setSaveFlash] = useState(false)
 
   const [showCalModal, setShowCalModal] = useState(false)
-  const [calDate,      setCalDate]      = useState('')
-  const [calTime,      setCalTime]      = useState('')
-  const [calError,     setCalError]     = useState('')
-
+  const [calDate, setCalDate] = useState('')
+  const [calTime, setCalTime] = useState('')
+  const [calError, setCalError] = useState('')
   const [scheduledItems, setScheduledItems] = useState<ScheduledItem[]>([])
   const [expandScheduled, setExpandScheduled] = useState(false)
 
   const [logs, setLogs] = useState<ChecklistLog[]>([])
-  const [shareEntry,      setShareEntry]      = useState<ChecklistLog | null>(null)
-  const [editingId,       setEditingId]       = useState<string | null>(null)
-  const [editNote,        setEditNote]        = useState('')
+  const [shareEntry, setShareEntry] = useState<ChecklistLog | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editNote, setEditNote] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -272,21 +276,59 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
     setLogs(saved)
     const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
     setScheduledItems(sched)
+    const savedCustom = loadLS<Record<string, CustomItem[]>>('checklist_custom_items', {})
+    setCustomItems(savedCustom)
     const savedPage = loadLS<number>(CL_PAGE_KEY, 1)
     if (savedPage === 3 || (saved.length > 0 && savedPage !== 2)) setPageRaw(3)
   }, [])
 
   const effectiveMins = useCustom ? Math.max(1, parseInt(customMins) || 1) : targetMins
-  const totalSecs     = effectiveMins * 60
-  const beforeReady   = skipBefore || beforePhotos.length > 0
-  const afterReady    = skipAfter  || afterPhotos.length > 0
+  const totalSecs = effectiveMins * 60
+  const beforeReady = skipBefore || beforePhotos.length > 0
+  const afterReady = skipAfter || afterPhotos.length > 0
 
-  const getC = () => checked[space] || SP[space].items.map(() => false)
-  const toggleC = (i: number) => { const c = getC(); const n = [...c]; n[i] = !n[i]; setChecked({ ...checked, [space]: n }) }
-  const done  = getC().filter(Boolean).length
-  const total = SP[space].items.length
-  const checklistDone = done === total
+  // 合併預設 + 自訂清單
+  const allItems = [
+    ...SP[space].items,
+    ...(customItems[space] || []).map(ci => ({ text: ci.text, id: ci.id })),
+  ]
+  const getC = () => {
+    const c = checked[space] || []
+    // 確保長度與 allItems 一致
+    if (c.length < allItems.length) return [...c, ...Array(allItems.length - c.length).fill(false)]
+    return c
+  }
+  const toggleC = (i: number) => {
+    const c = getC(); const n = [...c]; n[i] = !n[i]
+    setChecked({ ...checked, [space]: n })
+  }
+  const done = getC().filter(Boolean).length
+  const total = allItems.length
+  const checklistDone = done === total && total > 0
   const canSave = checklistDone && afterReady
+
+  // 新增自訂項目
+  const addCustomItem = () => {
+    if (!newItemText.trim()) return
+    const newItem: CustomItem = { text: newItemText.trim(), id: Date.now().toString() }
+    const next = { ...customItems, [space]: [...(customItems[space] || []), newItem] }
+    setCustomItems(next)
+    saveLS('checklist_custom_items', next)
+    setNewItemText('')
+    setShowAddItem(false)
+  }
+  // 刪除自訂項目
+  const removeCustomItem = (id: string) => {
+    const spaceCustom = (customItems[space] || []).filter(ci => ci.id !== id)
+    const next = { ...customItems, [space]: spaceCustom }
+    setCustomItems(next)
+    saveLS('checklist_custom_items', next)
+    // 同步縮短 checked 陣列
+    const presetLen = SP[space].items.length
+    const newCustomLen = spaceCustom.length
+    const c = getC().slice(0, presetLen + newCustomLen)
+    setChecked({ ...checked, [space]: c })
+  }
 
   useEffect(() => {
     if (timerRunning) {
@@ -334,10 +376,8 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         res(c.toDataURL('image/jpeg', 0.5))
       }; img.src = src
     })
-
     const bp = skipBefore ? [] : await Promise.all(beforePhotos.map(compressPhoto))
-    const ap = skipAfter  ? [] : await Promise.all(afterPhotos.map(compressPhoto))
-
+    const ap = skipAfter ? [] : await Promise.all(afterPhotos.map(compressPhoto))
     const entry: ChecklistLog = {
       id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
       space: SN[space], note: note.trim() || defaultNote,
@@ -345,74 +385,47 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
       duration: elapsedSecs, targetMinutes: effectiveMins,
     }
     const next = [entry, ...logs]
-    setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next, userId)
-    onSaveLog(entry)
-
+    setLogs(next); saveLS(LS_CHECKLIST_LOGS, next, userId); onSaveLog(entry)
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
-    setChecked({ ...checked, [space]: SP[space].items.map(() => false) })
+    setChecked({ ...checked, [space]: allItems.map(() => false) })
     setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
-
     setSaveFlash(true)
-    setTimeout(() => { setSaveFlash(false); setPage(3) }, 600)
+    setTimeout(() => { setSaveFlash(false); setPage(3) }, 800)
   }
 
   const validateAndDownloadIcs = () => {
     setCalError('')
     if (!calDate || !calTime) { setCalError('請選擇日期和時間'); return }
     if (new Date(`${calDate}T${calTime}`) <= new Date()) { setCalError('請選擇當下之後的時間'); return }
-    const appUrl = typeof window !== 'undefined' ? `${window.location.origin}/?tab=checklist` : 'https://organizer-app.vercel.app/?tab=checklist'
+    const appUrl = typeof window !== 'undefined' ? `${window.location.origin}/?tab=checklist` : APP_URL
     const ics = generateIcs(calDate, calTime, SN[space], effectiveMins, appUrl)
     downloadIcs(ics)
     const newItem: ScheduledItem = { id: Date.now().toString(), space: SN[space], date: calDate, time: calTime, durationMins: effectiveMins }
-    const next = [newItem, ...scheduledItems]
-    setScheduledItems(next)
-    saveLS('checklist_scheduled', next)
+    const next = [newItem, ...scheduledItems]; setScheduledItems(next); saveLS('checklist_scheduled', next)
     setShowCalModal(false)
   }
-
   const removeScheduled = (id: string) => {
-    const next = scheduledItems.filter(s => s.id !== id)
-    setScheduledItems(next)
-    saveLS('checklist_scheduled', next)
+    const next = scheduledItems.filter(s => s.id !== id); setScheduledItems(next); saveLS('checklist_scheduled', next)
   }
-
   const saveEdit = () => {
     const next = logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)
-    setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next, userId)
-    setEditingId(null)
+    setLogs(next); saveLS(LS_CHECKLIST_LOGS, next, userId); setEditingId(null)
   }
   const deleteLog = (id: string) => {
     const next = logs.filter(l => l.id !== id)
-    setLogs(next)
-    saveLS(LS_CHECKLIST_LOGS, next, userId)
-    setConfirmDeleteId(null)
-    if (shareEntry?.id === id) setShareEntry(null)
+    setLogs(next); saveLS(LS_CHECKLIST_LOGS, next, userId)
+    setConfirmDeleteId(null); if (shareEntry?.id === id) setShareEntry(null)
   }
-
   const shareText = (e: ChecklistLog) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
-
   const shareCardRef = useRef<HTMLDivElement>(null)
-
-  // ✅ 改用 Canvas 手動繪製，iOS 相容
   const captureAndShare = async (entry: ChecklistLog) => {
     try {
-      const canvas = await drawChecklistCard({
-        space: entry.space,
-        date: entry.date,
-        duration: entry.duration,
-        beforePhotos: entry.beforePhotos,
-        afterPhotos: entry.afterPhotos,
-        note: entry.note,
-      })
+      const canvas = await drawChecklistCard({ space: entry.space, date: entry.date, duration: entry.duration, beforePhotos: entry.beforePhotos, afterPhotos: entry.afterPhotos, note: entry.note })
       await saveOrShareImage(canvas, 'organizer-diary.png', shareText(entry))
-    } catch {
-      shareToSocial('copy', shareText(entry))
-    }
+    } catch { shareToSocial('copy', shareText(entry)) }
   }
 
-  // ── PAGE 1 ──────────────────────────────────────────────────────
+  // ── PAGE 1：選空間 ───────────────────────────────────────
   if (page === 1) return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -426,13 +439,12 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>選空間、拍整理前照片、設好時間，再開始</p>
       <PageDots page={1} />
 
+      {/* 預約提醒 */}
       {scheduledItems.length > 0 && (
         <div style={{ background: '#EAF2EE', border: `1.5px solid ${sg}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: expandScheduled ? 8 : 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50' }}>📅 預約整理（{scheduledItems.length} 筆）</div>
-            <button onClick={() => setExpandScheduled(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>
-              {expandScheduled ? '收起' : '查看'}
-            </button>
+            <button onClick={() => setExpandScheduled(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>{expandScheduled ? '收起' : '查看'}</button>
           </div>
           {expandScheduled && scheduledItems.map(s => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderTop: `1px solid ${sg}22` }}>
@@ -447,21 +459,29 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         </div>
       )}
 
+      {/* 空間選擇，含預估時間 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
         {Object.keys(SP).map(k => (
-          <button key={k} onClick={() => setSpace(k)} style={{ padding: '14px 10px', border: space === k ? `2px solid ${sg}` : `1px solid ${bd}`, borderRadius: 10, background: space === k ? '#EAF2EE' : ww, cursor: 'pointer', textAlign: 'center' }}>
+          <button key={k} onClick={() => setSpace(k)} style={{
+            padding: '14px 10px 12px', border: space === k ? `2px solid ${sg}` : `1px solid ${bd}`,
+            borderRadius: 10, background: space === k ? '#EAF2EE' : ww, cursor: 'pointer', textAlign: 'center',
+            WebkitTapHighlightColor: 'transparent',
+          }}>
             <span style={{ fontSize: 22, display: 'block', marginBottom: 4 }}>{SI[k]}</span>
-            <span style={{ fontSize: 13, color: ink }}>{SN[k]}</span>
+            <span style={{ fontSize: 13, color: ink, display: 'block', marginBottom: 3 }}>{SN[k]}</span>
+            <span style={{ fontSize: 10, color: mf, display: 'block' }}>{SE[k]}</span>
           </button>
         ))}
       </div>
 
+      {/* 整理前照片 */}
       <div style={{ background: ww, border: `1px solid ${beforeReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <PhotoStrip photos={beforePhotos} onAdd={f => addPhotos('before', f)} onRemove={i => removePhoto('before', i)} onEdit={i => openPhotoEditor('before', i)}
           skipped={skipBefore} onSkip={() => { setSkipBefore(s => !s); setBeforePhotos([]) }} label="📷 整理前照片" color={mf} />
         {!beforeReady && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 8 }}>請上傳照片或選擇「不上傳照片」才能繼續</div>}
       </div>
 
+      {/* 計時設定 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>⏱ 設定整理時間</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -482,6 +502,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         <div style={{ fontSize: 12, color: mf, marginTop: 6 }}>已設定：<strong style={{ color: ink }}>{effectiveMins} 分鐘</strong></div>
       </div>
 
+      {/* 預約行事曆 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 8 }}>📅 預約整理時間</div>
         <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>選好日期時間，下載行事曆檔案加入手機行事曆（含整理清單連結）</div>
@@ -495,6 +516,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         {beforeReady ? '開始整理 ▶' : '請先處理整理前照片'}
       </button>
 
+      {/* 行事曆 Modal */}
       {showCalModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 28, maxWidth: 380, width: '100%' }}>
@@ -518,14 +540,11 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
           </div>
         </div>
       )}
-
-      {editingPhoto && (
-        <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />
-      )}
+      {editingPhoto && <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />}
     </div>
   )
 
-  // ── PAGE 2 ──────────────────────────────────────────────────────
+  // ── PAGE 2：整理中 ───────────────────────────────────────
   if (page === 2) return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
@@ -534,6 +553,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
       </div>
       <PageDots page={2} />
 
+      {/* 計時器 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center', position: 'sticky', top: 46, zIndex: 50 }}>
         <div style={{ position: 'relative', width: 130, height: 130, margin: '0 auto 12px' }}>
           <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: 'rotate(-90deg)' }}>
@@ -559,23 +579,65 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         )}
       </div>
 
+      {/* 清單 + 自訂項目 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>{SP[space].label}</div>
-        {SP[space].items.map((item, i) => (
-          <div key={i} onClick={() => toggleC(i)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < total - 1 ? `1px solid ${cr}` : 'none', cursor: 'pointer' }}>
-            <div style={{ width: 20, height: 20, border: getC()[i] ? 'none' : `1.5px solid ${bd}`, borderRadius: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: getC()[i] ? sg : 'white' }}>
-              {getC()[i] && <svg width="10" height="7" viewBox="0 0 10 7" fill="none"><path d="M1 3.5L3.5 6L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>{SP[space].label}</div>
+          <span style={{ fontSize: 12, color: mf }}>{done} / {total}</span>
+        </div>
+
+        {allItems.map((item, i) => {
+          const isCustom = i >= SP[space].items.length
+          const customId = isCustom ? (customItems[space] || [])[i - SP[space].items.length]?.id : undefined
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < total - 1 ? `1px solid ${cr}` : 'none' }}>
+              <div onClick={() => toggleC(i)} style={{ width: 20, height: 20, border: getC()[i] ? 'none' : `1.5px solid ${bd}`, borderRadius: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: getC()[i] ? sg : 'white', cursor: 'pointer' }}>
+                {getC()[i] && <svg width="10" height="7" viewBox="0 0 10 7" fill="none"><path d="M1 3.5L3.5 6L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              </div>
+              <span onClick={() => toggleC(i)} style={{ fontSize: 14, flex: 1, textDecoration: getC()[i] ? 'line-through' : 'none', color: getC()[i] ? mf : ink, cursor: 'pointer' }}>{item.text}</span>
+              {'badge' in item && item.badge && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#F0E2C0', color: '#C4953A', fontWeight: 500 }}>{item.badge}</span>}
+              {isCustom && customId && (
+                <button onClick={() => removeCustomItem(customId)} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', flexShrink: 0 }} title="移除此項目">✕</button>
+              )}
             </div>
-            <span style={{ fontSize: 14, flex: 1, textDecoration: getC()[i] ? 'line-through' : 'none', color: getC()[i] ? mf : ink }}>{item.text}</span>
-            {item.badge && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#F0E2C0', color: '#C4953A', fontWeight: 500 }}>{item.badge}</span>}
-          </div>
-        ))}
+          )
+        })}
+
+        {/* 新增自訂項目 */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px dashed ${bd}` }}>
+          {!showAddItem ? (
+            <button onClick={() => setShowAddItem(true)} style={{ fontSize: 12, color: sg, background: 'none', border: `1px dashed ${sg}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', width: '100%' }}>
+              ＋ 新增自訂整理項目
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={newItemText} onChange={e => setNewItemText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addCustomItem()}
+                placeholder="例：整理抽屜雜物"
+                style={{ flex: 1, border: `1px solid ${sg}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, outline: 'none', color: ink }} />
+              <button onClick={addCustomItem} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer' }}>加入</button>
+              <button onClick={() => { setShowAddItem(false); setNewItemText('') }} style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>✕</button>
+            </div>
+          )}
+        </div>
+
+        {/* 進度條 */}
         <div style={{ background: cr, borderRadius: 4, height: 6, marginTop: 16, overflow: 'hidden' }}>
           <div style={{ height: '100%', borderRadius: 4, background: sg, width: `${total ? Math.round(done / total * 100) : 0}%`, transition: 'width 0.4s' }} />
         </div>
-        <div style={{ fontSize: 12, color: mf, marginTop: 6, textAlign: 'right' }}>{done} / {total} 完成</div>
       </div>
 
+      {/* 完成慶賀橫幅（全部打勾後出現） */}
+      {checklistDone && (
+        <CompletionBanner
+          spaceName={SN[space]}
+          onSave={saveLog}
+          canSave={canSave}
+          saving={saveFlash}
+        />
+      )}
+
+      {/* 整理後照片 + 日記 */}
       <div style={{ background: ww, border: `1px solid ${afterReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <PhotoStrip photos={afterPhotos} onAdd={f => addPhotos('after', f)} onRemove={i => removePhoto('after', i)} onEdit={i => openPhotoEditor('after', i)}
           skipped={skipAfter} onSkip={() => { setSkipAfter(s => !s); setAfterPhotos([]) }} label="📷 整理後照片" color={sg} />
@@ -589,27 +651,30 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
           style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 80, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
       </div>
 
-      {!canSave && (
-        <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 8, padding: '8px 12px', background: '#FDF5F0', borderRadius: 8, border: '1px solid #E8B89A' }}>
-          儲存前需完成：{!checklistDone && `整理清單（還有 ${total - done} 項）`}{!checklistDone && !afterReady && '、'}{!afterReady && '整理後照片（上傳或選擇不上傳）'}
-        </div>
+      {/* 底部儲存按鈕（未完成時才顯示，完成後由慶賀橫幅接管） */}
+      {!checklistDone && (
+        <>
+          {!canSave && (
+            <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 8, padding: '8px 12px', background: '#FDF5F0', borderRadius: 8, border: '1px solid #E8B89A' }}>
+              儲存前需完成：{!checklistDone && `整理清單（還有 ${total - done} 項）`}{!checklistDone && !afterReady && '、'}{!afterReady && '整理後照片（上傳或選擇不上傳）'}
+            </div>
+          )}
+          <button onClick={saveLog} disabled={!canSave}
+            style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: canSave ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.3s' }}>
+            {saveFlash ? '✅ 已儲存整理成果！' : '💾 儲存日記'}
+          </button>
+        </>
       )}
-      <button onClick={saveLog} disabled={!canSave}
-        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: canSave ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.3s' }}>
-        {saveFlash ? '✅ 已儲存！' : '💾 儲存日記'}
-      </button>
 
-      {editingPhoto && (
-        <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />
-      )}
+      {editingPhoto && <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />}
     </div>
   )
 
-  // ── PAGE 3 ──────────────────────────────────────────────────────
+  // ── PAGE 3：整理紀錄 ─────────────────────────────────────
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>整理完成清單</h1>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>整理成果紀錄</h1>
         <div style={{ fontSize: 13, color: mf }}>{logs.length} 筆</div>
       </div>
       <PageDots page={3} />
@@ -619,11 +684,15 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         <button onClick={() => setPage(1)} style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>前往 →</button>
       </div>
 
+      {/* 空狀態改為引導文 */}
       {logs.length === 0 ? (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '40px 24px', textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📓</div>
-          <div style={{ fontSize: 15, color: mf }}>還沒有整理紀錄</div>
-          <div style={{ fontSize: 13, color: mf, marginTop: 4 }}>完成第一次整理後會出現在這裡</div>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>📓</div>
+          <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 6 }}>還沒有整理紀錄</div>
+          <div style={{ fontSize: 13, color: ml, marginBottom: 20, lineHeight: 1.7 }}>完成第一次整理後，Before / After 照片和日記會出現在這裡。</div>
+          <button onClick={() => setPage(1)} style={{ padding: '11px 28px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+            開始第一次整理 →
+          </button>
         </div>
       ) : logs.map(entry => (
         <div key={entry.id} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
@@ -634,18 +703,9 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
               <span style={{ fontSize: 12, color: mf }}>· {fmtMins(entry.duration)}</span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShareEntry(entry)}
-                style={{ flex: 1, fontSize: 13, color: 'white', background: sg, border: 'none', borderRadius: 8, cursor: 'pointer', padding: '8px 0', fontWeight: 500 }}>
-                檢視
-              </button>
-              <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }}
-                style={{ flex: 1, fontSize: 13, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>
-                編輯
-              </button>
-              <button onClick={() => setConfirmDeleteId(entry.id)}
-                style={{ flex: 1, fontSize: 13, color: '#C47B5A', background: 'none', border: '1px solid #C47B5A', borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>
-                刪除
-              </button>
+              <button onClick={() => setShareEntry(entry)} style={{ flex: 1, fontSize: 13, color: 'white', background: sg, border: 'none', borderRadius: 8, cursor: 'pointer', padding: '8px 0', fontWeight: 500 }}>檢視</button>
+              <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }} style={{ flex: 1, fontSize: 13, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>編輯</button>
+              <button onClick={() => setConfirmDeleteId(entry.id)} style={{ flex: 1, fontSize: 13, color: '#C47B5A', background: 'none', border: '1px solid #C47B5A', borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>刪除</button>
             </div>
           </div>
 
@@ -680,6 +740,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         </div>
       ))}
 
+      {/* 分享 Modal */}
       {shareEntry && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.52)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -729,6 +790,7 @@ export default function ChecklistTab({ onSaveLog, userId }: Props) {
         </div>
       )}
 
+      {/* 刪除確認 */}
       {confirmDeleteId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ background: ww, borderRadius: 14, padding: 28, maxWidth: 320, width: '100%' }}>
