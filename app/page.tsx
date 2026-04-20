@@ -90,8 +90,8 @@ export default function Home() {
         sbLoadChecklistLogs(u.email),
         sbLoadDeclutterRecords(u.email),
       ])
-      setChecklistLogs(logs.length > 0 ? logs : loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], u.email))
-      setDeclutterRecords(records.length > 0 ? records : loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [], u.email))
+      setChecklistLogs(logs)
+      setDeclutterRecords(records)
     } catch {
       showToast('載入資料失敗，請重新整理')
     } finally {
