@@ -105,18 +105,28 @@ export default function Home() {
       window.location.replace(url + (url.includes('?') ? '&' : '?') + 'openExternalBrowser=1')
       return
     }
-    const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
-    if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
+    // URL 參數 tab 切換（從 HomeTab 的 APP_URL 連結進入時）
+    const params = new URLSearchParams(window.location.search)
+    const urlTab = params.get('tab') as AppTab | null
+    if (urlTab && TABS.find(t => t.id === urlTab)) {
+      setTab(urlTab)
+      sessionStorage.setItem(TAB_KEY, urlTab)
+      window.history.replaceState({}, '', '/')
+    } else {
+      const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
+      if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
+    }
+
     const u = getUserFromCookie()
     if (u) { setUser(u); loadUserData(u) }
     else {
       setDeclutterRecords([])
-setChecklistLogs([])
       setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
     }
   }, [loadUserData])
 
-  const handleTabChange = (newTab: AppTab) => {
+  // ── Tab 切換（共用，帶捲到頂）────────────────────────────────
+  const handleTabChange = useCallback((newTab: AppTab) => {
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
     requestAnimationFrame(() => {
@@ -124,8 +134,9 @@ setChecklistLogs([])
       document.documentElement.scrollTop = 0
       document.body.scrollTop = 0
     })
-  }
+  }, [])
 
+  // ── 資料操作 handlers ────────────────────────────────────────
   const handleDeclutterSave = async (record: DeclutterRecord) => {
     const recordToSave: DeclutterRecord = {
       ...record,
@@ -135,6 +146,7 @@ setChecklistLogs([])
     if (user) {
       const ok = await sbSaveDeclutterRecord(user.email, recordToSave)
       if (!ok) showToast('儲存失敗，請檢查網路連線')
+      else showToast('斷捨離紀錄已儲存', 'success')
     } else {
       saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])
     }
@@ -176,10 +188,17 @@ setChecklistLogs([])
     else { setDeclutterRecords([]); setChecklistLogs([]) }
   }
 
+  // DeclutterTab → MemberTab 跳轉（帶子區塊）
+  const handleGoToMember = useCallback((section?: string) => {
+    handleTabChange('member')
+    if (section) sessionStorage.setItem('member_section', section)
+  }, [handleTabChange])
+
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0E8', fontFamily: "'Noto Sans TC', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet" />
 
+      {/* 頂部標題列 */}
       <div style={{
         background: '#FAF8F4', borderBottom: `1px solid ${bd}`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
@@ -191,13 +210,60 @@ setChecklistLogs([])
         </div>
       </div>
 
+      {/* 頁面內容 */}
       <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
-        {tab === 'home'      && <HomeTab key="home" onNavigate={handleTabChange} user={user} onLoginClick={() => handleTabChange('member')} />}
-        {tab === 'checklist' && <ChecklistTab key="checklist" onSaveLog={handleChecklistSave} userId={user?.email} />}
-        {tab === 'declutter' && <DeclutterTab key="declutter" onSaveToMember={handleDeclutterSave} onGoToMember={(section) => { handleTabChange('member'); if (section) sessionStorage.setItem('member_section', section) }} userEmail={user?.email} />}
-        {tab === 'challenge' && <ChallengeTab key="challenge" userId={user?.email} />}
-        {tab === 'recommend' && <RecommendTab key="recommend" />}
-        {tab === 'member'    && (
+
+        {tab === 'home' && (
+          <HomeTab
+            key="home"
+            onNavigate={handleTabChange}
+            user={user}
+            onLoginClick={() => handleTabChange('member')}
+          />
+        )}
+
+        {tab === 'checklist' && (
+          <ChecklistTab
+            key="checklist"
+            onSaveLog={handleChecklistSave}
+            userId={user?.email}
+          />
+        )}
+
+        {tab === 'declutter' && (
+          <DeclutterTab
+            key="declutter"
+            onSaveToMember={handleDeclutterSave}
+            onGoToMember={handleGoToMember}
+            userEmail={user?.email}
+          />
+        )}
+
+        {tab === 'challenge' && (
+          <ChallengeTab
+            key="challenge"
+            userId={user?.email}
+          />
+        )}
+
+        {/* ✅ RecommendTab：新增 fromSpace prop（可選）
+            日後若要從 ChecklistTab 完成後自動帶入空間類型，
+            可透過 sessionStorage 傳遞，例：
+            sessionStorage.setItem('recommend_space', 'wardrobe')
+            然後在這裡讀取並傳入。目前預設讀取。 */}
+        {tab === 'recommend' && (
+          <RecommendTab
+            key="recommend"
+            fromSpace={
+              typeof window !== 'undefined'
+                ? (sessionStorage.getItem('recommend_space') ?? undefined)
+                : undefined
+            }
+          />
+        )}
+
+        {/* ✅ MemberTab：新增 onNavigate prop，供空狀態引導按鈕跳轉 */}
+        {tab === 'member' && (
           <MemberTab
             key="member"
             declutterRecords={declutterRecords}
@@ -206,10 +272,13 @@ setChecklistLogs([])
             onUserChange={handleUserChange}
             onDeleteDeclutter={handleDeleteDeclutterRecord}
             onDeleteDiary={handleDeleteChecklistLog}
+            onNavigate={handleTabChange}
           />
         )}
+
       </div>
 
+      {/* 底部導覽列 */}
       <nav style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         background: '#FAF8F4', borderTop: `1px solid ${bd}`,

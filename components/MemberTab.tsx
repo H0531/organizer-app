@@ -5,34 +5,44 @@ import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto
 import { sbLoadChallengeData } from '@/lib/supabase'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 import StatsCharts from './StatsCharts'
+import type { AppTab } from '@/app/page'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
 const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
 
-type Props = {
-  declutterRecords: DeclutterRecord[]
-  checklistLogs: ChecklistLog[]
-  user: OAuthUser | null
-  onUserChange: (u: OAuthUser | null) => void
-  onDeleteDeclutter: (savedAt: string) => void
-  onDeleteDiary: (id: string) => void
+// ── 刪除確認 Modal ───────────────────────────────────────────
+function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: ww, borderRadius: 14, padding: 28, maxWidth: 320, width: '100%' }}>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 8 }}>確認刪除</div>
+        <div style={{ fontSize: 13, color: ml, marginBottom: 24, lineHeight: 1.6 }}>{message}</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onConfirm} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#C47B5A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>確定刪除</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 14, cursor: 'pointer' }}>取消</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-function ShareModal({ title, text, photo, captureRef, onClose }: { title: string; text: string; photo?: string; captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void }) {
-const captureAndShare = async () => {
-  if (!captureRef?.current) return
-  try {
-    // 告別紀念文：有照片時用 drawDeclutterCard，否則用 drawTextCard
-    const itemName = title.replace('告別紀念文 · ', '')
-    const memo = text.split('\n').slice(1, -1).join('\n')
-    const canvas = photo
-      ? await drawDeclutterCard({ name: itemName, memo, photo })
-      : await drawTextCard(title, text)
-    await saveOrShareImage(canvas, 'organizer-share.png', text)
-  } catch { shareToSocial('copy', text) }
-}
-
+// ── 分享 Modal ───────────────────────────────────────────────
+function ShareModal({ title, text, photo, captureRef, onClose }: {
+  title: string; text: string; photo?: string
+  captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void
+}) {
+  const captureAndShare = async () => {
+    if (!captureRef?.current) return
+    try {
+      const itemName = title.replace('告別紀念文 · ', '')
+      const memo = text.split('\n').slice(1, -1).join('\n')
+      const canvas = photo
+        ? await drawDeclutterCard({ name: itemName, memo, photo })
+        : await drawTextCard(title, text)
+      await saveOrShareImage(canvas, 'organizer-share.png', text)
+    } catch { shareToSocial('copy', text) }
+  }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -66,7 +76,17 @@ const captureAndShare = async () => {
   )
 }
 
-export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange, onDeleteDeclutter, onDeleteDiary }: Props) {
+type Props = {
+  declutterRecords: DeclutterRecord[]
+  checklistLogs: ChecklistLog[]
+  user: OAuthUser | null
+  onUserChange: (u: OAuthUser | null) => void
+  onDeleteDeclutter: (savedAt: string) => void
+  onDeleteDiary: (id: string) => void
+  onNavigate?: (tab: AppTab) => void
+}
+
+export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange, onDeleteDeclutter, onDeleteDiary, onNavigate }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
@@ -78,6 +98,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
   const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
   const [tossPhotos, setTossPhotos] = useState<Record<string, string>>({})
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'diary'; id: string } | { type: 'declutter'; savedAt: string } | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -96,14 +117,12 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
           setChallengeEntries(remote.entries as ChallengeEntry[])
         } else {
           const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] }, user.email)
-          setChallengeMode(saved.mode)
-          setChallengeEntries(saved.entries)
+          setChallengeMode(saved.mode); setChallengeEntries(saved.entries)
         }
       })
     } else {
       const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] })
-      setChallengeMode(saved.mode)
-      setChallengeEntries(saved.entries)
+      setChallengeMode(saved.mode); setChallengeEntries(saved.entries)
     }
     const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | 'stats' | null
     if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
@@ -130,51 +149,82 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
 
   const challengePct = challengeMode ? Math.round((challengeEntries.length / challengeMode) * 100) : 0
 
+  // 成就數字計算
+  const totalSessions = checklistLogs.length
+  const totalDeclutterItems = declutterRecords.reduce((a, r) => a + r.items.length, 0)
+  const totalReleasedItems = declutterRecords.reduce((a, r) => a + r.items.filter(x => x.decision !== 'keep').length, 0)
+  const totalMins = Math.round(checklistLogs.reduce((a, l) => a + l.duration, 0) / 60)
+  const challengeDays = challengeEntries.length
+
   const diaryShareText = (log: ChecklistLog) =>
     `我完成了${log.space}整理！用時 ${fmtMins(log.duration)} ✨\n${log.note}\n#整理小幫手 #生活整理`
-
   const declutterShareText = (record: DeclutterRecord) => {
     const keep = record.items.filter(x => x.decision === 'keep').length
     const donate = record.items.filter(x => x.decision === 'donate').length
     const toss = record.items.filter(x => x.decision === 'toss').length
     return `完成了一輪斷捨離！共 ${record.items.length} 件\n留 ${keep} 件・送 ${donate} 件・丟 ${toss} 件\n#斷捨離 #整理小幫手`
   }
-
   const challengeShareText = () =>
     `每日丟一物挑戰 ${challengeEntries.length}/${challengeMode} 天，達成率 ${challengePct}%！\n繼續努力中 💪\n#每日丟一物 #整理小幫手`
 
+  // ── 未登入頁 ────────────────────────────────────────────────
   if (!user) return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>我的整理</h1>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20, lineHeight: 1.7 }}>
-        登入後，整理日記、斷捨離紀錄和每日挑戰進度都會同步到帳號，不怕換裝置或清除瀏覽器。
+        整理成果、照片和挑戰進度，登入後跨裝置都看得到。
       </p>
+
       {authError && (
-        <div style={{ background: '#FDF5F0', border: '1px solid #E8A87C', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#C47B5A' }}>
+        <div style={{ background: '#FDF5F0', border: '1px solid #E8A87C', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#C47B5A' }}>
           ⚠️ 登入失敗，請再試一次
         </div>
       )}
-      <div style={{ background: cr, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: ml, marginBottom: 8 }}>目前本機資料</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-          {[
-            { label: '整理日記', value: `${checklistLogs.length} 筆`, icon: '📓' },
-            { label: '斷捨離', value: `${declutterRecords.reduce((a, r) => a + r.items.length, 0)} 件`, icon: '♻️' },
-            { label: '每日挑戰', value: challengeMode ? `${challengeEntries.length}/${challengeMode}天` : '未開始', icon: '🎯' },
-          ].map(s => (
-            <div key={s.label} style={{ background: ww, borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: sg }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: mf }}>{s.label}</div>
-            </div>
-          ))}
+
+      {/* 本機成果預覽（有資料才顯示，加強登入誘因） */}
+      {(totalSessions > 0 || totalDeclutterItems > 0 || challengeDays > 0) && (
+        <div style={{ background: cr, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: mf, marginBottom: 10 }}>你目前已累積的整理成果</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 10 }}>
+            {[
+              { icon: '📓', value: totalSessions, unit: '次', label: '整理紀錄' },
+              { icon: '♻️', value: totalDeclutterItems, unit: '件', label: '斷捨離' },
+              { icon: '🎯', value: challengeDays, unit: '天', label: '挑戰天數' },
+            ].map(s => (
+              <div key={s.label} style={{ background: ww, borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: sg }}>{s.value}<span style={{ fontSize: 11 }}>{s.unit}</span></div>
+                <div style={{ fontSize: 11, color: mf }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#C47B5A', lineHeight: 1.6 }}>
+            ⚠️ 這些資料目前只存在本機，清除瀏覽器或換裝置後會消失。登入後可永久保存。
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: mf, marginTop: 10 }}>⚠️ 未登入資料只存在本機，關閉瀏覽器後將消失</div>
-      </div>
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '32px 24px', marginBottom: 16, textAlign: 'center' }}>
+      )}
+
+      {/* 空狀態引導（無資料時） */}
+      {totalSessions === 0 && totalDeclutterItems === 0 && challengeDays === 0 && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '28px 24px', marginBottom: 20, textAlign: 'center' }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
+          <div style={{ fontSize: 14, color: ink, marginBottom: 6 }}>還沒有整理紀錄</div>
+          <div style={{ fontSize: 12, color: mf, marginBottom: 20, lineHeight: 1.7 }}>完成第一次整理後，成果會出現在這裡。</div>
+          {onNavigate && (
+            <button onClick={() => onNavigate('checklist')} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+              開始整理 →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Google 登入卡 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '32px 24px', textAlign: 'center' }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
-        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 8 }}>使用 Google 登入</div>
-        <div style={{ fontSize: 13, color: ml, marginBottom: 24, lineHeight: 1.6 }}>登入後資料跨裝置同步，不怕遺失</div>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 8 }}>登入後跨裝置保存成果</div>
+        <div style={{ fontSize: 13, color: ml, marginBottom: 24, lineHeight: 1.7 }}>
+          整理日記、Before/After 照片、每日挑戰進度，手機和電腦都同步。
+        </div>
         <button onClick={handleGoogleLogin}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: '100%', padding: '13px 20px', borderRadius: 10, border: '1.5px solid #DADCE0', background: 'white', cursor: 'pointer', fontSize: 15, color: '#3C4043', fontWeight: 500, marginBottom: 16 }}>
           <svg width="20" height="20" viewBox="0 0 48 48">
@@ -190,12 +240,14 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     </div>
   )
 
+  // ── 已登入頁 ────────────────────────────────────────────────
   return (
     <div>
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 20, color: ink }}>我的整理</h1>
 
+      {/* 使用者資訊卡 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '20px 24px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           {user.picture
             ? <img src={user.picture} alt="" style={{ width: 56, height: 56, borderRadius: '50%', border: `2px solid ${sg}` }} />
             : <div style={{ width: 56, height: 56, borderRadius: '50%', background: sg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'white', fontWeight: 700 }}>{user.name.charAt(0)}</div>
@@ -211,49 +263,94 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16, fontWeight: 600, color: ink }}>{user.name}</span>
-                <button onClick={() => { setDraftName(user.name); setEditingName(true) }}
-                  style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>改名</button>
+                <button onClick={() => { setDraftName(user.name); setEditingName(true) }} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>改名</button>
               </div>
             )}
             <div style={{ fontSize: 13, color: mf, marginTop: 2 }}>{user.email}</div>
           </div>
         </div>
-        <button onClick={handleLogout}
-          style={{ marginTop: 16, width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>
-          登出
-        </button>
-      <button onClick={() => {
-          Object.keys(localStorage).filter(k =>
-            k.startsWith('declutter_records') || k.startsWith('checklist_logs')
-          ).forEach(k => localStorage.removeItem(k))
-          window.location.reload()
-        }} style={{ marginTop: 8, width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: '#C47B5A', fontSize: 13, cursor: 'pointer' }}>
-          清除本機舊資料
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleLogout} style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>登出</button>
+          <button onClick={() => {
+            Object.keys(localStorage).filter(k => k.startsWith('declutter_records') || k.startsWith('checklist_logs')).forEach(k => localStorage.removeItem(k))
+            window.location.reload()
+          }} style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: '#C47B5A', fontSize: 13, cursor: 'pointer' }}>清除本機舊資料</button>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
+      {/* 成就大數字區 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>累計整理成就</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 12 }}>
+          {[
+            { num: totalSessions, unit: '次', label: '整理打卡', icon: '📓', color: sg },
+            { num: totalReleasedItems, unit: '件', label: '已放手物品', icon: '♻️', color: '#C47B5A' },
+            { num: totalMins, unit: '分鐘', label: '累計整理時間', icon: '⏱', color: '#4285F4' },
+            { num: challengeDays, unit: '天', label: '每日挑戰累計', icon: '🎯', color: '#C4953A' },
+          ].map(({ num, unit, label, icon, color }) => (
+            <div key={label} style={{ background: cr, borderRadius: 10, padding: '14px 12px' }}>
+              <div style={{ fontSize: 14, marginBottom: 6 }}>{icon}</div>
+              <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>
+                {num}<span style={{ fontSize: 12, fontWeight: 400, color: mf }}> {unit}</span>
+              </div>
+              <div style={{ fontSize: 11, color: mf, marginTop: 4 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+        {/* 里程碑文字 */}
+        {totalSessions > 0 && (
+          <div style={{ fontSize: 12, color: ml, background: '#EAF2EE', borderRadius: 8, padding: '9px 12px', lineHeight: 1.7 }}>
+            ✦ {
+              totalSessions >= 30 ? `你已整理 ${totalSessions} 次，整理早已成為你的生活習慣。` :
+              totalSessions >= 10 ? `你已整理 ${totalSessions} 次，空間越來越有你的風格。` :
+              totalSessions >= 3 ? `你已整理 ${totalSessions} 次，繼續保持，空間正在慢慢改變。` :
+              `你已經做了很好的第一步。每一次整理，都讓空間輕一點。`
+            }
+          </div>
+        )}
+        {totalSessions === 0 && (
+          <div style={{ fontSize: 12, color: mf, textAlign: 'center', padding: '8px 0' }}>
+            完成第一次整理，成就數字就會出現
+          </div>
+        )}
+      </div>
+
+      {/* 分頁切換 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 16 }}>
         {[
-          { label: '整理日記', value: `${checklistLogs.length}`, unit: '筆', icon: '📓', section: 'diary' as const },
-          { label: '斷捨離物品', value: `${declutterRecords.reduce((a, r) => a + r.items.length, 0)}`, unit: '件', icon: '♻️', section: 'declutter' as const },
-          { label: '每日挑戰', value: challengeMode ? `${challengePct}` : '—', unit: challengeMode ? '%' : '', icon: '🎯', section: 'challenge' as const },
-          { label: '統計圖表', value: '', unit: '', icon: '📊', section: 'stats' as const },
+          { key: 'diary' as const, icon: '📓', label: '日記', count: checklistLogs.length },
+          { key: 'declutter' as const, icon: '♻️', label: '斷捨離', count: declutterRecords.length },
+          { key: 'challenge' as const, icon: '🎯', label: '挑戰', count: challengeDays },
+          { key: 'stats' as const, icon: '📊', label: '統計', count: null },
         ].map(s => (
-          <button key={s.label} onClick={() => setActiveSection(s.section)}
-            style={{ background: activeSection === s.section ? '#EAF2EE' : ww, border: `1px solid ${activeSection === s.section ? sg : bd}`, borderRadius: 12, padding: '14px 8px', textAlign: 'center', cursor: 'pointer' }}>
-            <div style={{ fontSize: 20 }}>{s.icon}</div>
-            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: sg, margin: '4px 0 1px' }}>{s.value}<span style={{ fontSize: 12 }}>{s.unit}</span></div>
-            <div style={{ fontSize: 11, color: mf }}>{s.label}</div>
+          <button key={s.key} onClick={() => setActiveSection(s.key)}
+            style={{
+              background: activeSection === s.key ? '#EAF2EE' : ww,
+              border: `1px solid ${activeSection === s.key ? sg : bd}`,
+              borderRadius: 10, padding: '10px 6px', textAlign: 'center', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}>
+            <div style={{ fontSize: 18 }}>{s.icon}</div>
+            <div style={{ fontSize: 11, color: activeSection === s.key ? '#2E6B50' : mf, marginTop: 2 }}>{s.label}</div>
+            {s.count !== null && <div style={{ fontSize: 11, fontWeight: 600, color: activeSection === s.key ? sg : mf }}>{s.count}</div>}
           </button>
         ))}
       </div>
 
+      {/* 整理日記 */}
       {activeSection === 'diary' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>整理日記（{checklistLogs.length} 筆）</div>
           {checklistLogs.length === 0 ? (
-            <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📓</div>完成整理後紀錄會出現在這裡
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>📓</div>
+              <div style={{ fontSize: 14, color: ink, marginBottom: 6 }}>還沒有整理紀錄</div>
+              <div style={{ fontSize: 12, color: mf, marginBottom: 20, lineHeight: 1.7 }}>完成第一次整理打卡後，<br />日記會出現在這裡。</div>
+              {onNavigate && (
+                <button onClick={() => onNavigate('checklist')} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                  開始整理 →
+                </button>
+              )}
             </div>
           ) : checklistLogs.map((log, i) => (
             <div key={log.id} style={{ borderBottom: i < checklistLogs.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
@@ -266,9 +363,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <button onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log), withCapture: true })}
                     style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
-                  <button onClick={() => {
-                    if (window.confirm('確定刪除這筆日記？刪除後無法復原。')) onDeleteDiary(log.id)
-                  }} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
+                  <button onClick={() => setConfirmDelete({ type: 'diary', id: log.id })}
+                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}>
                     {expandedLog === log.id ? '▲' : '▼'}
                   </span>
@@ -295,12 +391,20 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
+      {/* 斷捨離紀錄 */}
       {activeSection === 'declutter' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄（{declutterRecords.length} 次）</div>
           {declutterRecords.length === 0 ? (
-            <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>還沒有斷捨離紀錄
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>♻️</div>
+              <div style={{ fontSize: 14, color: ink, marginBottom: 6 }}>還沒有斷捨離紀錄</div>
+              <div style={{ fontSize: 12, color: mf, marginBottom: 20, lineHeight: 1.7 }}>完成一輪斷捨離後，<br />紀錄會出現在這裡。</div>
+              {onNavigate && (
+                <button onClick={() => onNavigate('declutter')} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                  開始斷捨離 →
+                </button>
+              )}
             </div>
           ) : declutterRecords.map((record, i) => (
             <div key={i} style={{ borderBottom: i < declutterRecords.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
@@ -314,9 +418,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                     <button onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
                       style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
                   )}
-                  <button onClick={() => {
-                    if (window.confirm('確定刪除這筆斷捨離紀錄？刪除後無法復原。')) onDeleteDeclutter(record.savedAt)
-                  }} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
+                  <button onClick={() => setConfirmDelete({ type: 'declutter', savedAt: record.savedAt })}
+                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
                   <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
                     {expandedRecord === record.savedAt ? '▲' : '▼'}
                   </span>
@@ -374,6 +477,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
+      {/* 挑戰紀錄 */}
       {activeSection === 'challenge' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -384,8 +488,15 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             )}
           </div>
           {!challengeMode ? (
-            <div style={{ textAlign: 'center', color: mf, fontSize: 14, padding: '24px 0' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>🎯</div>尚未開始挑戰
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
+              <div style={{ fontSize: 14, color: ink, marginBottom: 6 }}>尚未開始挑戰</div>
+              <div style={{ fontSize: 12, color: mf, marginBottom: 20 }}>每天放手一件東西，7 天就能感受到空間變化</div>
+              {onNavigate && (
+                <button onClick={() => onNavigate('challenge')} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                  開始每日挑戰 →
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -421,17 +532,30 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       )}
 
+      {/* 統計圖表 */}
       {activeSection === 'stats' && (
         <StatsCharts checklistLogs={checklistLogs} declutterRecords={declutterRecords} />
       )}
 
+      {/* 分享 Modal */}
       {shareModal && (
         <ShareModal
-          title={shareModal.title}
-          text={shareModal.text}
-          photo={shareModal.photo}
+          title={shareModal.title} text={shareModal.text} photo={shareModal.photo}
           captureRef={shareModal.withCapture ? shareCaptureRef : undefined}
           onClose={() => setShareModal(null)}
+        />
+      )}
+
+      {/* 刪除確認 Modal */}
+      {confirmDelete && (
+        <ConfirmModal
+          message={confirmDelete.type === 'diary' ? '確定刪除這筆整理日記？刪除後無法復原。' : '確定刪除這筆斷捨離紀錄？刪除後無法復原。'}
+          onConfirm={() => {
+            if (confirmDelete.type === 'diary') onDeleteDiary(confirmDelete.id)
+            else onDeleteDeclutter(confirmDelete.savedAt)
+            setConfirmDelete(null)
+          }}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
     </div>
