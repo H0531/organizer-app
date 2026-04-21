@@ -139,6 +139,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
 
   const [shareTossEntry, setShareTossEntry] = useState<TossEntry | null>(null)
   const [saveFlash, setSaveFlash] = useState(false)
+  const [showSavedPopup, setShowSavedPopup] = useState(false)
   const isSavingRef = useRef(false)
 
   const setStage = (s: Stage) => { setStageRaw(s); saveLS(STAGE_KEY, s) }
@@ -235,7 +236,11 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       }
       onSaveToMember(record)
       setSaveFlash(true)
-      setTimeout(() => { setSaveFlash(false); setJustSaved(true); saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null) }, 600)
+      setTimeout(() => {
+        setSaveFlash(false); setJustSaved(true)
+        saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
+        setShowSavedPopup(true)
+      }, 600)
     } finally { isSavingRef.current = false }
   }
 
@@ -559,6 +564,31 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       )}
 
       {shareTossEntry && <TossShareModal entry={shareTossEntry} onClose={() => setShareTossEntry(null)} />}
+
+      {/* 儲存完成 popup */}
+      {showSavedPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#FAF8F4', borderRadius: 20, padding: '28px 24px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>✨</div>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: '#2C2820', marginBottom: 8, fontWeight: 700 }}>
+              斷捨離紀錄已儲存！
+            </div>
+            <div style={{ fontSize: 13, color: '#6B6358', lineHeight: 1.8, marginBottom: 20 }}>
+              紀錄已製成圖卡 📸<br />
+              可以點左上角的分享按鈕儲存或分享圖片，<br />
+              也可到<strong style={{ color: '#7A9E8A' }}>會員區</strong>隨時回顧每次斷捨離紀錄。
+            </div>
+            <button onClick={() => { setShowSavedPopup(false); onGoToMember('declutter') }}
+              style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#7A9E8A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600, marginBottom: 10 }}>
+              前往會員區查看紀錄
+            </button>
+            <button onClick={() => setShowSavedPopup(false)}
+              style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px solid #DDD8CF', background: 'white', color: '#6B6358', fontSize: 13, cursor: 'pointer' }}>
+              關閉
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 
@@ -717,6 +747,31 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       </div>
 
       {shareTossEntry && <TossShareModal entry={shareTossEntry} onClose={() => setShareTossEntry(null)} />}
+
+      {/* 儲存完成 popup */}
+      {showSavedPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#FAF8F4', borderRadius: 20, padding: '28px 24px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>✨</div>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: '#2C2820', marginBottom: 8, fontWeight: 700 }}>
+              斷捨離紀錄已儲存！
+            </div>
+            <div style={{ fontSize: 13, color: '#6B6358', lineHeight: 1.8, marginBottom: 20 }}>
+              告別文已製成圖卡 📸<br />
+              可以點左上角的分享按鈕儲存或分享圖片，<br />
+              也可到<strong style={{ color: '#7A9E8A' }}>會員區</strong>隨時回顧每次斷捨離紀錄。
+            </div>
+            <button onClick={() => { setShowSavedPopup(false); onGoToMember('declutter') }}
+              style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#7A9E8A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600, marginBottom: 10 }}>
+              前往會員區查看紀錄
+            </button>
+            <button onClick={() => setShowSavedPopup(false)}
+              style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px solid #DDD8CF', background: 'white', color: '#6B6358', fontSize: 13, cursor: 'pointer' }}>
+              關閉
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
