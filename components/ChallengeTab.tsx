@@ -150,11 +150,8 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const [fReason, setFReason] = useState('')
   const [fFeeling, setFFeeling] = useState('')
 
-  // loadedRef: load 完成後才允許 save effect 執行
+  // load 完成才允許 save，避免初始化時空資料覆蓋真實紀錄
   const loadedRef = useRef(false)
-  // 記住當前 userId，讓 save effect 拿到最新值
-  const userIdRef = useRef(userId)
-  useEffect(() => { userIdRef.current = userId }, [userId])
 
   useEffect(() => {
     loadedRef.current = false
@@ -177,25 +174,19 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         loadedMode = saved.mode ?? null
         loadedEntries = saved.entries ?? []
       }
-      // 先設資料，再開 loadedRef，避免 save effect 拿到空值
       setMode(loadedMode)
       setEntries(loadedEntries)
-      // 用 setTimeout 確保 React 已 commit 上面的 setState 再開啟 save
-      setTimeout(() => { loadedRef.current = true }, 0)
+      loadedRef.current = true
     }
     load()
   }, [userId])
 
-  // save effect：只在 load 完成後執行
-  useEffect(() => {
-    if (!loadedRef.current) return
-    const payload = { mode, entries }
-    if (userIdRef.current) {
-      sbSaveChallengeData(userIdRef.current, payload)
-    } else {
-      saveLS(LS_CHALLENGE_DATA, payload)
-    }
-  }, [mode, entries])
+  // 直接 save（不用 effect），在每個資料變動點呼叫
+  const persistData = (newMode: ChallengeMode | null, newEntries: TossEntry[]) => {
+    const payload = { mode: newMode, entries: newEntries }
+    if (userId) sbSaveChallengeData(userId, payload)
+    else saveLS(LS_CHALLENGE_DATA, payload)
+  }
 
   const today = new Date().toLocaleDateString('zh-TW')
   const currentDay = entries.length + 1
@@ -211,6 +202,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     const entry: TossEntry = { day: currentDay, item: fItem, origin: fOrigin, reason: fReason, feeling: fFeeling, date: today }
     const newEntries = [...entries, entry]
     setEntries(newEntries)
+    persistData(mode, newEntries)   // ← 直接 save，不依賴 effect
     setShowForm(false)
     setFItem(''); setFOrigin(''); setFReason(''); setFFeeling('')
     const idx = Math.floor(Math.random() * MEMORIAL_TEMPLATES.length)
@@ -238,9 +230,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const handleResetChallenge = () => {
     setPrevEntryCount(entries.length)
     setMode(null); setPendingMode(null); setEntries([])
-    const payload = { mode: null, entries: [] }
-    if (userId) sbSaveChallengeData(userId, payload)
-    else saveLS(LS_CHALLENGE_DATA, payload, userId)
+    persistData(null, [])
   }
 
   // ── 未開始：選擇模式 ─────────────────────────────────────
@@ -288,7 +278,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
               ⚠️ 開始後若中途中斷，需從第 1 天重新計算。請確認你已準備好每天打卡！
             </div>
             <button
-              onClick={() => { setMode(pendingMode); setPendingMode(null) }}
+              onClick={() => { setMode(pendingMode); setPendingMode(null); persistData(pendingMode, entries) }}
               style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
               確認開始 {pendingMode} 天挑戰
             </button>
