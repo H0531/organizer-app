@@ -150,41 +150,52 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const [fReason, setFReason] = useState('')
   const [fFeeling, setFFeeling] = useState('')
 
-  const [initialized, setInitialized] = useState(false)
-  const savingRef = useRef(false)
+  // loadedRef: load 完成後才允許 save effect 執行
+  const loadedRef = useRef(false)
+  // 記住當前 userId，讓 save effect 拿到最新值
+  const userIdRef = useRef(userId)
+  useEffect(() => { userIdRef.current = userId }, [userId])
 
   useEffect(() => {
-    setInitialized(false)
+    loadedRef.current = false
+    setMode(null)
+    setEntries([])
     const load = async () => {
+      let loadedMode: ChallengeMode | null = null
+      let loadedEntries: TossEntry[] = []
       if (userId) {
         const remote = await sbLoadChallengeData(userId)
         if (remote) {
-          setMode(remote.mode as ChallengeMode | null)
-          setEntries(remote.entries as TossEntry[])
-          setInitialized(true)
-          return
+          loadedMode = remote.mode as ChallengeMode | null
+          loadedEntries = remote.entries as TossEntry[]
         }
       }
-      const saved = loadLS<{ mode: ChallengeMode | null; entries: TossEntry[] }>(
-        LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
-      )
-      if (saved.mode) setMode(saved.mode)
-      if (saved.entries) setEntries(saved.entries)
-      setInitialized(true)
+      if (!userId || loadedMode === null) {
+        const saved = loadLS<{ mode: ChallengeMode | null; entries: TossEntry[] }>(
+          LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
+        )
+        loadedMode = saved.mode ?? null
+        loadedEntries = saved.entries ?? []
+      }
+      // 先設資料，再開 loadedRef，避免 save effect 拿到空值
+      setMode(loadedMode)
+      setEntries(loadedEntries)
+      // 用 setTimeout 確保 React 已 commit 上面的 setState 再開啟 save
+      setTimeout(() => { loadedRef.current = true }, 0)
     }
     load()
   }, [userId])
 
-  // 只在 initialized 後才儲存，避免 load 前被空資料覆蓋
+  // save effect：只在 load 完成後執行
   useEffect(() => {
-    if (!initialized) return
+    if (!loadedRef.current) return
     const payload = { mode, entries }
-    if (userId) {
-      sbSaveChallengeData(userId, payload)
+    if (userIdRef.current) {
+      sbSaveChallengeData(userIdRef.current, payload)
     } else {
-      saveLS(LS_CHALLENGE_DATA, payload, userId)
+      saveLS(LS_CHALLENGE_DATA, payload)
     }
-  }, [mode, entries, userId, initialized])
+  }, [mode, entries])
 
   const today = new Date().toLocaleDateString('zh-TW')
   const currentDay = entries.length + 1
