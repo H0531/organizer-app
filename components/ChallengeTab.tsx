@@ -167,15 +167,14 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
           loadedEntries = remote.entries as TossEntry[]
         }
       }
-      if (!userId || loadedMode === null) {
+      // Supabase 沒資料或表不存在時，一律 fallback localStorage（含 userId suffix）
+      if (loadedMode === null) {
         const saved = loadLS<{ mode: ChallengeMode | null; entries: TossEntry[] }>(
           LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
         )
         loadedMode = saved.mode ?? null
         loadedEntries = saved.entries ?? []
       }
-      const key = userId ? `${LS_CHALLENGE_DATA}__${userId}` : LS_CHALLENGE_DATA
-      console.log('[Challenge] load complete → key:', key, 'mode:', loadedMode, 'entries:', loadedEntries.length)
       setMode(loadedMode)
       setEntries(loadedEntries)
       loadedRef.current = true
@@ -183,16 +182,13 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     load()
   }, [userId])
 
-  // 直接 save（不用 effect），在每個資料變動點呼叫
+  // 直接 save：永遠存 localStorage，有 userId 時額外同步 Supabase
   const persistData = (newMode: ChallengeMode | null, newEntries: TossEntry[]) => {
     const payload = { mode: newMode, entries: newEntries }
-    const key = userId ? `${LS_CHALLENGE_DATA}__${userId}` : LS_CHALLENGE_DATA
-    console.log('[Challenge] persistData → key:', key, 'mode:', newMode, 'entries:', newEntries.length)
+    // 永遠先存 localStorage（含 userId suffix），確保重整後一定讀得到
+    saveLS(LS_CHALLENGE_DATA, payload, userId)
+    // 有登入時額外非同步同步到 Supabase（失敗不影響本地）
     if (userId) sbSaveChallengeData(userId, payload)
-    else saveLS(LS_CHALLENGE_DATA, payload)
-    // 存完後立刻驗證
-    const verify = localStorage.getItem(key)
-    console.log('[Challenge] verify localStorage:', verify ? JSON.parse(verify) : 'NULL')
   }
 
   const today = new Date().toLocaleDateString('zh-TW')
