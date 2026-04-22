@@ -233,6 +233,8 @@ export default function Home() {
             onNavigate={handleTabChange}
             user={user}
             onLoginClick={() => handleTabChange('member')}
+            checklistLogs={checklistLogs}
+            declutterRecords={declutterRecords}
           />
         )}
 

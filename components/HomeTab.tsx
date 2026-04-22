@@ -1,6 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { OAuthUser } from '@/lib/auth'
+import { loadLS, LS_CHALLENGE_DATA } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 type Tab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
@@ -50,18 +51,60 @@ function OnboardingQuiz({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   )
 }
 
+type ChecklistLog = { id: string; date: string; space: string; duration: number }
+type DeclutterRecord = { savedAt: string; items: { decision: string | null }[]; tossEntries: unknown[] }
+
 export default function HomeTab({
   onNavigate,
   user,
   onLoginClick,
+  checklistLogs = [],
+  declutterRecords = [],
 }: {
   onNavigate: (t: Tab) => void
   user: OAuthUser | null
   onLoginClick: () => void
+  checklistLogs?: ChecklistLog[]
+  declutterRecords?: DeclutterRecord[]
 }) {
+  // 從 localStorage 讀 challenge 資料（ChallengeTab 管理，HomeTab 只讀）
+  const [challengeData, setChallengeData] = useState<{ mode: number | null; entries: { day: number; date: string }[] } | null>(null)
+
+  useEffect(() => {
+    // userId 可能帶 suffix，先試 user email，沒有就用純 key
+    const userId = user?.email
+    const data = loadLS<{ mode: number | null; entries: { day: number; date: string }[] }>(
+      LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
+    )
+    setChallengeData(data)
+  }, [user])
+
   const NavLink = ({ target, children }: { target: Tab; children: string }) => (
     <span onClick={() => onNavigate(target)} style={{ color: sg, textDecoration: 'underline', cursor: 'pointer', fontWeight: 500 }}>{children}</span>
   )
+
+  // ── 統計計算 ────────────────────────────────────────────────
+  const totalCleanings = checklistLogs.length
+  const totalMins = checklistLogs.reduce((acc, l) => acc + Math.floor((l.duration ?? 0) / 60), 0)
+  const totalDeclutter = declutterRecords.reduce((acc, r) => acc + (r.items?.filter(i => i.decision === 'toss' || i.decision === 'donate').length ?? 0), 0)
+  const challengeEntries = challengeData?.entries ?? []
+  const challengeMode = challengeData?.mode ?? null
+  const challengeDays = challengeEntries.length
+  // 連續天數
+  const calcStreak = (entries: { date: string }[]) => {
+    if (!entries.length) return 0
+    const today = new Date()
+    let streak = 0
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const d = new Date(entries[i].date.replace(/\//g, '-'))
+      const diff = Math.round((today.getTime() - d.getTime()) / 86400000)
+      if (diff === streak) streak++
+      else break
+    }
+    return streak
+  }
+  const streak = calcStreak(challengeEntries)
+  const hasAnyData = totalCleanings > 0 || totalDeclutter > 0 || challengeDays > 0
 
   return (
     <div>
@@ -85,16 +128,52 @@ export default function HomeTab({
       )}
 
       {user && (
-        <div style={{
-          background: ww, border: `1px solid ${bd}`, borderRadius: 12,
-          padding: '12px 18px', marginBottom: 20,
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          {user.picture
-            ? <img src={user.picture} alt="" style={{ width: 32, height: 32, borderRadius: '50%', border: `1.5px solid ${sg}` }} />
-            : <div style={{ width: 32, height: 32, borderRadius: '50%', background: sg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'white', fontWeight: 700 }}>{user.name.charAt(0)}</div>
-          }
-          <div style={{ fontSize: 13, color: ink }}>嗨，<strong>{user.name}</strong>！今天要整理哪裡？</div>
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+          {/* 問候列 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: hasAnyData ? 16 : 0 }}>
+            {user.picture
+              ? <img src={user.picture} alt="" style={{ width: 34, height: 34, borderRadius: '50%', border: `1.5px solid ${sg}`, flexShrink: 0 }} />
+              : <div style={{ width: 34, height: 34, borderRadius: '50%', background: sg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'white', fontWeight: 700, flexShrink: 0 }}>{user.name.charAt(0)}</div>
+            }
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: ink }}>嗨，{user.name}！</div>
+              {!hasAnyData && <div style={{ fontSize: 12, color: mf }}>還沒有整理紀錄，今天開始吧 ✦</div>}
+            </div>
+          </div>
+
+          {/* 統計格 */}
+          {hasAnyData && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+              {totalCleanings > 0 && (
+                <button onClick={() => onNavigate('checklist')} style={{ background: '#EAF2EE', border: `1px solid ${sg}22`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: sg, fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{totalCleanings}</div>
+                  <div style={{ fontSize: 11, color: '#2E6B50', marginTop: 3 }}>次整理完成</div>
+                  {totalMins > 0 && <div style={{ fontSize: 10, color: ml, marginTop: 2 }}>共 {totalMins} 分鐘</div>}
+                </button>
+              )}
+              {totalDeclutter > 0 && (
+                <button onClick={() => onNavigate('declutter')} style={{ background: '#EEF3FE', border: '1px solid #4285F422', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#4285F4', fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{totalDeclutter}</div>
+                  <div style={{ fontSize: 11, color: '#3067C8', marginTop: 3 }}>件物品放手</div>
+                  <div style={{ fontSize: 10, color: ml, marginTop: 2 }}>斷捨離紀錄</div>
+                </button>
+              )}
+              {challengeDays > 0 && (
+                <button onClick={() => onNavigate('challenge')} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#C4953A', fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{challengeDays}</div>
+                  <div style={{ fontSize: 11, color: '#7A5E2A', marginTop: 3 }}>天挑戰打卡{challengeMode ? ` / ${challengeMode}` : ''}</div>
+                  {streak > 1 && <div style={{ fontSize: 10, color: '#C4953A', marginTop: 2 }}>🔥 連續 {streak} 天</div>}
+                </button>
+              )}
+              {(totalCleanings > 0 || totalDeclutter > 0 || challengeDays > 0) && (
+                <button onClick={() => onNavigate('member')} style={{ background: cr, border: `1px solid ${bd}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ fontSize: 22, color: ml, lineHeight: 1 }}>📓</div>
+                  <div style={{ fontSize: 11, color: ml, marginTop: 3 }}>查看全部紀錄</div>
+                  <div style={{ fontSize: 10, color: mf, marginTop: 2 }}>會員頁</div>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
