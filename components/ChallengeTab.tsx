@@ -174,6 +174,8 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         loadedMode = saved.mode ?? null
         loadedEntries = saved.entries ?? []
       }
+      const key = userId ? `${LS_CHALLENGE_DATA}__${userId}` : LS_CHALLENGE_DATA
+      console.log('[Challenge] load complete → key:', key, 'mode:', loadedMode, 'entries:', loadedEntries.length)
       setMode(loadedMode)
       setEntries(loadedEntries)
       loadedRef.current = true
@@ -184,8 +186,13 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   // 直接 save（不用 effect），在每個資料變動點呼叫
   const persistData = (newMode: ChallengeMode | null, newEntries: TossEntry[]) => {
     const payload = { mode: newMode, entries: newEntries }
+    const key = userId ? `${LS_CHALLENGE_DATA}__${userId}` : LS_CHALLENGE_DATA
+    console.log('[Challenge] persistData → key:', key, 'mode:', newMode, 'entries:', newEntries.length)
     if (userId) sbSaveChallengeData(userId, payload)
     else saveLS(LS_CHALLENGE_DATA, payload)
+    // 存完後立刻驗證
+    const verify = localStorage.getItem(key)
+    console.log('[Challenge] verify localStorage:', verify ? JSON.parse(verify) : 'NULL')
   }
 
   const today = new Date().toLocaleDateString('zh-TW')
