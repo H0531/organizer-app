@@ -230,6 +230,21 @@ function SavedPopup({ entry, onShare, onClose }: { entry: ChecklistLog; onShare:
 }
 
 const CL_PAGE_KEY = 'checklist_page'
+const CL_DRAFT_KEY = 'checklist_draft'  // 整理中草稿
+
+type ChecklistDraft = {
+  space: string
+  checked: Record<string, boolean[]>
+  beforePhotos: string[]
+  afterPhotos: string[]
+  skipBefore: boolean
+  skipAfter: boolean
+  note: string
+  elapsedSecs: number
+  targetMins: number
+  useCustom: boolean
+  customMins: string
+}
 type Props = { onSaveLog: (log: ChecklistLog) => void; onDeleteLog?: (id: string) => void; onEditLog?: (id: string, note: string) => void; initialLogs?: ChecklistLog[]; userId?: string }
 
 export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initialLogs, userId }: Props) {
@@ -290,7 +305,26 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setCustomItems(savedCustom)
     const savedPage = loadLS<number>(CL_PAGE_KEY, 1)
     const existingLogs = initialLogs ?? loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], userId)
-    if (savedPage === 3 || (existingLogs.length > 0 && savedPage !== 2)) setPageRaw(3)
+    if (savedPage === 3 || (existingLogs.length > 0 && savedPage !== 2)) {
+      setPageRaw(3)
+    } else if (savedPage === 2) {
+      // 恢復整理中草稿
+      const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null)
+      if (draft) {
+        setSpace(draft.space)
+        setChecked(draft.checked)
+        setBeforePhotos(draft.beforePhotos ?? [])
+        setAfterPhotos(draft.afterPhotos ?? [])
+        setSkipBefore(draft.skipBefore ?? false)
+        setSkipAfter(draft.skipAfter ?? false)
+        setNote(draft.note ?? '')
+        setElapsedSecs(draft.elapsedSecs ?? 0)
+        setTargetMins(draft.targetMins ?? 30)
+        setUseCustom(draft.useCustom ?? false)
+        setCustomMins(draft.customMins ?? '')
+        setPageRaw(2)
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -333,21 +367,43 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setChecked({ ...checked, [space]: c })
   }
 
+  const draftTickRef = useRef(0)
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
         setTimeLeft(t => { if (t <= 1) { setTimerRunning(false); setTimerDone(true); clearInterval(timerRef.current!); return 0 } return t - 1 })
-        setElapsedSecs(e => e + 1)
+        setElapsedSecs(e => {
+          const next = e + 1
+          draftTickRef.current += 1
+          // 每 30 秒存一次草稿，避免頻繁寫 localStorage
+          if (draftTickRef.current % 30 === 0) {
+            saveLS(CL_DRAFT_KEY, {
+              space, checked, beforePhotos, afterPhotos,
+              skipBefore, skipAfter, note,
+              elapsedSecs: next, targetMins, useCustom, customMins,
+            } as ChecklistDraft)
+          }
+          return next
+        })
       }, 1000)
     } else { if (timerRef.current) clearInterval(timerRef.current) }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [timerRunning])
+  }, [timerRunning, space, checked, beforePhotos, afterPhotos, skipBefore, skipAfter, note, targetMins, useCustom, customMins])
 
   const addPhotos = (type: 'before' | 'after', files: FileList) => {
     const cur = type === 'before' ? beforePhotos : afterPhotos
     const set = type === 'before' ? setBeforePhotos : setAfterPhotos
     const toAdd = Array.from(files).slice(0, MAX_PHOTOS - cur.length)
-    Promise.all(toAdd.map(f => new Promise<string>(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(f) }))).then(res => set([...cur, ...res]))
+    Promise.all(toAdd.map(f => new Promise<string>(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(f) }))).then(res => {
+      const next = [...cur, ...res]
+      set(next)
+      if (page === 2) saveLS(CL_DRAFT_KEY, {
+        space, checked,
+        beforePhotos: type === 'before' ? next : beforePhotos,
+        afterPhotos: type === 'after' ? next : afterPhotos,
+        skipBefore, skipAfter, note, elapsedSecs, targetMins, useCustom, customMins,
+      } as ChecklistDraft)
+    })
   }
   const removePhoto = (type: 'before' | 'after', i: number) => {
     if (type === 'before') setBeforePhotos(p => p.filter((_, idx) => idx !== i))
@@ -377,7 +433,37 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setExpandScheduled(false)
   }
 
-  const startTimer = () => { setTimeLeft(totalSecs); setElapsedSecs(0); setTimerDone(false); setTimerRunning(true); setPage(2) }
+  // 整理中草稿：壓縮後存 localStorage，不存照片原始大小
+  const saveDraft = (overrides: Partial<ChecklistDraft> = {}) => {
+    const compress = (photos: string[]) => photos  // 已在上傳時壓縮過
+    const draft: ChecklistDraft = {
+      space,
+      checked,
+      beforePhotos: compress(beforePhotos),
+      afterPhotos: compress(afterPhotos),
+      skipBefore,
+      skipAfter,
+      note,
+      elapsedSecs,
+      targetMins,
+      useCustom,
+      customMins,
+      ...overrides,
+    }
+    saveLS(CL_DRAFT_KEY, draft)
+  }
+  const clearDraft = () => saveLS(CL_DRAFT_KEY, null)
+
+  const startTimer = () => {
+    setTimeLeft(totalSecs); setElapsedSecs(0); setTimerDone(false); setTimerRunning(true)
+    setPage(2)
+    // 存初始草稿（至少有 space + beforePhotos）
+    saveLS(CL_DRAFT_KEY, {
+      space, checked, beforePhotos, afterPhotos: [],
+      skipBefore, skipAfter: false, note: '',
+      elapsedSecs: 0, targetMins: effectiveMins, useCustom, customMins,
+    } as ChecklistDraft)
+  }
 
   const saveLog = async () => {
     if (!canSave) return
@@ -404,6 +490,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: allItems.map(() => false) })
     setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
+    clearDraft()  // 儲存成功後清除草稿
     setSaveFlash(true)
     setTimeout(() => {
       setSaveFlash(false); setPage(3)
@@ -455,6 +542,53 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   // ── PAGE 1 ───────────────────────────────────────────────
   if (page === 1) return (
     <div>
+      {/* 繼續未完成整理的提示 */}
+      {(() => {
+        const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null)
+        if (!draft || !draft.space) return null
+        const SN_MAP: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen: '廚房', bathroom: '浴室', bag: '包包', digital: '數位' }
+        const spName = SN_MAP[draft.space] ?? draft.space
+        const doneCount = Object.values(draft.checked[draft.space] ?? []).filter(Boolean).length
+        const totalCount = (SP[draft.space]?.items.length ?? 0) + ((draft.checked[draft.space]?.length ?? 0) - (SP[draft.space]?.items.length ?? 0))
+        return (
+          <div style={{ background: '#FDF9F0', border: '1.5px solid #C4953A', borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#7A5E2A', marginBottom: 3 }}>
+                ⏸ 上次 {spName} 整理還沒完成
+              </div>
+              <div style={{ fontSize: 12, color: ml }}>
+                清單完成 {doneCount} / {totalCount > 0 ? totalCount : '?'} 項
+                {draft.elapsedSecs > 0 && `・已計時 ${Math.floor(draft.elapsedSecs / 60)} 分`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button onClick={() => {
+                setSpace(draft.space)
+                setChecked(draft.checked)
+                setBeforePhotos(draft.beforePhotos ?? [])
+                setAfterPhotos(draft.afterPhotos ?? [])
+                setSkipBefore(draft.skipBefore ?? false)
+                setSkipAfter(draft.skipAfter ?? false)
+                setNote(draft.note ?? '')
+                setElapsedSecs(draft.elapsedSecs ?? 0)
+                setTargetMins(draft.targetMins ?? 30)
+                setUseCustom(draft.useCustom ?? false)
+                setCustomMins(draft.customMins ?? '')
+                setTimeLeft(Math.max(0, (draft.targetMins ?? 30) * 60 - (draft.elapsedSecs ?? 0)))
+                setTimerDone(false)
+                setPageRaw(2)
+                saveLS(CL_PAGE_KEY, 2)
+              }} style={{ fontSize: 12, color: 'white', background: '#C4953A', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}>
+                繼續整理
+              </button>
+              <button onClick={() => saveLS(CL_DRAFT_KEY, null)} style={{ fontSize: 12, color: mf, background: 'none', border: `1px solid ${bd}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}>
+                放棄
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, color: ink, margin: 0 }}>今天整理哪裡？</h1>
         {logs.length > 0 && (
@@ -591,7 +725,15 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   if (page === 2) return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <button onClick={() => { setTimerRunning(false); setPage(1) }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
+        <button onClick={() => {
+          setTimerRunning(false)
+          // 存草稿再返回，讓使用者回來時能繼續
+          saveLS(CL_DRAFT_KEY, {
+            space, checked, beforePhotos, afterPhotos,
+            skipBefore, skipAfter, note, elapsedSecs, targetMins, useCustom, customMins,
+          } as ChecklistDraft)
+          setPage(1)
+        }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0 }}>整理中</h1>
       </div>
       <PageDots page={2} />
