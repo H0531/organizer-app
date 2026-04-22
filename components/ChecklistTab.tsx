@@ -240,7 +240,8 @@ type ChecklistDraft = {
   skipBefore: boolean
   skipAfter: boolean
   note: string
-  elapsedSecs: number
+  accumulatedSecs: number   // 已計時的秒數（暫停前累積）
+  startedAt: number | null  // 目前計時段的開始 timestamp（null = 暫停中）
   targetMins: number
   useCustom: boolean
   customMins: string
@@ -269,8 +270,14 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [timeLeft, setTimeLeft] = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
   const [timerDone, setTimerDone] = useState(false)
-  const [elapsedSecs, setElapsedSecs] = useState(0)
+  // 計時：accumulatedSecs = 暫停前已累積的秒數；startedAt = 本段計時開始的 timestamp
+  const [accumulatedSecs, setAccumulatedSecs] = useState(0)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // elapsedSecs：即時計算，供顯示和儲存用
+  const elapsedSecs = timerRunning && startedAt !== null
+    ? accumulatedSecs + Math.floor((Date.now() - startedAt) / 1000)
+    : accumulatedSecs
 
   const [note, setNote] = useState('')
   const [saveFlash, setSaveFlash] = useState(false)
@@ -318,10 +325,22 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         setSkipBefore(draft.skipBefore ?? false)
         setSkipAfter(draft.skipAfter ?? false)
         setNote(draft.note ?? '')
-        setElapsedSecs(draft.elapsedSecs ?? 0)
         setTargetMins(draft.targetMins ?? 30)
         setUseCustom(draft.useCustom ?? false)
         setCustomMins(draft.customMins ?? '')
+        // 計算重整時已過的時間：若之前在計時中，把離開到現在的時間也加進來
+        const savedAcc = draft.accumulatedSecs ?? (draft as unknown as {elapsedSecs?: number}).elapsedSecs ?? 0
+        const savedStartedAt = draft.startedAt ?? null
+        const restoredAcc = savedStartedAt !== null
+          ? savedAcc + Math.floor((Date.now() - savedStartedAt) / 1000)
+          : savedAcc
+        setAccumulatedSecs(restoredAcc)
+        setStartedAt(null)        // 恢復後一律暫停，讓使用者主動按繼續
+        setTimerRunning(false)
+        const tMins = draft.targetMins ?? 30
+        const remaining = Math.max(0, tMins * 60 - restoredAcc)
+        setTimeLeft(remaining)
+        setTimerDone(remaining === 0)
         setPageRaw(2)
       }
     }
@@ -369,26 +388,26 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
 
   const draftTickRef = useRef(0)
   useEffect(() => {
-    if (timerRunning) {
+    if (timerRunning && startedAt !== null) {
       timerRef.current = setInterval(() => {
-        setTimeLeft(t => { if (t <= 1) { setTimerRunning(false); setTimerDone(true); clearInterval(timerRef.current!); return 0 } return t - 1 })
-        setElapsedSecs(e => {
-          const next = e + 1
-          draftTickRef.current += 1
-          // 每 30 秒存一次草稿，避免頻繁寫 localStorage
-          if (draftTickRef.current % 30 === 0) {
-            saveLS(CL_DRAFT_KEY, {
-              space, checked, beforePhotos, afterPhotos,
-              skipBefore, skipAfter, note,
-              elapsedSecs: next, targetMins, useCustom, customMins,
-            } as ChecklistDraft)
-          }
-          return next
+        setTimeLeft(t => {
+          if (t <= 1) { setTimerRunning(false); setTimerDone(true); clearInterval(timerRef.current!); return 0 }
+          return t - 1
         })
+        draftTickRef.current += 1
+        // 每 30 秒存一次草稿（含目前的 startedAt，讓重整後能繼續計算）
+        if (draftTickRef.current % 30 === 0) {
+          saveLS(CL_DRAFT_KEY, {
+            space, checked, beforePhotos, afterPhotos,
+            skipBefore, skipAfter, note,
+            accumulatedSecs, startedAt,
+            targetMins, useCustom, customMins,
+          } as ChecklistDraft)
+        }
       }, 1000)
     } else { if (timerRef.current) clearInterval(timerRef.current) }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [timerRunning, space, checked, beforePhotos, afterPhotos, skipBefore, skipAfter, note, targetMins, useCustom, customMins])
+  }, [timerRunning, startedAt, space, checked, beforePhotos, afterPhotos, skipBefore, skipAfter, note, accumulatedSecs, targetMins, useCustom, customMins])
 
   const addPhotos = (type: 'before' | 'after', files: FileList) => {
     const cur = type === 'before' ? beforePhotos : afterPhotos
@@ -401,7 +420,9 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         space, checked,
         beforePhotos: type === 'before' ? next : beforePhotos,
         afterPhotos: type === 'after' ? next : afterPhotos,
-        skipBefore, skipAfter, note, elapsedSecs, targetMins, useCustom, customMins,
+        skipBefore, skipAfter, note,
+        accumulatedSecs: elapsedSecs, startedAt: null,
+        targetMins, useCustom, customMins,
       } as ChecklistDraft)
     })
   }
@@ -433,21 +454,15 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setExpandScheduled(false)
   }
 
-  // 整理中草稿：壓縮後存 localStorage，不存照片原始大小
+  // 整理中草稿：暫停時存 accumulatedSecs（不存 startedAt，重整後視為暫停）
   const saveDraft = (overrides: Partial<ChecklistDraft> = {}) => {
-    const compress = (photos: string[]) => photos  // 已在上傳時壓縮過
     const draft: ChecklistDraft = {
-      space,
-      checked,
-      beforePhotos: compress(beforePhotos),
-      afterPhotos: compress(afterPhotos),
-      skipBefore,
-      skipAfter,
-      note,
-      elapsedSecs,
-      targetMins,
-      useCustom,
-      customMins,
+      space, checked,
+      beforePhotos, afterPhotos,
+      skipBefore, skipAfter, note,
+      accumulatedSecs: elapsedSecs,  // 存入即時 elapsed（含目前計時段）
+      startedAt: null,               // 重整後一律暫停
+      targetMins, useCustom, customMins,
       ...overrides,
     }
     saveLS(CL_DRAFT_KEY, draft)
@@ -455,13 +470,18 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const clearDraft = () => saveLS(CL_DRAFT_KEY, null)
 
   const startTimer = () => {
-    setTimeLeft(totalSecs); setElapsedSecs(0); setTimerDone(false); setTimerRunning(true)
+    const now = Date.now()
+    setTimeLeft(totalSecs)
+    setAccumulatedSecs(0)
+    setStartedAt(now)
+    setTimerDone(false)
+    setTimerRunning(true)
     setPage(2)
-    // 存初始草稿（至少有 space + beforePhotos）
     saveLS(CL_DRAFT_KEY, {
       space, checked, beforePhotos, afterPhotos: [],
       skipBefore, skipAfter: false, note: '',
-      elapsedSecs: 0, targetMins: effectiveMins, useCustom, customMins,
+      accumulatedSecs: 0, startedAt: now,
+      targetMins: effectiveMins, useCustom, customMins,
     } as ChecklistDraft)
   }
 
@@ -489,7 +509,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setLogs(next); onSaveLog(entry)
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: allItems.map(() => false) })
-    setTimerDone(false); setElapsedSecs(0); setTimeLeft(0)
+    setTimerDone(false); setAccumulatedSecs(0); setStartedAt(null); setTimeLeft(0)
     clearDraft()  // 儲存成功後清除草稿
     setSaveFlash(true)
     setTimeout(() => {
@@ -558,11 +578,14 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
               </div>
               <div style={{ fontSize: 12, color: ml }}>
                 清單完成 {doneCount} / {totalCount > 0 ? totalCount : '?'} 項
-                {draft.elapsedSecs > 0 && `・已計時 ${Math.floor(draft.elapsedSecs / 60)} 分`}
+                {((draft.accumulatedSecs ?? (draft as unknown as {elapsedSecs?: number}).elapsedSecs ?? 0) > 0) && `・已計時 ${Math.floor((draft.accumulatedSecs ?? (draft as unknown as {elapsedSecs?: number}).elapsedSecs ?? 0) / 60)} 分`}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
               <button onClick={() => {
+                const acc = draft.accumulatedSecs ?? (draft as unknown as {elapsedSecs?: number}).elapsedSecs ?? 0
+                const sAt = draft.startedAt ?? null
+                const restored = sAt !== null ? acc + Math.floor((Date.now() - sAt) / 1000) : acc
                 setSpace(draft.space)
                 setChecked(draft.checked)
                 setBeforePhotos(draft.beforePhotos ?? [])
@@ -570,12 +593,14 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                 setSkipBefore(draft.skipBefore ?? false)
                 setSkipAfter(draft.skipAfter ?? false)
                 setNote(draft.note ?? '')
-                setElapsedSecs(draft.elapsedSecs ?? 0)
+                setAccumulatedSecs(restored)
+                setStartedAt(null)
                 setTargetMins(draft.targetMins ?? 30)
                 setUseCustom(draft.useCustom ?? false)
                 setCustomMins(draft.customMins ?? '')
-                setTimeLeft(Math.max(0, (draft.targetMins ?? 30) * 60 - (draft.elapsedSecs ?? 0)))
-                setTimerDone(false)
+                setTimeLeft(Math.max(0, (draft.targetMins ?? 30) * 60 - restored))
+                setTimerDone(restored >= (draft.targetMins ?? 30) * 60)
+                setTimerRunning(false)
                 setPageRaw(2)
                 saveLS(CL_PAGE_KEY, 2)
               }} style={{ fontSize: 12, color: 'white', background: '#C4953A', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}>
@@ -726,11 +751,15 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         <button onClick={() => {
+          // 暫停並存草稿
+          const elapsed = timerRunning && startedAt !== null ? Math.floor((Date.now() - startedAt) / 1000) : 0
+          const newAcc = accumulatedSecs + elapsed
           setTimerRunning(false)
-          // 存草稿再返回，讓使用者回來時能繼續
           saveLS(CL_DRAFT_KEY, {
             space, checked, beforePhotos, afterPhotos,
-            skipBefore, skipAfter, note, elapsedSecs, targetMins, useCustom, customMins,
+            skipBefore, skipAfter, note,
+            accumulatedSecs: newAcc, startedAt: null,
+            targetMins, useCustom, customMins,
           } as ChecklistDraft)
           setPage(1)
         }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
@@ -756,9 +785,34 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
             <div style={{ fontSize: 10, color: mf, marginTop: 2 }}>目標 {effectiveMins} 分</div>
           </div>
         </div>
-        <div style={{ fontSize: 13, color: mf, marginBottom: 14 }}>已用 {fmtMins(elapsedSecs)}</div>
+        <div style={{ fontSize: 13, color: mf, marginBottom: 14 }}>
+          已用 {fmtMins(elapsedSecs)}
+          {!timerRunning && !timerDone && elapsedSecs > 0 && (
+            <span style={{ marginLeft: 8, fontSize: 11, color: '#C4953A', background: '#FDF9F0', padding: '2px 8px', borderRadius: 10, border: '1px solid #C4953A44' }}>⏸ 暫停中</span>
+          )}
+        </div>
         {!timerDone && (
-          <button onClick={() => setTimerRunning(r => !r)} style={{ padding: '8px 22px', borderRadius: 8, border: `1px solid ${sg}`, background: timerRunning ? sg : 'white', color: timerRunning ? 'white' : sg, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={() => {
+            if (timerRunning) {
+              // 暫停：把本段計時累積進去，清除 startedAt
+              const elapsed = startedAt !== null ? Math.floor((Date.now() - startedAt) / 1000) : 0
+              const newAcc = accumulatedSecs + elapsed
+              setAccumulatedSecs(newAcc)
+              setStartedAt(null)
+              setTimerRunning(false)
+              // 立刻存草稿（暫停狀態，startedAt = null）
+              saveLS(CL_DRAFT_KEY, {
+                space, checked, beforePhotos, afterPhotos,
+                skipBefore, skipAfter, note,
+                accumulatedSecs: newAcc, startedAt: null,
+                targetMins, useCustom, customMins,
+              } as ChecklistDraft)
+            } else {
+              // 繼續：記錄新的 startedAt
+              setStartedAt(Date.now())
+              setTimerRunning(true)
+            }
+          }} style={{ padding: '8px 22px', borderRadius: 8, border: `1px solid ${sg}`, background: timerRunning ? sg : 'white', color: timerRunning ? 'white' : sg, fontSize: 13, cursor: 'pointer' }}>
             {timerRunning ? '⏸ 暫停' : '▶ 繼續'}
           </button>
         )}
