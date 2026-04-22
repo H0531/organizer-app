@@ -182,6 +182,20 @@ export default function Home() {
     }
   }
 
+  const handleEditChecklistLog = async (id: string, note: string) => {
+    const updated = checklistLogs.map(l => l.id === id ? { ...l, note } : l)
+    setChecklistLogs(updated)
+    if (user) {
+      const log = updated.find(l => l.id === id)
+      if (log) {
+        const ok = await sbSaveChecklistLog(user.email, log)
+        if (!ok) showToast('編輯儲存失敗')
+      }
+    } else {
+      saveLS(LS_CHECKLIST_LOGS, updated)
+    }
+  }
+
   const handleUserChange = async (u: OAuthUser | null) => {
     setUser(u)
     if (u) await loadUserData(u)
@@ -226,6 +240,9 @@ export default function Home() {
           <ChecklistTab
             key="checklist"
             onSaveLog={handleChecklistSave}
+            onDeleteLog={handleDeleteChecklistLog}
+            onEditLog={handleEditChecklistLog}
+            initialLogs={checklistLogs}
             userId={user?.email}
           />
         )}

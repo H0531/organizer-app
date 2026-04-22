@@ -150,17 +150,18 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const [fReason, setFReason] = useState('')
   const [fFeeling, setFFeeling] = useState('')
 
-  const initialized = useRef(false)
+  const [initialized, setInitialized] = useState(false)
+  const savingRef = useRef(false)
 
   useEffect(() => {
-    initialized.current = false
+    setInitialized(false)
     const load = async () => {
       if (userId) {
         const remote = await sbLoadChallengeData(userId)
         if (remote) {
           setMode(remote.mode as ChallengeMode | null)
           setEntries(remote.entries as TossEntry[])
-          initialized.current = true
+          setInitialized(true)
           return
         }
       }
@@ -169,20 +170,21 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
       )
       if (saved.mode) setMode(saved.mode)
       if (saved.entries) setEntries(saved.entries)
-      initialized.current = true
+      setInitialized(true)
     }
     load()
   }, [userId])
 
+  // 只在 initialized 後才儲存，避免 load 前被空資料覆蓋
   useEffect(() => {
-    if (!initialized.current) return
+    if (!initialized) return
     const payload = { mode, entries }
     if (userId) {
       sbSaveChallengeData(userId, payload)
     } else {
       saveLS(LS_CHALLENGE_DATA, payload, userId)
     }
-  }, [mode, entries, userId])
+  }, [mode, entries, userId, initialized])
 
   const today = new Date().toLocaleDateString('zh-TW')
   const currentDay = entries.length + 1
