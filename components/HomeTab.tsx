@@ -13,18 +13,19 @@ function ContactModal({ onClose, feedbackSent, setFeedbackSent }: {
   setFeedbackSent: (v: boolean) => void
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
   const [sending, setSending] = useState(false)
 
   const handleSubmit = async () => {
     const text = textareaRef.current?.value.trim()
+    const email = emailRef.current?.value.trim()
     if (!text) return
     setSending(true)
     try {
-      // 存到 Supabase feedback 表（fire-and-forget）
       await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, submitted_at: new Date().toISOString() }),
+        body: JSON.stringify({ message: text, contact_email: email || null, submitted_at: new Date().toISOString() }),
       })
     } catch { /* 靜默失敗 */ }
     setSending(false)
@@ -46,7 +47,14 @@ function ContactModal({ onClose, feedbackSent, setFeedbackSent }: {
             ref={textareaRef}
             defaultValue=""
             placeholder="描述問題或建議⋯例如：某個按鈕點不到、希望新增某功能"
-            style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 130, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }}
+            style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 130, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 10 }}
+          />
+          <input
+            ref={emailRef}
+            type="email"
+            defaultValue=""
+            placeholder="聯絡 Email（選填，方便我們回覆你）"
+            style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }}
           />
           <button
             onClick={handleSubmit}

@@ -1,12 +1,32 @@
-import { MetadataRoute } from "next";
+import { MetadataRoute } from 'next'
+
+const BASE_URL = 'https://organizer-app-mauve.vercel.app'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: "https://organizer-app-mauve.vercel.app",
+      url: BASE_URL,
       lastModified: new Date(),
-      changeFrequency: "weekly",
+      changeFrequency: 'weekly',
       priority: 1,
     },
-  ];
+    {
+      url: `${BASE_URL}/?tab=checklist`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/?tab=declutter`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/?tab=challenge`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+  ]
 }

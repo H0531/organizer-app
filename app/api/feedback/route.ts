@@ -8,19 +8,13 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, submitted_at } = await req.json()
+    const { message, contact_email, submitted_at } = await req.json()
     if (!message?.trim()) {
       return NextResponse.json({ error: 'empty message' }, { status: 400 })
     }
-
-    const { error } = await supabaseAdmin
+    await supabaseAdmin
       .from('feedback')
-      .insert({ message: message.trim(), submitted_at })
-
-    if (error) {
-      console.error('feedback insert error:', error)
-    }
-
+      .insert({ message: message.trim(), contact_email: contact_email || null, submitted_at })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('POST /api/feedback error:', err)
