@@ -225,7 +225,7 @@ export default function Home() {
       </div>
 
       {/* 頁面內容 */}
-      <div style={{ padding: '16px 16px 80px', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{ padding: '16px 16px calc(100px + env(safe-area-inset-bottom))', maxWidth: 480, margin: '0 auto' }}>
 
         {tab === 'home' && (
           <HomeTab

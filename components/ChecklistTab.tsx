@@ -282,6 +282,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
 
   const [note, setNote] = useState('')
   const [saveFlash, setSaveFlash] = useState(false)
+  const [isSavingUI, setIsSavingUI] = useState(false)
 
   const [showCalModal, setShowCalModal] = useState(false)
   const [calDate, setCalDate] = useState('')
@@ -489,6 +490,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const saveLog = async () => {
     if (!canSave || isSavingRef.current) return
     isSavingRef.current = true
+    setIsSavingUI(true)
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
 
     // 壓縮 → dataUrl
@@ -530,6 +532,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     clearDraft()  // 儲存成功後清除草稿
     setSaveFlash(true)
     isSavingRef.current = false
+    setIsSavingUI(false)
     setTimeout(() => {
       setSaveFlash(false); setPage(3)
       setTimeout(() => setSavedPopupEntry(entry), 150)
@@ -909,9 +912,9 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
           🎉 清單全部完成！記得上傳整理後照片再儲存
         </div>
       )}
-      <button onClick={saveLog} disabled={!canSave}
-        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: canSave ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.3s', marginBottom: 24 }}>
-        {saveFlash ? '✅ 已儲存整理成果！' : '💾 儲存整理成果'}
+      <button onClick={saveLog} disabled={!canSave || isSavingUI}
+        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : isSavingUI ? '#9BC4AE' : canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: (canSave && !isSavingUI) ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.3s', marginBottom: 24 }}>
+        {saveFlash ? '✅ 已儲存整理成果！' : isSavingUI ? '⏳ 上傳中⋯' : '💾 儲存整理成果'}
       </button>
 
       {editingPhoto && <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />}
