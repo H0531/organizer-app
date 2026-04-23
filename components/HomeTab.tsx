@@ -1,20 +1,68 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { OAuthUser } from '@/lib/auth'
 import { loadLS, LS_CHALLENGE_DATA } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 type Tab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
-// ── Footer ────────────────────────────────────────────────────
-function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
-  const [showPrivacy, setShowPrivacy] = useState(false)
-  const [showTerms, setShowTerms] = useState(false)
-  const [showContact, setShowContact] = useState(false)
-  const [feedbackText, setFeedbackText] = useState('')
-  const [feedbackSent, setFeedbackSent] = useState(false)
+// ── Contact Modal (uncontrolled textarea 避免失焦) ───────────
+function ContactModal({ onClose, feedbackSent, setFeedbackSent }: {
+  onClose: () => void
+  feedbackSent: boolean
+  setFeedbackSent: (v: boolean) => void
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [sending, setSending] = useState(false)
 
-  const Modal = ({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) => (
+  const handleSubmit = async () => {
+    const text = textareaRef.current?.value.trim()
+    if (!text) return
+    setSending(true)
+    try {
+      // 存到 Supabase feedback 表（fire-and-forget）
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, submitted_at: new Date().toISOString() }),
+      })
+    } catch { /* 靜默失敗 */ }
+    setSending(false)
+    setFeedbackSent(true)
+  }
+
+  return (
+    <Modal title="聯絡 / 錯誤回報" onClose={onClose}>
+      <div style={{ fontSize: 13, color: ml, lineHeight: 1.7, marginBottom: 16 }}>
+        有任何問題、功能建議或發現錯誤，歡迎填寫下方表單，我們會盡快處理。
+      </div>
+      {feedbackSent ? (
+        <div style={{ background: '#EAF2EE', borderRadius: 12, padding: '24px 16px', fontSize: 14, color: '#2E6B50', textAlign: 'center', fontWeight: 500 }}>
+          ✅ 已發送，感謝您的回饋 :)
+        </div>
+      ) : (
+        <>
+          <textarea
+            ref={textareaRef}
+            defaultValue=""
+            placeholder="描述問題或建議⋯例如：某個按鈕點不到、希望新增某功能"
+            style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 130, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }}
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={sending}
+            style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: sending ? '#9BC4AE' : ink, color: 'white', fontSize: 14, cursor: sending ? 'not-allowed' : 'pointer', fontWeight: 500 }}>
+            {sending ? '送出中⋯' : '送出'}
+          </button>
+        </>
+      )}
+    </Modal>
+  )
+}
+
+// ── Shared Modal ─────────────────────────────────────────────
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.52)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0' }}>
       <div style={{ background: ww, borderRadius: '16px 16px 0 0', padding: '24px 24px 40px', maxWidth: 480, width: '100%', maxHeight: '80vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -25,6 +73,14 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
       </div>
     </div>
   )
+}
+
+// ── Footer ────────────────────────────────────────────────────
+function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
+  const [showContact, setShowContact] = useState(false)
+  const [feedbackSent, setFeedbackSent] = useState(false)
 
   return (
     <>
@@ -106,43 +162,7 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
       {/* 聯絡 / 錯誤回報 */}
       {showContact && (
-        <Modal title="聯絡 / 錯誤回報" onClose={() => setShowContact(false)}>
-          <div style={{ fontSize: 13, color: ml, lineHeight: 1.7, marginBottom: 16 }}>
-            有任何問題、功能建議或發現錯誤，歡迎填寫下方表單，我們會盡快處理。
-          </div>
-          {feedbackSent ? (
-            <div style={{ background: '#EAF2EE', borderRadius: 12, padding: '20px 16px', fontSize: 14, color: '#2E6B50', textAlign: 'center', fontWeight: 500 }}>
-              ✅ 已發送，感謝您的回饋 :)
-            </div>
-          ) : (
-            <>
-              <textarea
-                value={feedbackText}
-                onChange={e => setFeedbackText(e.target.value)}
-                placeholder="描述問題或建議⋯&#10;例如：某個按鈕點不到、希望新增某功能"
-                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 120, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }}
-              />
-              <a
-                href={feedbackText.trim()
-                  ? `mailto:i.am.ych.0531@gmail.com?subject=${encodeURIComponent('[聯絡/錯誤回報]')}&body=${encodeURIComponent(feedbackText.trim())}`
-                  : '#'}
-                onClick={e => {
-                  if (!feedbackText.trim()) { e.preventDefault(); return }
-                  setFeedbackSent(true)
-                  setTimeout(() => { setFeedbackSent(false); setFeedbackText('') }, 4000)
-                }}
-                style={{
-                  display: 'block', width: '100%', padding: '13px', borderRadius: 10,
-                  border: 'none', background: feedbackText.trim() ? ink : '#C8C2B8',
-                  color: 'white', fontSize: 14, cursor: feedbackText.trim() ? 'pointer' : 'not-allowed',
-                  fontWeight: 500, textAlign: 'center', textDecoration: 'none',
-                  boxSizing: 'border-box',
-                }}>
-                送出
-              </a>
-            </>
-          )}
-        </Modal>
+        <ContactModal onClose={() => { setShowContact(false); setFeedbackSent(false) }} feedbackSent={feedbackSent} setFeedbackSent={setFeedbackSent} />
       )}
     </>
   )

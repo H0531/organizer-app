@@ -216,10 +216,10 @@ export default function Home() {
       <div style={{
         background: '#FAF8F4', borderBottom: `1px solid ${bd}`,
         padding: '0 16px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', height: 46,
+        justifyContent: 'space-between', height: 52,
         position: 'sticky', top: 0, zIndex: 100,
       }}>
-        <div style={{ fontFamily: "'Noto Serif TC', serif", fontWeight: 700, fontSize: 17, color: ink }}>
+        <div style={{ fontFamily: "'Noto Serif TC', serif", fontWeight: 700, fontSize: 20, color: ink, letterSpacing: '0.02em' }}>
           整理<span style={{ color: sg }}>•</span>小幫手
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
