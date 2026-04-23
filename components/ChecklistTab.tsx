@@ -789,7 +789,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       <PageDots page={2} />
 
       {/* 計時器 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center', position: 'sticky', top: 46, zIndex: 50 }}>
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center' }}>
         <div style={{ position: 'relative', width: 130, height: 130, margin: '0 auto 12px' }}>
           <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="65" cy="65" r="54" fill="none" stroke={cr} strokeWidth="9" />
@@ -871,7 +871,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
               <input value={newItemText} onChange={e => setNewItemText(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addCustomItem()}
                 placeholder="例：整理抽屜雜物"
-                style={{ flex: 1, border: `1px solid ${sg}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, outline: 'none', color: ink }} />
+                style={{ flex: 1, border: `1px solid ${sg}`, borderRadius: 8, padding: '7px 10px', fontSize: 16, outline: 'none', color: ink }} />
               <button onClick={addCustomItem} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer' }}>加入</button>
               <button onClick={() => { setShowAddItem(false); setNewItemText('') }} style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>✕</button>
             </div>
@@ -898,7 +898,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         </div>
         <textarea value={note} onChange={e => setNote(e.target.value)}
           placeholder="寫下你的整理心得、驚喜發現、或給未來自己的話⋯（不填也可以，系統會自動記錄）"
-          style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: ink, minHeight: 90, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+          style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 90, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
       </div>
 
       {/* 儲存按鈕 — 在紀念文下方 */}
@@ -960,7 +960,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
           </div>
           {editingId === entry.id ? (
             <div>
-              <textarea value={editNote} onChange={e => setEditNote(e.target.value)} style={{ width: '100%', border: `1px solid ${sg}`, borderRadius: 8, padding: '8px 10px', fontSize: 13, color: ink, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', minHeight: 60 }} />
+              <textarea value={editNote} onChange={e => setEditNote(e.target.value)} style={{ width: '100%', border: `1px solid ${sg}`, borderRadius: 8, padding: '8px 10px', fontSize: 16, color: ink, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', minHeight: 60 }} />
               <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                 <button onClick={saveEdit} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存</button>
                 <button onClick={() => setEditingId(null)} style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
@@ -991,7 +991,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       {/* 分享 Modal */}
       {shareEntry && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.52)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto', paddingBottom: 36 }}>
             <div ref={shareCardRef} style={{ background: ww, borderRadius: 12, padding: '20px 20px 16px' }}>
               <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, color: ink, marginBottom: 2 }}>{shareEntry.space}整理紀錄</div>
               <div style={{ fontSize: 12, color: mf, marginBottom: 16 }}>{shareEntry.date} · 用時 {fmtMins(shareEntry.duration)}</div>
