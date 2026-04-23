@@ -152,22 +152,34 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
 
   // load 完成才允許 save，避免初始化時空資料覆蓋真實紀錄
   const loadedRef = useRef(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncToast, setSyncToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
   useEffect(() => {
     loadedRef.current = false
     setMode(null)
     setEntries([])
+    setSyncToast(null)
     const load = async () => {
       let loadedMode: ChallengeMode | null = null
       let loadedEntries: TossEntry[] = []
+
       if (userId) {
-        const remote = await sbLoadChallengeData(userId)
-        if (remote) {
-          loadedMode = remote.mode as ChallengeMode | null
-          loadedEntries = remote.entries as TossEntry[]
+        setSyncing(true)
+        try {
+          const remote = await sbLoadChallengeData(userId)
+          if (remote) {
+            loadedMode = remote.mode as ChallengeMode | null
+            loadedEntries = remote.entries as TossEntry[]
+          }
+        } catch {
+          // 雲端失敗 → fallback localStorage
+        } finally {
+          setSyncing(false)
         }
       }
-      // Supabase 沒資料或表不存在時，一律 fallback localStorage（含 userId suffix）
+
+      // 沒有雲端資料 → 讀 localStorage（含未登入情況）
       if (loadedMode === null) {
         const saved = loadLS<{ mode: ChallengeMode | null; entries: TossEntry[] }>(
           LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
@@ -175,6 +187,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         loadedMode = saved.mode ?? null
         loadedEntries = saved.entries ?? []
       }
+
       setMode(loadedMode)
       setEntries(loadedEntries)
       loadedRef.current = true
@@ -187,8 +200,13 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     const payload = { mode: newMode, entries: newEntries }
     // 永遠先存 localStorage（含 userId suffix），確保重整後一定讀得到
     saveLS(LS_CHALLENGE_DATA, payload, userId)
-    // 有登入時額外非同步同步到 Supabase（失敗不影響本地）
-    if (userId) sbSaveChallengeData(userId, payload)
+    // 有登入時額外非同步同步到 Supabase
+    if (userId) {
+      sbSaveChallengeData(userId, payload).then(ok => {
+        setSyncToast({ msg: ok ? '進度已同步到雲端 ☁️' : '雲端同步失敗，進度已存本機', ok })
+        setTimeout(() => setSyncToast(null), 2800)
+      })
+    }
   }
 
   const today = new Date().toLocaleDateString('zh-TW')
@@ -236,10 +254,41 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     persistData(null, [])
   }
 
+  // ── 同步 Toast ───────────────────────────────────────────
+  const syncToastUI = syncToast && (
+    <div style={{
+      position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 9999, background: syncToast.ok ? '#7A9E8A' : '#C47B5A',
+      color: 'white', borderRadius: 10, padding: '10px 20px',
+      fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+      animation: 'fadeInUp 0.2s ease',
+    }}>
+      {syncToast.msg}
+      <style>{`@keyframes fadeInUp { from { opacity:0; transform:translateX(-50%) translateY(10px) } to { opacity:1; transform:translateX(-50%) translateY(0) } }`}</style>
+    </div>
+  )
+
+  // ── 同步中 loading ────────────────────────────────────────
+  if (syncing) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 0', color: ml, fontSize: 14 }}>
+        <div style={{
+          width: 32, height: 32, border: '3px solid #DDD8CF',
+          borderTop: '3px solid #7A9E8A', borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        雲端進度載入中⋯
+      </div>
+    )
+  }
+
   // ── 未開始：選擇模式 ─────────────────────────────────────
   if (!mode) {
     return (
       <div>
+        {syncToastUI}
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>每日丟一物挑戰</h1>
         <p style={{ color: ml, fontSize: 14, marginBottom: 24 }}>連續打卡，每天放手一件東西，讓生活越來越輕盈</p>
 
@@ -341,6 +390,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   // ── 挑戰進行中 ───────────────────────────────────────────
   return (
     <div>
+      {syncToastUI}
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>每日丟一物挑戰</h1>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>{mode} 天挑戰進行中</p>
 

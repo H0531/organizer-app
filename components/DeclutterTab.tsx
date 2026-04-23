@@ -229,10 +229,21 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     if (items.length === 0 || isSavingRef.current) return
     isSavingRef.current = true
     try {
-      await Promise.all(tossEntries.filter(e => e.photo).map(e => savePhoto(`toss_photo_${e.id}`, e.photo!, userEmail)))
+      // 上傳 toss 照片至 Supabase Storage，將 tossEntries 裡的 photo 換成 URL
+      const uploadedEntries = await Promise.all(
+        tossEntries.map(async (e) => {
+          if (!e.photo) return e
+          if (userEmail) {
+            const { uploadPhoto } = await import('@/lib/photos')
+            const url = await uploadPhoto(userEmail, `toss_photo_${e.id}`, e.photo)
+            if (url) return { ...e, photo: url }
+          }
+          return e  // 未登入或上傳失敗：保留原始 dataUrl（本機用）
+        })
+      )
       const record: DeclutterRecord = {
         savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
-        items, tossEntries,
+        items, tossEntries: uploadedEntries,
       }
       onSaveToMember(record)
       setSaveFlash(true)

@@ -488,6 +488,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const saveLog = async () => {
     if (!canSave) return
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
+
+    // 壓縮 → dataUrl
     const compressPhoto = (src: string): Promise<string> => new Promise(res => {
       const img = new Image(); img.onload = () => {
         const c = document.createElement('canvas')
@@ -497,10 +499,23 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         res(c.toDataURL('image/jpeg', 0.5))
       }; img.src = src
     })
-    const bp = skipBefore ? [] : await Promise.all(beforePhotos.map(compressPhoto))
-    const ap = skipAfter ? [] : await Promise.all(afterPhotos.map(compressPhoto))
+
+    // 上傳至 Supabase Storage（有 userId 時），回傳 URL 或 fallback dataUrl
+    const logId = Date.now().toString()
+    const uploadOrCompress = async (src: string, idx: number, prefix: 'before' | 'after'): Promise<string> => {
+      const compressed = await compressPhoto(src)
+      if (userId) {
+        const { uploadPhoto } = await import('@/lib/photos')
+        const url = await uploadPhoto(userId, `checklist_${logId}_${prefix}_${idx}`, compressed)
+        if (url) return url
+      }
+      return compressed
+    }
+
+    const bp = skipBefore ? [] : await Promise.all(beforePhotos.map((s, i) => uploadOrCompress(s, i, 'before')))
+    const ap = skipAfter  ? [] : await Promise.all(afterPhotos.map((s, i) => uploadOrCompress(s, i, 'after')))
     const entry: ChecklistLog = {
-      id: Date.now().toString(), date: new Date().toLocaleDateString('zh-TW'),
+      id: logId, date: new Date().toLocaleDateString('zh-TW'),
       space: SN[space], note: note.trim() || defaultNote,
       beforePhotos: bp, afterPhotos: ap,
       duration: elapsedSecs, targetMinutes: effectiveMins,

@@ -1,4 +1,7 @@
-// 上傳照片到 Supabase Storage，回傳 public URL
+// ── Supabase Storage 照片工具 ─────────────────────────────────
+// 所有操作透過 /api/photos server route，避免在 client 暴露 service key
+
+// 上傳照片（dataUrl → Supabase Storage），回傳 public URL
 export async function uploadPhoto(
   email: string,
   key: string,
@@ -18,7 +21,7 @@ export async function uploadPhoto(
   }
 }
 
-// 刪除雲端照片
+// 刪除雲端照片（靜默失敗）
 export async function deleteRemotePhoto(email: string, key: string): Promise<void> {
   try {
     await fetch('/api/photos', {
@@ -31,8 +34,17 @@ export async function deleteRemotePhoto(email: string, key: string): Promise<voi
   }
 }
 
-// 取得雲端照片 URL（用 public URL 組法）
-export function getRemotePhotoUrl(email: string, key: string): string {
+// 取得雲端照片 public URL
+export function getRemotePhotoUrl(
+  email: string,
+  key: string,
+  ext: 'jpg' | 'png' = 'jpg'
+): string {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  return `${base}/storage/v1/object/public/photos/${encodeURIComponent(email)}/${key}.jpg`
+  return `${base}/storage/v1/object/public/photos/${encodeURIComponent(email)}/${key}.${ext}`
+}
+
+// 判斷是否為遠端 URL（非 base64）
+export function isRemoteUrl(src: string): boolean {
+  return src.startsWith('http://') || src.startsWith('https://')
 }
