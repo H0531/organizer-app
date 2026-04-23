@@ -151,13 +151,13 @@ function MemberFooter() {
             </span>
           ))}
         </div>
-        <div style={{ textAlign: 'center', fontSize: 11, color: mf, paddingBottom: 8 }}>© 2025 H 的收整沙龍 · 整理小幫手</div>
+        <div style={{ textAlign: 'center', fontSize: 11, color: mf, paddingBottom: 8 }}>© 2026 H 的收整沙龍 · 整理小幫手</div>
       </footer>
 
       {showPrivacy && (
         <Modal title="隱私權政策" onClose={() => setShowPrivacy(false)}>
           <div style={{ fontSize: 13, color: ml, lineHeight: 1.9 }}>
-            <p style={{ marginBottom: 12 }}>最後更新：2025 年 4 月</p>
+            <p style={{ marginBottom: 12 }}>最後更新：2026 年 4 月</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>收集的資料</strong><br />本服務在您登入時會取得 Google 帳號的名稱、Email 及大頭照，僅用於識別您的帳號並顯示於介面。</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>資料儲存</strong><br />整理紀錄、照片、挑戰進度等資料儲存於 Supabase 雲端資料庫。未登入時，資料僅儲存於您的瀏覽器本機。</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>照片</strong><br />上傳的照片儲存於 Supabase Storage，僅您本人可透過帳號存取。</p>
@@ -168,7 +168,7 @@ function MemberFooter() {
       {showTerms && (
         <Modal title="使用條款" onClose={() => setShowTerms(false)}>
           <div style={{ fontSize: 13, color: ml, lineHeight: 1.9 }}>
-            <p style={{ marginBottom: 12 }}>最後更新：2025 年 4 月</p>
+            <p style={{ marginBottom: 12 }}>最後更新：2026 年 4 月</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>服務說明</strong><br />整理小幫手是免費提供的個人整理工具，功能包含整理清單、斷捨離決策輔助及每日丟一物挑戰。</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>使用規範</strong><br />本服務供個人使用，請勿用於商業用途或任何違法行為。</p>
             <p style={{ marginBottom: 0 }}><strong style={{ color: ink }}>資料責任</strong><br />請定期備份重要資料。本服務對資料遺失不承擔任何責任，建議登入以啟用雲端備份。</p>
