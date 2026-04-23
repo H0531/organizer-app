@@ -274,6 +274,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [accumulatedSecs, setAccumulatedSecs] = useState(0)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isSavingRef = useRef(false)
   // elapsedSecs：即時計算，供顯示和儲存用
   const elapsedSecs = timerRunning && startedAt !== null
     ? accumulatedSecs + Math.floor((Date.now() - startedAt) / 1000)
@@ -486,7 +487,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   }
 
   const saveLog = async () => {
-    if (!canSave) return
+    if (!canSave || isSavingRef.current) return
+    isSavingRef.current = true
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
 
     // 壓縮 → dataUrl
@@ -527,6 +529,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setTimerDone(false); setAccumulatedSecs(0); setStartedAt(null); setTimeLeft(0)
     clearDraft()  // 儲存成功後清除草稿
     setSaveFlash(true)
+    isSavingRef.current = false
     setTimeout(() => {
       setSaveFlash(false); setPage(3)
       setTimeout(() => setSavedPopupEntry(entry), 150)
