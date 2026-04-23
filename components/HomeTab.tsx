@@ -107,57 +107,41 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
       {/* 聯絡 / 錯誤回報 */}
       {showContact && (
         <Modal title="聯絡 / 錯誤回報" onClose={() => setShowContact(false)}>
-          <div style={{ fontSize: 13, color: ml, lineHeight: 1.9, marginBottom: 20 }}>
-            <p style={{ marginBottom: 12 }}>有任何問題、功能建議或錯誤回報，歡迎透過以下方式聯繫：</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-              <a href="https://www.instagram.com/i.am.ych" target="_blank" rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', textDecoration: 'none', color: ink }}>
-                <span style={{ fontSize: 18 }}>📸</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Instagram DM</div>
-                  <div style={{ fontSize: 12, color: mf }}>@i.am.ych</div>
-                </div>
-              </a>
-              <a href="https://www.threads.com/@i.am.ych" target="_blank" rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', textDecoration: 'none', color: ink }}>
-                <span style={{ fontSize: 18 }}>🧵</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Threads</div>
-                  <div style={{ fontSize: 12, color: mf }}>@i.am.ych</div>
-                </div>
-              </a>
+          <div style={{ fontSize: 13, color: ml, lineHeight: 1.7, marginBottom: 16 }}>
+            有任何問題、功能建議或發現錯誤，歡迎填寫下方表單，我們會盡快處理。
+          </div>
+          {feedbackSent ? (
+            <div style={{ background: '#EAF2EE', borderRadius: 12, padding: '20px 16px', fontSize: 14, color: '#2E6B50', textAlign: 'center', fontWeight: 500 }}>
+              ✅ 已發送，感謝您的回饋 :)
             </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: ink, marginBottom: 8 }}>快速意見回饋</div>
-            {feedbackSent ? (
-              <div style={{ background: '#EAF2EE', borderRadius: 10, padding: '14px 16px', fontSize: 13, color: '#2E6B50', textAlign: 'center' }}>
-                ✅ 感謝你的回饋！
-              </div>
-            ) : (
-              <>
-                <textarea
-                  value={feedbackText}
-                  onChange={e => setFeedbackText(e.target.value)}
-                  placeholder="描述問題或建議⋯（例如：某個按鈕點不到、希望新增某功能）"
-                  style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 100, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 10 }}
-                />
-                <button
-                  onClick={() => {
-                    if (!feedbackText.trim()) return
-                    const url = `https://www.threads.com/@i.am.ych`
-                    const text = `整理小幫手回饋：${feedbackText.trim()}`
-                    navigator.clipboard?.writeText(text).catch(() => {})
-                    window.open(url, '_blank', 'noopener')
-                    setFeedbackSent(true)
-                    setTimeout(() => { setFeedbackSent(false); setFeedbackText('') }, 3000)
-                  }}
-                  style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: feedbackText.trim() ? ink : '#C8C2B8', color: 'white', fontSize: 14, cursor: feedbackText.trim() ? 'pointer' : 'not-allowed', fontWeight: 500 }}>
-                  送出（複製並開啟 Threads）
-                </button>
-              </>
-            )}
-          </div>
+          ) : (
+            <>
+              <textarea
+                value={feedbackText}
+                onChange={e => setFeedbackText(e.target.value)}
+                placeholder="描述問題或建議⋯&#10;例如：某個按鈕點不到、希望新增某功能"
+                style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 120, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }}
+              />
+              <a
+                href={feedbackText.trim()
+                  ? `mailto:i.am.ych.0531@gmail.com?subject=${encodeURIComponent('[聯絡/錯誤回報]')}&body=${encodeURIComponent(feedbackText.trim())}`
+                  : '#'}
+                onClick={e => {
+                  if (!feedbackText.trim()) { e.preventDefault(); return }
+                  setFeedbackSent(true)
+                  setTimeout(() => { setFeedbackSent(false); setFeedbackText('') }, 4000)
+                }}
+                style={{
+                  display: 'block', width: '100%', padding: '13px', borderRadius: 10,
+                  border: 'none', background: feedbackText.trim() ? ink : '#C8C2B8',
+                  color: 'white', fontSize: 14, cursor: feedbackText.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: 500, textAlign: 'center', textDecoration: 'none',
+                  boxSizing: 'border-box',
+                }}>
+                送出
+              </a>
+            </>
+          )}
         </Modal>
       )}
     </>
