@@ -255,7 +255,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [page, setPageRaw] = useState<1 | 2 | 3>(1)
   const setPage = (p: 1 | 2 | 3) => { setPageRaw(p); saveLS(CL_PAGE_KEY, p) }
 
-  const [space, setSpace] = useState('desk')
+  const [space, setSpace] = useState('living')
   const [checked, setChecked] = useState<Record<string, boolean[]>>({})
   const [customItems, setCustomItems] = useState<Record<string, CustomItem[]>>({})
   const [newItemText, setNewItemText] = useState('')
@@ -324,7 +324,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       // 恢復整理中草稿
       const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null)
       if (draft) {
-        setSpace(draft.space)
+        setSpace(SP[draft.space] ? draft.space : 'living')
         setChecked(draft.checked)
         setBeforePhotos(draft.beforePhotos ?? [])
         setAfterPhotos(draft.afterPhotos ?? [])
