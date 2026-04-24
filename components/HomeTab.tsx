@@ -365,7 +365,7 @@ export default function HomeTab({
           </div>
           <div style={{ flexShrink: 0, width: 80 }}>
             <img
-              src="https://images.unsplash.com/photo-1501854140801-50d01698950b?w=160&q=80"
+              src="/hiking.jpg"
               alt="山徑"
               style={{ width: 80, height: 110, objectFit: 'cover', borderRadius: 10, display: 'block' }}
             />
