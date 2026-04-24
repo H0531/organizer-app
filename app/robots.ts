@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
     },
-    sitemap: 'https://organizer-app-mauve.vercel.app/sitemap.xml',
-    host: 'https://organizer-app-mauve.vercel.app',
+    sitemap: 'https://www.iamych.app/sitemap.xml',
+    host: 'https://www.iamych.app',
   }
 }
