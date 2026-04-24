@@ -304,11 +304,17 @@ export default function HomeTab({
                   <div style={{ fontSize: 10, color: ml, marginTop: 2 }}>斷捨離紀錄</div>
                 </button>
               )}
-              {challengeDays > 0 && (
+              {challengeDays > 0 ? (
                 <button onClick={() => onNavigate('challenge')} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#C4953A', fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{challengeDays}</div>
                   <div style={{ fontSize: 11, color: '#7A5E2A', marginTop: 3 }}>天挑戰打卡{challengeMode ? ` / ${challengeMode}` : ''}</div>
                   {streak > 1 && <div style={{ fontSize: 10, color: '#C4953A', marginTop: 2 }}>🔥 連續 {streak} 天</div>}
+                </button>
+              ) : (
+                <button onClick={() => onNavigate('challenge')} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ fontSize: 22, lineHeight: 1 }}>🎯</div>
+                  <div style={{ fontSize: 11, color: '#7A5E2A', marginTop: 3 }}>每日丟一物挑戰</div>
+                  <div style={{ fontSize: 10, color: '#C4953A', marginTop: 2 }}>點我開始 →</div>
                 </button>
               )}
               {hasAnyData && (
