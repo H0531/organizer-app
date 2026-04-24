@@ -224,6 +224,19 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
   const [tossPhotos, setTossPhotos] = useState<Record<string, string>>({})
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'diary'; id: string } | { type: 'declutter'; savedAt: string } | null>(null)
+  const [editingCategory, setEditingCategory] = useState<{ savedAt: string; itemIdx: number } | null>(null)
+
+  // ── 統計資料 ──────────────────────────────────────────────
+  const allItems = declutterRecords.flatMap(r => r.items)
+  const keepItems = allItems.filter(x => x.decision === 'keep')
+  const donateCount = allItems.filter(x => x.decision === 'donate').length
+  const tossCount = allItems.filter(x => x.decision === 'toss').length
+  const keepCount = keepItems.length
+  const total = allItems.length
+
+  const KEEP_CATS = ['每天會用', '偶爾會用', '捨不得丟', '備用存放', '工作學習', '小孩的']
+  const catCounts = KEEP_CATS.map(cat => ({ cat, count: keepItems.filter(x => x.category === cat).length })).filter(x => x.count > 0)
+  const uncategorizedKeep = keepItems.filter(x => !x.category)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -540,6 +553,85 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       {activeSection === 'declutter' && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄（{declutterRecords.length} 次）</div>
+
+          {/* ── 統計圖表 ── */}
+          {total > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              {/* 留送丟圓餅圖 */}
+              <div style={{ background: 'white', border: `1px solid ${bd}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: mf, marginBottom: 12, fontWeight: 500 }}>物品流向總覽</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <svg width="80" height="80" viewBox="0 0 80 80">
+                    {(() => {
+                      const data = [
+                        { value: keepCount, color: '#7A9E8A' },
+                        { value: donateCount, color: '#4285F4' },
+                        { value: tossCount, color: '#C47B5A' },
+                      ].filter(d => d.value > 0)
+                      let angle = -Math.PI / 2
+                      return data.map((d, i) => {
+                        const pct = d.value / total
+                        const startAngle = angle
+                        angle += pct * 2 * Math.PI
+                        const x1 = 40 + 36 * Math.cos(startAngle)
+                        const y1 = 40 + 36 * Math.sin(startAngle)
+                        const x2 = 40 + 36 * Math.cos(angle)
+                        const y2 = 40 + 36 * Math.sin(angle)
+                        const large = pct > 0.5 ? 1 : 0
+                        return (
+                          <path key={i}
+                            d={`M40,40 L${x1},${y1} A36,36 0 ${large},1 ${x2},${y2} Z`}
+                            fill={d.color} />
+                        )
+                      })
+                    })()}
+                    <circle cx="40" cy="40" r="20" fill={ww} />
+                    <text x="40" y="44" textAnchor="middle" fontSize="11" fill={ink} fontWeight="600">{total}件</text>
+                  </svg>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { label: '留下', count: keepCount, color: '#7A9E8A', bg: '#EAF2EE' },
+                      { label: '送出', count: donateCount, color: '#4285F4', bg: '#EEF3FE' },
+                      { label: '丟棄', count: tossCount, color: '#C47B5A', bg: '#FDF5F0' },
+                    ].map(d => (
+                      <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: ml, flex: 1 }}>{d.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: ink }}>{d.count} 件</span>
+                        <span style={{ fontSize: 11, color: mf }}>（{total > 0 ? Math.round(d.count / total * 100) : 0}%）</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 留下分類長條圖 */}
+              {keepCount > 0 && (
+                <div style={{ background: 'white', border: `1px solid ${bd}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: mf, marginBottom: 12, fontWeight: 500 }}>留下物品分類</div>
+                  {catCounts.length === 0 && uncategorizedKeep.length > 0 ? (
+                    <div style={{ fontSize: 12, color: mf }}>尚未填寫分類，可在紀錄中補填</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {catCounts.map(({ cat, count }) => (
+                        <div key={cat}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: ml, marginBottom: 3 }}>
+                            <span>{cat}</span><span>{count} 件</span>
+                          </div>
+                          <div style={{ background: bd, borderRadius: 4, height: 6 }}>
+                            <div style={{ background: sg, borderRadius: 4, height: 6, width: `${Math.round(count / keepCount * 100)}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                      {uncategorizedKeep.length > 0 && (
+                        <div style={{ fontSize: 11, color: mf, marginTop: 4 }}>未分類：{uncategorizedKeep.length} 件，可在紀錄中補填</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {declutterRecords.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>♻️</div>
@@ -593,7 +685,28 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                       }}>
                         {item.decision === 'keep' ? '✓' : item.decision === 'toss' ? '🗑' : '📦'} {item.name}
                         {item.category && <span style={{ color: mf }}> · {item.category}</span>}
-                        {item.disposeDate && <span style={{ color: mf }}> · {item.disposeDate}</span>}
+                        {item.decision === 'keep' && !item.category && (
+                          <button onClick={() => setEditingCategory({ savedAt: record.savedAt, itemIdx: j })}
+                            style={{ marginLeft: 6, fontSize: 10, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, padding: '1px 6px', cursor: 'pointer' }}>補填分類</button>
+                        )}
+                        {editingCategory?.savedAt === record.savedAt && editingCategory?.itemIdx === j && (
+                          <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {KEEP_CATS.map(cat => (
+                              <button key={cat} onClick={() => {
+                                // 更新 record 中這筆 item 的 category，透過 onDeleteDeclutter 的反向操作無法直接改，用 localStorage 直接寫
+                                const key = Object.keys(localStorage).find(k => k.startsWith('declutter_records'))
+                                if (key) {
+                                  const records = JSON.parse(localStorage.getItem(key) || '[]')
+                                  const recIdx = records.findIndex((r: DeclutterRecord) => r.savedAt === record.savedAt)
+                                  if (recIdx >= 0) { records[recIdx].items[j].category = cat; localStorage.setItem(key, JSON.stringify(records)) }
+                                }
+                                setEditingCategory(null)
+                                window.location.reload()
+                              }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${sg}`, background: '#EAF2EE', color: '#2E6B50', cursor: 'pointer' }}>{cat}</button>
+                            ))}
+                            <button onClick={() => setEditingCategory(null)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${bd}`, background: 'white', color: mf, cursor: 'pointer' }}>取消</button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -6,16 +6,19 @@ import type { ChecklistLog } from '@/lib/types'
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
 const SP: Record<string, { label: string; items: { text: string; badge?: string }[] }> = {
-  desk:     { label: '書桌整理清單', items: [{ text: '清空桌面所有物品', badge: '必做' }, { text: '分類文件文具雜物' }, { text: '丟棄過期收據廢紙' }, { text: '文具只留常用3支筆' }, { text: '電線整理貼上標籤' }, { text: '桌面只留今日必要物品' }] },
-  wardrobe: { label: '衣櫃整理清單', items: [{ text: '全部衣物取出攤開', badge: '必做' }, { text: '依類型分堆上衣褲外套' }, { text: '超過一年未穿考慮送出' }, { text: '破損變形衣物直接淘汰' }, { text: '常穿放前方少穿放後方' }, { text: '折疊統一方式直立收納' }] },
+  living:   { label: '玄關客廳整理清單', items: [{ text: '外出用品歸位', badge: '必做' }, { text: '清查公共備品是否過多' }, { text: '影音設備線材整理綁好' }, { text: '沙發雜物清空' }, { text: '鞋櫃清查過多的鞋' }, { text: '玄關只留今日外出用品' }] },
+  bedroom:  { label: '臥室整理清單', items: [{ text: '床頭雜物清空只留睡前必用品', badge: '必做' }, { text: '床底下清查囤放物品' }, { text: '寢具確認數量只留兩套' }, { text: '個人用品歸回固定位置' }, { text: '地板淨空無散落物品' }, { text: '梳妝台只留每日使用的保養品' }] },
+  wardrobe: { label: '衣櫃整理清單', items: [{ text: '全部衣物取出攤開', badge: '必做' }, { text: '分類為上衣、褲子、外套' }, { text: '超過一年未穿考慮送出' }, { text: '破損變形衣物直接淘汰' }, { text: '常穿放前方少穿放後方' }, { text: '折疊統一方式直立收納' }] },
   kitchen:  { label: '廚房整理清單', items: [{ text: '清查過期食品與調味料', badge: '必做' }, { text: '餐具統計過多的送出' }, { text: '常用鍋具放瓦斯爐旁' }, { text: '塑膠袋只留10個' }, { text: '清潔用品集中一區' }, { text: '冰箱門背貼購物清單欄' }] },
-  bathroom: { label: '浴室整理清單', items: [{ text: '清查過期保養品藥品', badge: '必做' }, { text: '只留1套備用備品' }, { text: '毛巾超過3條斷捨離' }, { text: '瓶瓶罐罐整理到收納架' }, { text: '清除水垢黴菌' }, { text: '放一個小香氛提升儀式感' }] },
+  study:    { label: '書房整理清單', items: [{ text: '清空桌面所有物品', badge: '必做' }, { text: '分類文件文具雜物' }, { text: '丟棄過期收據廢紙' }, { text: '書籍只留會再翻的' }, { text: '電線整理貼上標籤' }, { text: '桌面只留今日必要物品' }] },
+  bathroom: { label: '浴室整理清單', items: [{ text: '清查過期保養品藥品', badge: '必做' }, { text: '只留1套備用備品' }, { text: '毛巾超過3條斷捨離' }, { text: '瓶瓶罐罐整理到收納架' }, { text: '清除水垢黴菌' }, { text: '確認每樣物品有固定位置' }] },
+  storage:  { label: '儲藏室整理清單', items: [{ text: '清查超過一年未動的物品', badge: '必做' }, { text: '依類型分區工具備品季節物品' }, { text: '過期囤貨直接丟棄' }, { text: '箱子貼標籤標明內容物' }, { text: '清出走道保持通道順暢' }, { text: '只留有明確用途的物品' }] },
   bag:      { label: '包包整理清單', items: [{ text: '倒出所有東西', badge: '必做' }, { text: '丟棄發票廢紙屑' }, { text: '零錢集中到錢包' }, { text: '超過3個購物袋只留一個' }, { text: '藥品確認是否過期' }, { text: '常用物品分區放小包' }] },
   digital:  { label: '數位整理清單', items: [{ text: '截圖資料夾整理或刪除', badge: '必做' }, { text: '手機App超過3頁刪一輪' }, { text: '相簿備份到雲端' }, { text: '訂閱email取消不需要的' }, { text: '桌面資料夾分類命名' }, { text: '清除瀏覽器書籤' }] },
 }
-const SI: Record<string, string> = { desk: '🗂', wardrobe: '👕', kitchen: '🍳', bathroom: '🪥', bag: '👜', digital: '📱' }
-const SN: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen: '廚房', bathroom: '浴室', bag: '包包', digital: '數位' }
-const SE: Record<string, string> = { desk: '20–40 分鐘', wardrobe: '60–90 分鐘', kitchen: '45–60 分鐘', bathroom: '20–30 分鐘', bag: '10–20 分鐘', digital: '30–60 分鐘' }
+const SI: Record<string, string> = { living: '🛋', bedroom: '🛏', wardrobe: '👕', kitchen: '🍳', study: '📚', bathroom: '🪥', storage: '📦', bag: '👜', digital: '📱' }
+const SN: Record<string, string> = { living: '玄關客廳', bedroom: '臥室', wardrobe: '衣櫃', kitchen: '廚房', study: '書房', bathroom: '浴室', storage: '儲藏室', bag: '包包', digital: '數位' }
+const SE: Record<string, string> = { living: '20–40 分鐘', bedroom: '30–60 分鐘', wardrobe: '60–90 分鐘', kitchen: '45–60 分鐘', study: '30–50 分鐘', bathroom: '20–30 分鐘', storage: '60–120 分鐘', bag: '10–20 分鐘', digital: '30–60 分鐘' }
 
 const PRESET_MINS = [10, 30, 60, 90, 120]
 const MAX_PHOTOS = 5

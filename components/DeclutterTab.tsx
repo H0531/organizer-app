@@ -4,15 +4,17 @@ import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage,
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
-const KEEP_CATS = ['日常用品', '季節性', '紀念品', '備用品', '工作用品']
+const KEEP_CATS = ['每天會用', '偶爾會用', '捨不得丟', '備用存放', '工作學習', '小孩的']
 const DRAFT_KEY = 'declutter_draft'
 const STAGE_KEY = 'declutter_stage'
 
 // ── 擴充快速輸入，分類顯示 ───────────────────────────────────
 const QUICK_ITEM_GROUPS: { label: string; items: string[] }[] = [
-  { label: '衣物配件', items: ['衣服', '鞋子', '包包', '配飾'] },
-  { label: '3C 用品', items: ['手機充電線', '電子產品', '耳機', '舊手機'] },
-  { label: '生活雜物', items: ['重複備品', '過期食品', '書籍', '文件紙張', '玩具', '餐具', '彩妝品', '保養品'] },
+  { label: '衣物配件', items: ['衣服', '鞋子', '包包', '配飾', '寢具'] },
+  { label: '廚房用品', items: ['餐具', '鍋具', '食品調味料', '備用塑膠袋', '清潔用品'] },
+  { label: '書房文具', items: ['書籍', '文件紙張', '文具', '辦公用品'] },
+  { label: '3C 用品', items: ['手機充電線', '耳機', '舊手機', '電子產品'] },
+  { label: '生活雜物', items: ['重複備品', '彩妝品', '保養品', '藥品', '玩具', '紀念品'] },
 ]
 
 const todayStr = () => {
