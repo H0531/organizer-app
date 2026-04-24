@@ -275,6 +275,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isSavingRef = useRef(false)
+  const timerSectionRef = useRef<HTMLDivElement>(null)
   // elapsedSecs：即時計算，供顯示和儲存用
   const elapsedSecs = timerRunning && startedAt !== null
     ? accumulatedSecs + Math.floor((Date.now() - startedAt) / 1000)
@@ -479,6 +480,10 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setTimerDone(false)
     setTimerRunning(true)
     setPage(2)
+    // 進入整理中頁面後，捲動到計時器位置
+    setTimeout(() => {
+      timerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
     saveLS(CL_DRAFT_KEY, {
       space, checked, beforePhotos, afterPhotos: [],
       skipBefore, skipAfter: false, note: '',
@@ -789,7 +794,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       <PageDots page={2} />
 
       {/* 計時器 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center' }}>
+      <div ref={timerSectionRef} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: 24, marginBottom: 16, textAlign: 'center' }}>
         <div style={{ position: 'relative', width: 130, height: 130, margin: '0 auto 12px' }}>
           <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="65" cy="65" r="54" fill="none" stroke={cr} strokeWidth="9" />

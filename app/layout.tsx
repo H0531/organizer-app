@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const BASE_URL = "https://organizer-app-mauve.vercel.app";
+const BASE_URL = "https://iamych.app";
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID; // e.g. G-XXXXXXXXXX
 
 export const metadata: Metadata = {

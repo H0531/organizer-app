@@ -168,7 +168,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         setSyncing(true)
         try {
           const remote = await sbLoadChallengeData(userId)
-          if (remote) {
+          if (remote && (remote.mode !== null || (remote.entries as TossEntry[]).length > 0)) {
             loadedMode = remote.mode as ChallengeMode | null
             loadedEntries = remote.entries as TossEntry[]
           }
