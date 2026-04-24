@@ -119,7 +119,7 @@ function MemberFooter() {
       <footer style={{ marginTop: 32, borderTop: `1px solid ${bd}`, paddingTop: 24, paddingBottom: 8 }}>
         {/* 品牌 Logo + 標題 */}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <img src="/logo.png" alt="H 的收整沙龍" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', background: '#1e2130', marginBottom: 10 }} />
+          <img src="/logo.png" alt="H 的收整沙龍" style={{ width: 48, height: 48, objectFit: 'contain', display: 'block', margin: '0 auto 10px' }} />
           <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 15, fontWeight: 700, color: ink, marginBottom: 4 }}>
             整理<span style={{ color: sg }}>•</span>小幫手
           </div>
