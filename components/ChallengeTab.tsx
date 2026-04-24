@@ -28,9 +28,11 @@ const MEMORIAL_TEMPLATES = [
 function calcStreak(entries: TossEntry[]): number {
   if (entries.length === 0) return 0
   const today = new Date()
+  today.setHours(0, 0, 0, 0)
   let streak = 0
   for (let i = entries.length - 1; i >= 0; i--) {
     const entryDate = new Date(entries[i].date.replace(/\//g, '-'))
+    entryDate.setHours(0, 0, 0, 0)
     const diff = Math.round((today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
     if (diff === streak) {
       streak++
@@ -209,7 +211,8 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     }
   }
 
-  const today = new Date().toLocaleDateString('zh-TW')
+  const _d = new Date()
+  const today = `${_d.getFullYear()}/${String(_d.getMonth() + 1).padStart(2, '0')}/${String(_d.getDate()).padStart(2, '0')}`
   const currentDay = entries.length + 1
   const todayDone = entries[entries.length - 1]?.date === today
   const challengeDone = mode !== null && entries.length >= mode
