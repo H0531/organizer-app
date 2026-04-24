@@ -93,17 +93,17 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   return (
     <>
       <footer style={{ marginTop: 32, borderTop: `1px solid ${bd}`, paddingTop: 24, paddingBottom: 8 }}>
-        {/* 品牌 */}
+        {/* 品牌 Logo + 標題 */}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <img src="/logo.png" alt="H 的收整沙龍" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', background: '#1e2130', marginBottom: 10 }} />
           <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 15, fontWeight: 700, color: ink, marginBottom: 4 }}>
             整理<span style={{ color: sg }}>•</span>小幫手
           </div>
           <div style={{ fontSize: 11, color: mf }}>H 的收整沙龍 · 調整心情，安置物品，享受空間</div>
         </div>
 
-        {/* 品牌 Logo + 社群連結 */}
+        {/* 社群連結 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <img src="/logo.png" alt="H 的收整沙龍" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', background: '#1e2130' }} />
           <div style={{ display: 'flex', gap: 10 }}>
             <a href="https://www.instagram.com/i.am.ych?igsh=ZWd5M3EwMGxsZ3E%3D&utm_source=qr" target="_blank" rel="noopener noreferrer"
               style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 20, border: `1px solid ${bd}`, background: 'white', textDecoration: 'none', fontSize: 12, color: ink }}>
