@@ -111,7 +111,7 @@ export default function Home() {
     if (urlTab && TABS.find(t => t.id === urlTab)) {
       setTab(urlTab)
       sessionStorage.setItem(TAB_KEY, urlTab)
-      window.history.replaceState({}, '', '/')
+      // 保留 ?tab= 在網址，讓 GA 追蹤到正確頁面，不再 replaceState 掉
     } else {
       const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
       if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
@@ -129,6 +129,9 @@ export default function Home() {
   const handleTabChange = useCallback((newTab: AppTab) => {
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
+    // 把 tab 寫進網址，讓 GA 能追蹤各功能頁使用狀況
+    const url = newTab === 'home' ? '/' : `/?tab=${newTab}`
+    window.history.pushState({}, '', url)
     requestAnimationFrame(() => {
       window.scrollTo(0, 0)
       document.documentElement.scrollTop = 0
@@ -279,11 +282,6 @@ export default function Home() {
           />
         )}
 
-        {/* ✅ RecommendTab：新增 fromSpace prop（可選）
-            日後若要從 ChecklistTab 完成後自動帶入空間類型，
-            可透過 sessionStorage 傳遞，例：
-            sessionStorage.setItem('recommend_space', 'wardrobe')
-            然後在這裡讀取並傳入。目前預設讀取。 */}
         {tab === 'recommend' && (
           <RecommendTab
             key="recommend"
@@ -295,7 +293,6 @@ export default function Home() {
           />
         )}
 
-        {/* ✅ MemberTab：新增 onNavigate prop，供空狀態引導按鈕跳轉 */}
         {tab === 'member' && (
           <MemberTab
             key="member"
