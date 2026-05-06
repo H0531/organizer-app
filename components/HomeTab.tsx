@@ -181,9 +181,9 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
 // ── 新手引導評估 ─────────────────────────────────────────────
 const QUIZ_OPTIONS: { icon: string; label: string; sub: string; tab: Tab; tip: string }[] = [
-  { icon: '🗂', label: '我想整理一個空間', sub: '書桌、衣櫃、廚房…', tab: 'checklist', tip: '從整理清單開始，20 分鐘搞定一個空間' },
-  { icon: '♻️', label: '我有東西想清掉', sub: '不知留還是丟的物品', tab: 'declutter', tip: '用留／送／丟三分流決策，快速釐清' },
-  { icon: '🎯', label: '我想養成整理習慣', sub: '需要一點動力和成就感', tab: 'challenge', tip: '每天丟一件東西，7 天就能感受到空間變化' },
+  { icon: '🗂', label: '我想整理一個空間', sub: '20 分鐘搞定一個空間，逐項打勾', tab: 'checklist', tip: '從整理清單開始，20 分鐘搞定一個空間' },
+  { icon: '♻️', label: '我有東西想清掉', sub: '留／送／丟三分流，快速做決定', tab: 'declutter', tip: '用留／送／丟三分流決策，快速釐清' },
+  { icon: '🎯', label: '我想養成整理習慣', sub: '每天丟一件，7 天感受空間變化', tab: 'challenge', tip: '每天丟一件東西，7 天就能感受到空間變化' },
 ]
 
 function OnboardingQuiz({ onNavigate }: { onNavigate: (t: Tab) => void }) {
@@ -265,7 +265,10 @@ export default function HomeTab({
 
   return (
     <div>
-      {/* 登入 Banner */}
+      {/* 新手引導 - 移至最上方，讓功能入口成為第一視覺焦點 */}
+      <OnboardingQuiz onNavigate={onNavigate} />
+
+      {/* 登入 Banner - 移至功能入口下方，降低壓力 */}
       {!user && (
         <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
@@ -328,9 +331,6 @@ export default function HomeTab({
           )}
         </div>
       )}
-
-      {/* 新手引導 */}
-      <OnboardingQuiz onNavigate={onNavigate} />
 
       {/* Hero */}
       <div style={{ marginBottom: 24 }}>
