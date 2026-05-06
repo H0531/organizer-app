@@ -3,32 +3,67 @@ import { useState, useRef, useEffect } from 'react'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
-// ── 商品資料庫 ───────────────────────────────────────────────
-// comment：整理師短評（顯示於卡片底部）
-// category：商品用途分類（用於篩選標籤）
+// ── 商品資料庫（所有商品均已確認連結）────────────────────────
+// comment：整理師短評；category：商品用途（前端篩選用）
+const DAISO = 'https://shop.daiso.com.tw/pages/daiso0-61'
+
 const PD = [
-  { name: 'PP收納盒大', brand: '無印良品', w: 37, d: 26, h: 17, types: ['shelf', 'drawer', 'wardrobe'], price: 'NT$299', url: 'https://www.muji.com/tw/search/?q=PP收納盒大', category: '收納盒', comment: '疊放穩定，無印系列尺寸統一，買多不怕對不齊。' },
-  { name: 'PP收納盒中', brand: '無印良品', w: 25, d: 20, h: 14, types: ['shelf', 'drawer', 'wardrobe'], price: 'NT$199', url: 'https://www.muji.com/tw/search/?q=PP收納盒中', category: '收納盒', comment: '書架格層最常用的尺寸，建議先量格子再買。' },
-  { name: 'SAMLA透明收納箱', brand: 'IKEA', w: 57, d: 39, h: 28, types: ['under', 'shelf'], price: 'NT$299', url: 'https://www.ikea.com/tw/zh/search/?q=SAMLA', category: '收納盒', comment: '透明蓋讓你不用開箱就知道放什麼，床底首選。' },
-  { name: 'KUGGIS收納盒附蓋', brand: 'IKEA', w: 37, d: 54, h: 21, types: ['shelf', 'wardrobe', 'under'], price: 'NT$249', url: 'https://www.ikea.com/tw/zh/search/?q=KUGGIS', category: '收納盒', comment: '附蓋防塵，適合不常取用的季節性物品。' },
-  { name: '桌面整理架竹製', brand: '誠品生活', w: 28, d: 18, h: 22, types: ['shelf'], price: 'NT$680', url: 'https://www.eslite.com/search.aspx?key=桌面整理架竹製', category: '整理架', comment: '竹製質感適合書桌，文件、平板都能立放。' },
-  { name: '可疊加收納盒附蓋', brand: '無印良品', w: 34, d: 44, h: 18, types: ['shelf', 'under'], price: 'NT$350', url: 'https://www.muji.com/tw/search/?q=可疊加收納盒', category: '收納盒', comment: '可垂直疊加，整面書架統一感最強。' },
-  { name: '軟質整理盒6格', brand: 'DAISO', w: 32, d: 22, h: 10, types: ['drawer'], price: 'NT$49', url: 'https://www.daiso.com.tw/search?q=軟質整理盒', category: '分格盤', comment: '小物分類神器，文具、配件都適用。' },
-  { name: 'PP資料盒薄型', brand: '無印良品', w: 10, d: 32, h: 24, types: ['shelf', 'drawer'], price: 'NT$149', url: 'https://www.muji.com/tw/search/?q=PP資料盒薄型', category: '文件收納', comment: '直立放A4文件剛好，書架側邊的邊角空間別浪費。' },
-  { name: '抽屜分格盤(6格)', brand: 'NITORI', w: 30, d: 20, h: 6, types: ['drawer'], price: 'NT$129', url: 'https://www.nitori.com.tw/search?q=抽屜分格盤', category: '分格盤', comment: '深度淺、格子清楚，適合文具或化妝品分類。' },
-  { name: 'SKÅDIS 桌面整理盤', brand: 'IKEA', w: 36, d: 10, h: 10, types: ['drawer', 'shelf'], price: 'NT$99', url: 'https://www.ikea.com/tw/zh/search/?q=SKADIS', category: '整理架', comment: '抽屜前段或書架邊角的零碎空間很適合。' },
-  { name: 'SKUBB衣物整理盒', brand: 'IKEA', w: 44, d: 55, h: 19, types: ['wardrobe', 'under'], price: 'NT$149', url: 'https://www.ikea.com/tw/zh/search/?q=SKUBB', category: '衣物收納', comment: '衣櫃層板專用，折疊收納時整齊不塌陷。' },
-  { name: '不織布衣物收納袋', brand: 'NITORI', w: 40, d: 25, h: 30, types: ['wardrobe'], price: 'NT$199', url: 'https://www.nitori.com.tw/search?q=不織布衣物收納袋', category: '衣物收納', comment: '透氣不悶濕，棉被或換季衣物用這款。' },
-  { name: '掛式收納袋5格', brand: 'DAISO', w: 30, d: 10, h: 80, types: ['wardrobe'], price: 'NT$79', url: 'https://www.daiso.com.tw/search?q=掛式收納袋', category: '衣物收納', comment: '衣櫃門內側空間最好用，包包、配件都能掛。' },
-  { name: '真空壓縮收納袋L', brand: 'NITORI', w: 60, d: 80, h: 3, types: ['wardrobe', 'under'], price: 'NT$249', url: 'https://www.nitori.com.tw/search?q=真空壓縮收納袋', category: '衣物收納', comment: '換季棉被體積縮小一半，床底空間立刻釋放。' },
-  { name: '床下扁型收納盒', brand: 'NITORI', w: 74, d: 40, h: 14, types: ['under'], price: 'NT$450', url: 'https://www.nitori.com.tw/search?q=床下收納盒', category: '收納盒', comment: '床底高度通常 14cm 左右，買前一定要量清楚。' },
-  { name: '附輪床下收納箱', brand: 'IKEA', w: 66, d: 45, h: 17, types: ['under'], price: 'NT$349', url: 'https://www.ikea.com/tw/zh/search/?q=床下收納箱', category: '收納盒', comment: '附輪好推拉，適合需要頻繁取物的床底空間。' },
-  { name: '桌面電線收納盒', brand: 'DAISO', w: 25, d: 12, h: 8, types: ['shelf', 'drawer'], price: 'NT$49', url: 'https://www.daiso.com.tw/search?q=電線收納盒', category: '整理架', comment: '充電線、耳機等電子小物，用這個就夠了。' },
-  { name: '金屬網格文件架', brand: '無印良品', w: 10, d: 27, h: 26, types: ['shelf'], price: 'NT$390', url: 'https://www.muji.com/tw/search/?q=金屬網格文件架', category: '文件收納', comment: '雜誌、A4文件直立放，取用不需翻找。' },
+  // ── 層架 ──
+  { name: 'DRÖNA 收納盒', brand: 'IKEA', w: 33, d: 38, h: 33, types: ['shelf'], price: 'NT$169',
+    url: 'https://www.ikea.com.tw/zh/products/boxes-and-organisers/boxes-and-baskets/drona-art-70262828',
+    category: '收納盒', comment: '剛好塞滿 KALLAX 格狀層架，大布盒遮蔽雜亂視覺效果極佳。' },
+  { name: 'KUGGIS收納盒附蓋', brand: 'IKEA', w: 37, d: 54, h: 21, types: ['shelf', 'wardrobe', 'under'], price: 'NT$249',
+    url: 'https://www.ikea.com.tw/zh/products/boxes-and-organisers/boxes-and-baskets/kuggis-art-40280206',
+    category: '收納盒', comment: '附蓋防塵，適合不常取用的季節性物品。' },
+  { name: 'PP收納盒大', brand: '無印良品', w: 37, d: 26, h: 17, types: ['shelf', 'drawer', 'wardrobe'], price: 'NT$299',
+    url: 'https://shop.muji.tw/SalePage/Index/9084001',
+    category: '收納盒', comment: '疊放穩定，無印系列尺寸統一，買多不怕對不齊。' },
+  { name: 'SKÅDIS 收納壁板', brand: 'IKEA', w: 36, d: 1, h: 56, types: ['shelf'], price: 'NT$299',
+    url: 'https://www.ikea.com.tw/zh/products/wall-organisers/boards-and-wall-organisers/skadis-art-80320804',
+    category: '整理架', comment: '書桌牆面零碎空間最好用，掛鉤、盒子自由搭。' },
+  { name: '堆疊式前開收納箱', brand: 'DAISO', w: 38, d: 24, h: 44, types: ['shelf'], price: 'NT$199',
+    url: DAISO,
+    category: '收納盒', comment: '日本製斜口前掀蓋，不用搬開上層就能直接伸手拿取。' },
+
+  // ── 衣櫃 ──
+  { name: 'SKUBB衣物整理盒', brand: 'IKEA', w: 44, d: 55, h: 19, types: ['wardrobe', 'under'], price: 'NT$149',
+    url: 'https://www.ikea.com.tw/zh/products/clothes-and-shoe-organisers-and-accessories/clothes-and-shoes-organisers/skubb-art-50290361',
+    category: '衣物收納', comment: '衣櫃層板專用，折疊收納時整齊不塌陷。' },
+  { name: '衣物收納袋 RT7050 4格', brand: 'NITORI', w: 55, d: 40, h: 24, types: ['wardrobe'], price: 'NT$199',
+    url: 'https://www.nitori-net.tw/product/8490233s',
+    category: '衣物收納', comment: '透氣不織布防塵，有透明視窗不用打開就知道放什麼。' },
+  { name: '半透明衣物收納袋', brand: 'DAISO', w: 30, d: 36, h: 25, types: ['wardrobe'], price: 'NT$69',
+    url: DAISO,
+    category: '衣物收納', comment: '軟質拉鍊設計，半透明一眼看清內容物，防塵又省空間。' },
+
+  // ── 抽屜 ──
+  { name: 'SKUBB 收納盒 6件組', brand: 'IKEA', w: 44, d: 34, h: 11, types: ['drawer'], price: 'NT$199',
+    url: 'https://www.ikea.com.tw/zh/products/boxes-and-organisers/organisers/skubb-art-20428553',
+    category: '分格盒', comment: '一組含 3 種尺寸拉鍊軟格，內著、襪子、配件一次分類定位。' },
+  { name: '抽屜分格盤 15格', brand: 'NITORI', w: 30, d: 20, h: 6, types: ['drawer'], price: 'NT$129',
+    url: 'https://www.nitori-net.tw/product/8490229',
+    category: '分格盤', comment: '深度淺、格子清楚，適合文具或化妝品分類。' },
+  { name: '透明 PS 飾品收納盒', brand: 'DAISO', w: 30, d: 7, h: 2, types: ['drawer'], price: 'NT$49',
+    url: DAISO,
+    category: '分格盤', comment: '搭配絨面格放入抽屜，百元內就能拼出專櫃級手飾收納。' },
+
+  // ── 床底／沙發下 ──
+  { name: 'PÄRKLA 收納盒', brand: 'IKEA', w: 55, d: 49, h: 19, types: ['under'], price: 'NT$59',
+    url: 'https://www.ikea.com.tw/zh/products/clothes-and-shoe-organisers-and-accessories/clothes-and-shoes-organisers/parkla-art-10395384',
+    category: '收納盒', comment: '床底收納超平價首選，有拉鍊防塵，拉取省力。' },
+  { name: '雙開附輪床底收納箱', brand: 'NITORI', w: 66, d: 45, h: 17, types: ['under'], price: 'NT$349',
+    url: 'https://www.nitori-net.tw/product/8400039',
+    category: '收納盒', comment: '附輪好推拉，兩側都可開蓋，床底頻繁取物首選。' },
+  { name: 'SAMLA透明收納箱', brand: 'IKEA', w: 57, d: 39, h: 28, types: ['under', 'shelf'], price: 'NT$299',
+    url: 'https://www.ikea.com.tw/zh/products/boxes-and-organisers/boxes-and-baskets/samla-art-70180941',
+    category: '收納盒', comment: '透明蓋讓你不用開箱就知道放什麼，床底首選。' },
+  { name: '環保材質防塵收納箱', brand: 'DAISO', w: 36, d: 25, h: 24, types: ['under'], price: 'NT$99',
+    url: DAISO,
+    category: '收納盒', comment: '材質硬挺耐磨，自帶蓋防塵，挑高床架下堆疊放很穩。' },
 ]
 
 // 商品類型標籤（用於前端篩選）
-const CATEGORIES = ['全部', '收納盒', '整理架', '分格盤', '衣物收納', '文件收納']
+const CATEGORIES = ['全部', '收納盒', '整理架', '分格盤', '分格盒', '衣物收納']
 
 const SPACE_TYPES = [
   { value: 'shelf',    icon: '📚', label: '層架書架', hint: '量格子內部尺寸' },
