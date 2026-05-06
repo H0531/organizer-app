@@ -3,52 +3,46 @@ import { useState, useRef, useEffect } from 'react'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
-// ── 商品資料庫（連結均為搜尋頁 / 分類頁，永久有效）────────────────────────
-const DAISO_URL = 'https://shop.daiso.com.tw/collections/all'
-const IKEA_BOXES = 'https://www.ikea.com.tw/zh/cat/boxes-and-baskets-49861/'
-const IKEA_CLOTHES = 'https://www.ikea.com.tw/zh/cat/clothes-and-shoe-organisers-and-accessories-30314/'
-const IKEA_WALL = 'https://www.ikea.com.tw/zh/cat/wall-organisers-24985/'
-const MUJI_URL = 'https://shop.muji.tw/categories/storage'
-const NITORI_URL = 'https://www.nitori-net.tw/search/?q=收納'
+const g = (q: string) => `https://www.google.com/search?q=${encodeURIComponent(q)}`
 
 const PD = [
   // ── 層架 ──
   { name: 'DRÖNA 收納盒', brand: 'IKEA', w: 33, d: 38, h: 33, types: ['shelf'],
-    url: IKEA_BOXES, category: '收納盒', comment: '剛好塞滿 KALLAX 格狀層架，大布盒遮蔽雜亂視覺效果極佳。' },
+    url: g('IKEA DRÖNA 收納盒'), category: '收納盒', comment: '剛好塞滿 KALLAX 格狀層架，大布盒遮蔽雜亂視覺效果極佳。' },
   { name: 'KUGGIS收納盒附蓋', brand: 'IKEA', w: 37, d: 54, h: 21, types: ['shelf', 'wardrobe', 'under'],
-    url: IKEA_BOXES, category: '收納盒', comment: '附蓋防塵，適合不常取用的季節性物品。' },
+    url: g('IKEA KUGGIS 收納盒附蓋'), category: '收納盒', comment: '附蓋防塵，適合不常取用的季節性物品。' },
   { name: 'PP收納盒大', brand: '無印良品', w: 37, d: 26, h: 17, types: ['shelf', 'drawer', 'wardrobe'],
-    url: MUJI_URL, category: '收納盒', comment: '疊放穩定，無印系列尺寸統一，買多不怕對不齊。' },
+    url: g('無印良品 PP收納盒大'), category: '收納盒', comment: '疊放穩定，無印系列尺寸統一，買多不怕對不齊。' },
   { name: 'SKÅDIS 收納壁板', brand: 'IKEA', w: 36, d: 1, h: 56, types: ['shelf'],
-    url: IKEA_WALL, category: '整理架', comment: '書桌牆面零碎空間最好用，掛鉤、盒子自由搭。' },
+    url: g('IKEA SKÅDIS 收納壁板'), category: '整理架', comment: '書桌牆面零碎空間最好用，掛鉤、盒子自由搭。' },
   { name: '堆疊式前開收納箱', brand: 'DAISO', w: 38, d: 24, h: 44, types: ['shelf'],
-    url: DAISO_URL, category: '收納盒', comment: '日本製斜口前掀蓋，不用搬開上層就能直接伸手拿取。' },
+    url: g('DAISO 堆疊式前開收納箱'), category: '收納盒', comment: '日本製斜口前掀蓋，不用搬開上層就能直接伸手拿取。' },
 
   // ── 衣櫃 ──
   { name: 'SKUBB衣物整理盒', brand: 'IKEA', w: 44, d: 55, h: 19, types: ['wardrobe', 'under'],
-    url: IKEA_CLOTHES, category: '衣物收納', comment: '衣櫃層板專用，折疊收納時整齊不塌陷。' },
+    url: g('IKEA SKUBB 衣物整理盒'), category: '衣物收納', comment: '衣櫃層板專用，折疊收納時整齊不塌陷。' },
   { name: '衣物收納袋 4格', brand: 'NITORI', w: 55, d: 40, h: 24, types: ['wardrobe'],
-    url: NITORI_URL, category: '衣物收納', comment: '透氣不織布防塵，有透明視窗不用打開就知道放什麼。' },
+    url: g('NITORI 衣物收納袋 4格'), category: '衣物收納', comment: '透氣不織布防塵，有透明視窗不用打開就知道放什麼。' },
   { name: '半透明衣物收納袋', brand: 'DAISO', w: 30, d: 36, h: 25, types: ['wardrobe'],
-    url: DAISO_URL, category: '衣物收納', comment: '軟質拉鍊設計，半透明一眼看清內容物，防塵又省空間。' },
+    url: g('DAISO 半透明衣物收納袋'), category: '衣物收納', comment: '軟質拉鍊設計，半透明一眼看清內容物，防塵又省空間。' },
 
   // ── 抽屜 ──
   { name: 'SKUBB 收納盒 6件組', brand: 'IKEA', w: 44, d: 34, h: 11, types: ['drawer'],
-    url: IKEA_CLOTHES, category: '分格盒', comment: '一組含 3 種尺寸拉鍊軟格，內著、襪子、配件一次分類定位。' },
+    url: g('IKEA SKUBB 收納盒 6件組'), category: '分格盒', comment: '一組含 3 種尺寸拉鍊軟格，內著、襪子、配件一次分類定位。' },
   { name: '抽屜分格盤 15格', brand: 'NITORI', w: 30, d: 20, h: 6, types: ['drawer'],
-    url: NITORI_URL, category: '分格盤', comment: '深度淺、格子清楚，適合文具或化妝品分類。' },
+    url: g('NITORI 抽屜分格盤'), category: '分格盤', comment: '深度淺、格子清楚，適合文具或化妝品分類。' },
   { name: '透明 PS 飾品收納盒', brand: 'DAISO', w: 30, d: 7, h: 2, types: ['drawer'],
-    url: DAISO_URL, category: '分格盤', comment: '搭配絨面格放入抽屜，百元內就能拼出專櫃級手飾收納。' },
+    url: g('DAISO 透明PS飾品收納盒'), category: '分格盤', comment: '搭配絨面格放入抽屜，百元內就能拼出專櫃級手飾收納。' },
 
   // ── 床底／沙發下 ──
   { name: 'PÄRKLA 收納盒', brand: 'IKEA', w: 55, d: 49, h: 19, types: ['under'],
-    url: IKEA_CLOTHES, category: '收納盒', comment: '床底收納超平價首選，有拉鍊防塵，拉取省力。' },
+    url: g('IKEA PÄRKLA 收納盒'), category: '收納盒', comment: '床底收納超平價首選，有拉鍊防塵，拉取省力。' },
   { name: '雙開附輪床底收納箱', brand: 'NITORI', w: 66, d: 45, h: 17, types: ['under'],
-    url: NITORI_URL, category: '收納盒', comment: '附輪好推拉，兩側都可開蓋，床底頻繁取物首選。' },
+    url: g('NITORI 雙開附輪床底收納箱'), category: '收納盒', comment: '附輪好推拉，兩側都可開蓋，床底頻繁取物首選。' },
   { name: 'SAMLA透明收納箱', brand: 'IKEA', w: 57, d: 39, h: 28, types: ['under', 'shelf'],
-    url: IKEA_BOXES, category: '收納盒', comment: '透明蓋讓你不用開箱就知道放什麼，床底首選。' },
+    url: g('IKEA SAMLA 透明收納箱'), category: '收納盒', comment: '透明蓋讓你不用開箱就知道放什麼，床底首選。' },
   { name: '環保材質防塵收納箱', brand: 'DAISO', w: 36, d: 25, h: 24, types: ['under'],
-    url: DAISO_URL, category: '收納盒', comment: '材質硬挺耐磨，自帶蓋防塵，挑高床架下堆疊放很穩。' },
+    url: g('DAISO 環保材質防塵收納箱'), category: '收納盒', comment: '材質硬挺耐磨，自帶蓋防塵，挑高床架下堆疊放很穩。' },
 ]
 
 const CATEGORIES = ['全部', '收納盒', '整理架', '分格盤', '分格盒', '衣物收納']
@@ -313,7 +307,7 @@ export default function RecommendTab({ fromSpace }: { fromSpace?: string }) {
                       fontSize: 13, fontWeight: 600,
                       textDecoration: 'none',
                     }}>
-                    前往品牌官網查看 →
+                    搜尋此商品 →
                   </a>
                 </div>
               )
