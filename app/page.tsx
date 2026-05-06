@@ -130,8 +130,9 @@ export default function Home() {
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
     // 把 tab 寫進網址，讓 GA 能追蹤各功能頁使用狀況
+    // 用 replaceState 避免疊加 query string 或產生多餘 history
     const url = newTab === 'home' ? '/' : `/?tab=${newTab}`
-    window.history.pushState({}, '', url)
+    window.history.replaceState({}, '', url)
     requestAnimationFrame(() => {
       window.scrollTo(0, 0)
       document.documentElement.scrollTop = 0
