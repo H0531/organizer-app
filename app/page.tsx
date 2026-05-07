@@ -111,7 +111,7 @@ export default function Home() {
     if (urlTab && TABS.find(t => t.id === urlTab)) {
       setTab(urlTab)
       sessionStorage.setItem(TAB_KEY, urlTab)
-      window.history.replaceState({}, '', `/?tab=${urlTab}`)
+      // 保留 ?tab= 在網址，讓 GA 追蹤到正確頁面，不再 replaceState 掉
     } else {
       const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
       if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
@@ -129,10 +129,15 @@ export default function Home() {
   const handleTabChange = useCallback((newTab: AppTab) => {
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
-    // 把 tab 寫進網址，讓 GA 能追蹤各功能頁使用狀況
-    // 用 replaceState 避免疊加 query string 或產生多餘 history
     const url = newTab === 'home' ? '/' : `/?tab=${newTab}`
     window.history.replaceState({}, '', url)
+    // 手動觸發 GA page_view，因為 replaceState 不會被 Next.js router 感知
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'page_view', {
+        page_path: url,
+        page_title: newTab,
+      })
+    }
     requestAnimationFrame(() => {
       window.scrollTo(0, 0)
       document.documentElement.scrollTop = 0
