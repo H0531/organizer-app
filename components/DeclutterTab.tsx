@@ -248,6 +248,15 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
         items, tossEntries: uploadedEntries,
       }
       onSaveToMember(record)
+      // GA: 斷捨離儲存
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'declutter_saved', {
+          total_items: items.length,
+          keep_count: keepItems.length,
+          donate_count: donateItems.length,
+          toss_count: tossItems.length,
+        })
+      }
       setSaveFlash(true)
       setTimeout(() => {
         setSaveFlash(false); setJustSaved(true)
@@ -388,7 +397,18 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       )}
 
       {allDecided && (
-        <button onClick={() => setStage('review')}
+        <button onClick={() => {
+          setStage('review')
+          // GA: 進入分流
+          if (typeof window !== 'undefined' && window.gtag) {
+            window.gtag('event', 'declutter_flow_entered', {
+              total_items: items.length,
+              keep_count: keepItems.length,
+              donate_count: donateItems.length,
+              toss_count: tossItems.length,
+            })
+          }
+        }}
           style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600 }}>
           進入分流處理 →
         </button>

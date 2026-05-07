@@ -419,6 +419,10 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     const cur = type === 'before' ? beforePhotos : afterPhotos
     const set = type === 'before' ? setBeforePhotos : setAfterPhotos
     const toAdd = Array.from(files).slice(0, MAX_PHOTOS - cur.length)
+    // GA: 上傳照片
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', type === 'before' ? 'before_photo_uploaded' : 'after_photo_uploaded', { space: SN[space] })
+    }
     Promise.all(toAdd.map(f => new Promise<string>(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(f) }))).then(res => {
       const next = [...cur, ...res]
       set(next)
@@ -483,6 +487,10 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setTimerDone(false)
     setTimerRunning(true)
     setPage(2)
+    // GA: 開始整理
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'checklist_started', { space: SN[space], target_mins: effectiveMins })
+    }
     // 進入整理中頁面後，捲動到計時器位置
     setTimeout(() => {
       timerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -534,6 +542,16 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     }
     const next = [entry, ...logs]
     setLogs(next); onSaveLog(entry)
+    // GA: 整理打卡儲存
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'checklist_saved', {
+        space: SN[space],
+        has_before_photo: bp.length > 0,
+        has_after_photo: ap.length > 0,
+        has_ba_pair: bp.length > 0 && ap.length > 0,
+        duration_mins: Math.round(elapsedSecs / 60),
+      })
+    }
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)
     setChecked({ ...checked, [space]: allItems.map(() => false) })
     setTimerDone(false); setAccumulatedSecs(0); setStartedAt(null); setTimeLeft(0)

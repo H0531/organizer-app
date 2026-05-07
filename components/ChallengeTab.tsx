@@ -227,6 +227,10 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     const newEntries = [...entries, entry]
     setEntries(newEntries)
     persistData(mode, newEntries)   // ← 直接 save，不依賴 effect
+    // GA: 每日打卡
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'challenge_entry_submitted', { day: currentDay, challenge_days: mode })
+    }
     setShowForm(false)
     setFItem(''); setFOrigin(''); setFReason(''); setFFeeling('')
     const idx = Math.floor(Math.random() * MEMORIAL_TEMPLATES.length)
@@ -333,7 +337,13 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
               ⚠️ 開始後若中途中斷，需從第 1 天重新計算。請確認你已準備好每天打卡！
             </div>
             <button
-              onClick={() => { setMode(pendingMode); setPendingMode(null); persistData(pendingMode, entries) }}
+              onClick={() => {
+                setMode(pendingMode); setPendingMode(null); persistData(pendingMode, entries)
+                // GA: 開始挑戰
+                if (typeof window !== 'undefined' && window.gtag) {
+                  window.gtag('event', 'challenge_started', { days: pendingMode })
+                }
+              }}
               style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
               確認開始 {pendingMode} 天挑戰
             </button>
