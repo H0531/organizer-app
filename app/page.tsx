@@ -111,7 +111,7 @@ export default function Home() {
     if (urlTab && TABS.find(t => t.id === urlTab)) {
       setTab(urlTab)
       sessionStorage.setItem(TAB_KEY, urlTab)
-      // 保留 ?tab= 在網址，讓 GA 追蹤到正確頁面，不再 replaceState 掉
+      window.history.replaceState({}, '', `/?tab=${urlTab}`)
     } else {
       const savedTab = sessionStorage.getItem(TAB_KEY) as AppTab | null
       if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
