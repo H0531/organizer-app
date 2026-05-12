@@ -7,7 +7,7 @@ import ChallengeTab from '@/components/ChallengeTab'
 import RecommendTab from '@/components/RecommendTab'
 import MemberTab from '@/components/MemberTab'
 import type { DeclutterRecord, ChecklistLog } from '@/lib/types'
-import { loadLS, saveLS, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
+import { loadLS, saveLS, savePhoto, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
 import { getUserFromCookie, type OAuthUser } from '@/lib/auth'
 import {
   sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog,
@@ -147,6 +147,15 @@ export default function Home() {
 
   // ── 資料操作 handlers ────────────────────────────────────────
   const handleDeclutterSave = async (record: DeclutterRecord) => {
+    // 未登入：照片存 IDB，record 裡的 photo 清掉（避免塞爆 localStorage）
+    if (!user) {
+      await Promise.all(
+        record.tossEntries.map(e => {
+          if (e.photo) return savePhoto(`toss_photo_${e.id}`, e.photo)
+          return Promise.resolve()
+        })
+      )
+    }
     const recordToSave: DeclutterRecord = {
       ...record,
       tossEntries: record.tossEntries.map(e => ({ ...e, photo: undefined })),
