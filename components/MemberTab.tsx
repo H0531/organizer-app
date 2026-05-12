@@ -305,86 +305,46 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const challengeShareText = () =>
     `每日丟一物挑戰 ${challengeEntries.length}/${challengeMode} 天，達成率 ${challengePct}%！\n繼續努力中 💪\n#每日丟一物 #整理小幫手`
 
-  // ── 未登入頁 ────────────────────────────────────────────────
-  if (!user) return (
+  // ── 完整頁面（登入與未登入共用） ────────────────────────────
+  return (
     <div>
-      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>我的整理</h1>
-      <p style={{ color: ml, fontSize: 14, marginBottom: 20, lineHeight: 1.7 }}>
-        整理成果、照片和挑戰進度，登入後跨裝置都看得到。
-      </p>
+      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 16, color: ink }}>我的整理</h1>
 
+      {/* 登入錯誤提示 */}
       {authError && (
         <div style={{ background: '#FDF5F0', border: '1px solid #E8A87C', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#C47B5A' }}>
           ⚠️ 登入失敗，請再試一次
         </div>
       )}
 
-      {/* 本機成果預覽（有資料才顯示，加強登入誘因） */}
-      {(totalSessions > 0 || totalDeclutterItems > 0 || challengeDays > 0) && (
-        <div style={{ background: cr, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
-          <div style={{ fontSize: 12, color: mf, marginBottom: 10 }}>你目前已累積的整理成果</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 10 }}>
-            {[
-              { icon: '📓', value: totalSessions, unit: '次', label: '整理紀錄' },
-              { icon: '♻️', value: totalDeclutterItems, unit: '件', label: '斷捨離' },
-              { icon: '🎯', value: challengeDays, unit: '天', label: '挑戰天數' },
-            ].map(s => (
-              <div key={s.label} style={{ background: ww, borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
-                <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: sg }}>{s.value}<span style={{ fontSize: 11 }}>{s.unit}</span></div>
-                <div style={{ fontSize: 11, color: mf }}>{s.label}</div>
+      {/* 未登入：登入橫幅 */}
+      {!user && (
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: ink, marginBottom: 2 }}>登入後跨裝置保存成果</div>
+              <div style={{ fontSize: 12, color: ml, lineHeight: 1.6 }}>
+                {(totalSessions > 0 || totalDeclutterItems > 0 || challengeDays > 0)
+                  ? '⚠️ 目前資料僅存本機，清除瀏覽器或換裝置後會消失'
+                  : '整理日記、斷捨離紀錄、挑戰進度，手機和電腦都同步'}
               </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: '#C47B5A', lineHeight: 1.6 }}>
-            ⚠️ 這些資料目前只存在本機，清除瀏覽器或換裝置後會消失。登入後可永久保存。
-          </div>
-        </div>
-      )}
-
-      {/* 空狀態引導（無資料時） */}
-      {totalSessions === 0 && totalDeclutterItems === 0 && challengeDays === 0 && (
-        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '28px 24px', marginBottom: 20, textAlign: 'center' }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
-          <div style={{ fontSize: 14, color: ink, marginBottom: 6 }}>還沒有整理紀錄</div>
-          <div style={{ fontSize: 12, color: mf, marginBottom: 20, lineHeight: 1.7 }}>完成第一次整理後，成果會出現在這裡。</div>
-          {onNavigate && (
-            <button onClick={() => onNavigate('checklist')} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-              開始整理 →
+            </div>
+            <button onClick={handleGoogleLogin}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, border: '1.5px solid #DADCE0', background: 'white', cursor: 'pointer', fontSize: 13, color: '#3C4043', fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}>
+              <svg width="16" height="16" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              Google 登入
             </button>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Google 登入卡 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '32px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
-        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 8 }}>登入後跨裝置保存成果</div>
-        <div style={{ fontSize: 13, color: ml, marginBottom: 24, lineHeight: 1.7 }}>
-          整理日記、Before/After 照片、每日挑戰進度，手機和電腦都同步。
-        </div>
-        <button onClick={handleGoogleLogin}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: '100%', padding: '13px 20px', borderRadius: 10, border: '1.5px solid #DADCE0', background: 'white', cursor: 'pointer', fontSize: 15, color: '#3C4043', fontWeight: 500, marginBottom: 16 }}>
-          <svg width="20" height="20" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          使用 Google 登入
-        </button>
-        <div style={{ fontSize: 12, color: mf }}>登入即表示同意儲存您的基本資料（姓名、Email）</div>
-      </div>
-    </div>
-  )
-
-  // ── 已登入頁 ────────────────────────────────────────────────
-  return (
-    <div>
-      <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 20, color: ink }}>我的整理</h1>
-
-      {/* 使用者資訊卡 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '20px 24px', marginBottom: 16 }}>
+      {/* 使用者資訊卡（登入後才顯示） */}
+      {user && <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           {user.picture
             ? <img src={user.picture} alt="" style={{ width: 56, height: 56, borderRadius: '50%', border: `2px solid ${sg}` }} />
@@ -434,7 +394,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             </a>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* 成就大數字區 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
