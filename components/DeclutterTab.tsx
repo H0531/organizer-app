@@ -44,6 +44,25 @@ function readFile(file: File): Promise<string> {
   return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(file) })
 }
 
+function rotateImage(dataUrl: string, deg: 90 | -90): Promise<string> {
+  return new Promise(res => {
+    const img = new Image()
+    img.onload = () => {
+      const swap = deg === 90 || deg === -90
+      const w = swap ? img.height : img.width
+      const h = swap ? img.width : img.height
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.translate(w / 2, h / 2)
+      ctx.rotate((deg * Math.PI) / 180)
+      ctx.drawImage(img, -img.width / 2, -img.height / 2)
+      res(canvas.toDataURL('image/jpeg', 0.88))
+    }
+    img.src = dataUrl
+  })
+}
+
 // ── 單張照片上傳 ─────────────────────────────────────────────
 function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p: string | undefined) => void; label: string }) {
   const ref = useRef<HTMLInputElement>(null)
@@ -51,10 +70,19 @@ function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p:
     <div style={{ marginTop: 10 }}>
       <div style={{ fontSize: 12, color: mf, marginBottom: 6 }}>{label}（可略）</div>
       {photo ? (
-        <div style={{ position: 'relative', display: 'inline-block' }}>
-          <img src={photo} alt="" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8, border: `1.5px solid ${sg}`, display: 'block' }} />
-          <button onClick={() => onChange(undefined)} style={{ position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%', background: '#777', color: 'white', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-          <button onClick={() => ref.current?.click()} style={{ display: 'block', width: '100%', marginTop: 4, fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textAlign: 'left' }}>更換照片</button>
+        <div>
+          <div style={{ position: 'relative', background: '#1a1a1a', borderRadius: 8, border: `1.5px solid ${sg}`, overflow: 'hidden', width: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={photo} alt="" style={{ width: 160, height: 'auto', maxHeight: 160, objectFit: 'contain', display: 'block' }} />
+            <button onClick={() => onChange(undefined)} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', color: 'white', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <button onClick={async () => onChange(await rotateImage(photo, -90))}
+              style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>↺ 逆時針</button>
+            <button onClick={async () => onChange(await rotateImage(photo, 90))}
+              style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>↻ 順時針</button>
+            <button onClick={() => ref.current?.click()}
+              style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bd}`, background: 'white', color: sg, fontSize: 12, cursor: 'pointer' }}>更換</button>
+          </div>
         </div>
       ) : (
         <button onClick={() => ref.current?.click()} style={{ padding: '7px 14px', border: `1px dashed ${bd}`, borderRadius: 8, background: 'white', color: mf, cursor: 'pointer', fontSize: 12 }}>
@@ -84,7 +112,7 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>分享告別文</div>
         <div style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
           <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 6 }}>{entry.name}</div>
-          {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
+          {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 8, marginBottom: 10, display: 'block' }} />}
           {entry.memo && <div style={{ fontSize: 13, color: ml, lineHeight: 1.8, whiteSpace: 'pre-line', marginBottom: 8 }}>{entry.memo}</div>}
           <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #斷捨離</div>
         </div>
@@ -525,7 +553,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                     </button>
                   </div>
                   {donateMemos[item.id] && <div style={{ fontSize: 12, color: mf, marginTop: 3 }}>{donateMemos[item.id]}</div>}
-                  {donatePhotos[item.id] && <img src={donatePhotos[item.id]} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, marginTop: 6, border: `1px solid ${bd}` }} />}
+                  {donatePhotos[item.id] && <img src={donatePhotos[item.id]} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, marginTop: 6, border: `1px solid ${bd}` }} />}
                 </div>
                 <button onClick={() => removeItem(item.id)} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>刪除</button>
               </div>
@@ -569,7 +597,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                     ) : (
                       <>
                         {entry?.memo && <p style={{ fontSize: 12, color: mf, margin: '0 0 4px', lineHeight: 1.6 }}>{entry.memo}</p>}
-                        {entry?.photo && <img src={entry.photo} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: `1px solid ${bd}` }} />}
+                        {entry?.photo && <img src={entry.photo} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `1px solid ${bd}` }} />}
                         {!entry && <span style={{ fontSize: 12, color: mf }}>點「編輯」寫告別文（可略）</span>}
                       </>
                     )}
@@ -764,7 +792,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
             </div>
           ) : (
             <>
-              {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 8, marginBottom: 8 }} />}
+              {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 8, marginBottom: 8, display: 'block' }} />}
               <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: 0 }}>{entry.memo || '（未寫告別文）'}</p>
             </>
           )}

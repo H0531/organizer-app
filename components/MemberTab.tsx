@@ -495,10 +495,10 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                   {(log.beforePhotos?.length > 0 || log.afterPhotos?.length > 0) && (
                     <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                       {log.beforePhotos?.map((p, idx) => (
-                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: `1px solid ${bd}` }} />
+                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `1px solid ${bd}` }} />
                       ))}
                       {log.afterPhotos?.map((p, idx) => (
-                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: `2px solid ${sg}` }} />
+                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `2px solid ${sg}` }} />
                       ))}
                     </div>
                   )}
@@ -679,7 +679,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                             <div style={{ flex: 1 }}>
                               <strong>{e.name}</strong>
                               {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
-                              {tossPhotos[e.id] && <img src={tossPhotos[e.id]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 6, marginTop: 8 }} />}
+                              {tossPhotos[e.id] && <img src={tossPhotos[e.id]} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 6, marginTop: 8, display: 'block' }} />}
                             </div>
                             <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: !isIOSChrome(), photo: isIOSChrome() ? undefined : tossPhotos[e.id] })}
                               style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>分享</button>
