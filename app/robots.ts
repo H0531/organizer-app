@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
     },
-    sitemap: 'https://www.iamych.app/sitemap.xml',
-    host: 'https://www.iamych.app',
+    sitemap: 'https://iamych.app/sitemap.xml',
+    host: 'https://iamych.app',
   }
 }
