@@ -181,9 +181,9 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
 // ── 新手引導評估 ─────────────────────────────────────────────
 const QUIZ_OPTIONS: { icon: string; label: string; sub: string; tab: Tab; tip: string }[] = [
-  { icon: '🗂', label: '我想整理一個空間', sub: '20 分鐘搞定一個空間，逐項打勾', tab: 'checklist', tip: '從整理清單開始，20 分鐘搞定一個空間' },
-  { icon: '♻️', label: '我有東西想清掉', sub: '留／送／丟三分流，快速做決定', tab: 'declutter', tip: '用留／送／丟三分流決策，快速釐清' },
-  { icon: '🎯', label: '我想養成整理習慣', sub: '每天丟一件，7 天感受空間變化', tab: 'challenge', tip: '每天丟一件東西，7 天就能感受到空間變化' },
+  { icon: '🗂', label: '我想整理一個空間', sub: '從一個小空間開始，20 分鐘就好。', tab: 'checklist', tip: '從整理清單開始，20 分鐘搞定一個空間' },
+  { icon: '♻️', label: '我有東西想清掉', sub: '留、送、丟，一件一件做決定。', tab: 'declutter', tip: '用留／送／丟三分流決策，快速釐清' },
+  { icon: '🎯', label: '我想養成整理習慣', sub: '每天 5 分鐘，慢慢建立整理習慣。', tab: 'challenge', tip: '每天丟一件東西，7 天就能感受到空間變化' },
 ]
 
 function OnboardingQuiz({ onNavigate }: { onNavigate: (t: Tab) => void }) {
@@ -265,12 +265,68 @@ export default function HomeTab({
 
   return (
     <div>
-      {/* 新手引導 - 移至最上方，讓功能入口成為第一視覺焦點 */}
+      {/* Hero */}
+      <div style={{ marginBottom: 24 }}>
+        <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>H 的收整沙龍｜整理小幫手</p>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 24, fontWeight: 700, color: ink, lineHeight: 1.5, marginBottom: 14 }}>
+          不需要一次整理完，只要先開始一點點。
+        </h1>
+        <p style={{ fontSize: 14, color: ml, lineHeight: 1.8, marginBottom: 0 }}>
+          把整理拆成簡單的小任務，從一個小空間開始，今天完成一點就很好。
+        </p>
+      </div>
+
+      {/* 三入口 - 首頁最主要的 CTA */}
       <OnboardingQuiz onNavigate={onNavigate} />
 
-      {/* 登入 Banner - 移至功能入口下方，降低壓力 */}
+      {/* 新手提示 - 輕量版，取代原本的大型「新手必讀」清單 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 18px', marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: ink, marginBottom: 6 }}>💡 第一次整理？從小地方開始。</div>
+        <p style={{ fontSize: 12, color: ml, lineHeight: 1.7, marginBottom: 8 }}>
+          不用一次整理整個房間，先選一個小空間，花 20 分鐘完成一點就好。
+        </p>
+        <p style={{ fontSize: 12, color: mf, lineHeight: 1.7, marginBottom: 0 }}>
+          先整理，再決定要不要買收納品。
+        </p>
+      </div>
+
+      {/* Features - 降低資訊密度，移除步驟列表 */}
+      {[
+        {
+          icon: '🗂', tab: 'checklist' as Tab, title: '空間整理', time: '20–90 分鐘',
+          desc: '把整理拆成小任務，設定時間、完成打卡，留下整理成果。',
+        },
+        {
+          icon: '♻️', tab: 'declutter' as Tab, title: '斷捨離決策', time: '10–30 分鐘',
+          desc: '留、送、丟，逐件處理不再需要的物品。',
+        },
+        {
+          icon: '🎯', tab: 'challenge' as Tab, title: '每日丟一物', time: '每天 5 分鐘',
+          desc: '每天花 5 分鐘，讓整理慢慢變成習慣。',
+        },
+        {
+          icon: '📦', tab: 'recommend' as Tab, title: '收納品推薦', time: '5 分鐘',
+          desc: '量好空間尺寸，再找真正適合的收納方式。',
+        },
+      ].map((f, idx) => (
+        <div key={idx} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '18px 20px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{f.icon}</span>
+              <div style={{ fontSize: 14, fontWeight: 600, color: ink }}><NavLink target={f.tab}>{f.title}</NavLink></div>
+            </div>
+            <span style={{ fontSize: 11, color: mf, background: cr, padding: '3px 10px', borderRadius: 20, flexShrink: 0 }}>⏱ {f.time}</span>
+          </div>
+          <p style={{ fontSize: 13, color: ml, lineHeight: 1.8, marginBottom: 12 }}>{f.desc}</p>
+          <button onClick={() => onNavigate(f.tab)} style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${sg}`, background: 'white', color: sg, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+            開始 {f.title} →
+          </button>
+        </div>
+      ))}
+
+      {/* 登入 Banner / 已登入統計 - 移到四大功能之後 */}
       {!user && (
-        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '14px 18px', marginTop: 8, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 2 }}>跨裝置保存你的整理成果</div>
             <div style={{ fontSize: 12, color: ml, lineHeight: 1.6 }}>登入後，紀錄、照片、挑戰進度在手機和電腦都看得到。</div>
@@ -280,7 +336,7 @@ export default function HomeTab({
       )}
 
       {user && (
-        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '18px 20px', marginTop: 8, marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: hasAnyData ? 16 : 0 }}>
             {user.picture
               ? <img src={user.picture} alt="" style={{ width: 34, height: 34, borderRadius: '50%', border: `1.5px solid ${sg}`, flexShrink: 0 }} />
@@ -332,21 +388,11 @@ export default function HomeTab({
         </div>
       )}
 
-      {/* Hero */}
-      <div style={{ marginBottom: 24 }}>
-        <p style={{ fontSize: 13, color: mf, letterSpacing: '0.1em', marginBottom: 10 }}>H 的收整沙龍</p>
-        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 24, fontWeight: 700, color: ink, lineHeight: 1.5, marginBottom: 14 }}>
-          調整心情，安置物品，享受空間──
-        </h1>
-        <p style={{ fontSize: 14, color: ml, lineHeight: 1.8, marginBottom: 0 }}>
-          我是 24 小時伴你左右的整理小幫手，<br />有我陪你，一起整理。
-        </p>
-      </div>
-
-      {/* 關於 H */}
+      {/* 為什麼會有整理小幫手？（原「關於 H」） */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '22px 20px', marginBottom: 14, overflow: 'hidden' }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 10 }}>為什麼會有整理小幫手？</div>
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 15, fontWeight: 700, color: ink, marginBottom: 12, lineHeight: 1.5 }}>
               整理，不需要完美，<br />只需要開始
             </div>
@@ -372,72 +418,6 @@ export default function HomeTab({
           </div>
         </div>
       </div>
-
-      {/* 整理建議 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '22px 24px', marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>新手必讀 · 整理建議</div>
-        {[
-          ['從最小的空間開始', '第一次建議從「包包」開始，20 分鐘內就能完成，成功感很重要。'],
-          ['一次只整理一個空間', '整理完才算完成，別中途跑去整理別的地方。'],
-          ['先整理再買收納品', '斷捨離後才知道真正需要收納多少東西，避免買錯。'],
-          ['每日丟一物從小開始', '第一天可以從壞掉的東西或重複備品開始，不需要捨棄珍貴的物品。'],
-          ['固定一個整理日', '每週固定一個空間，一個月輪完六個空間一次。'],
-        ].map(([t, d], i, arr) => (
-          <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${cr}` : 'none' }}>
-            <span style={{ color: sg, flexShrink: 0, marginTop: 2 }}>✦</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: ink, marginBottom: 2 }}>{t}</div>
-              <div style={{ fontSize: 12, color: ml }}>{d}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Features */}
-      {[
-        {
-          icon: '🗂', tab: 'checklist' as Tab, title: '整理清單', time: '20–90 分鐘',
-          desc: '選空間、設計時器、逐項打勾，完成後拍 Before / After 對比照、記打卡日記，並可排進行事曆。',
-          steps: ['選擇今天要整理的空間', '（可選）拍整理前照片，支援裁切旋轉', '開始倒數計時，逐項打勾', '整理後拍照、寫日記，按儲存打卡', '預約下次整理會顯示在最上方'],
-        },
-        {
-          icon: '♻️', tab: 'declutter' as Tab, title: '斷捨離決策', time: '10–30 分鐘',
-          desc: '把物品逐一加入清單，標記「留」「送」「丟」後進入三條分流：留下指定分類、送出設定行事曆提醒、丟棄可寫告別紀念文。',
-          steps: ['新增物品並標記留／送／丟', '全部完成後按「進入分流」', '留 → 指定收納分類', '送 → 選日期加入行事曆提醒', '丟 → 寫告別紀念文（可略）', '按儲存紀錄，在會員頁查看明細'],
-        },
-        {
-          icon: '🎯', tab: 'challenge' as Tab, title: '每日丟一物挑戰', time: '每天 5 分鐘',
-          desc: '選擇 7、30、60 或 100 天挑戰，每天放手一件東西，記錄故事，系統生成告別紀念文可分享到社群。',
-          steps: ['選擇挑戰天數（建議新手從 7 天開始）', '每天記錄一件物品的故事', '系統生成 3 種告別紀念文', '達成里程碑可分享，進度自動保存'],
-        },
-        {
-          icon: '📦', tab: 'recommend' as Tab, title: '收納品推薦', time: '5 分鐘',
-          desc: '整理完後不知道買什麼收納品？輸入空間尺寸，自動推薦尺寸合適的商品（資料庫持續更新中）。',
-          steps: ['選擇空間類型', '輸入寬 × 深 × 高（公分）', '查看推薦商品，綠色「完美符合」優先'],
-        },
-      ].map((f, idx) => (
-        <div key={idx} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '22px 24px', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>{f.icon}</span>
-              <div style={{ fontSize: 14, fontWeight: 600, color: ink }}><NavLink target={f.tab}>{f.title}</NavLink></div>
-            </div>
-            <span style={{ fontSize: 11, color: mf, background: cr, padding: '3px 10px', borderRadius: 20, flexShrink: 0 }}>⏱ {f.time}</span>
-          </div>
-          <p style={{ fontSize: 13, color: ml, lineHeight: 1.8, marginBottom: 14 }}>{f.desc}</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {f.steps.map((step, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0', borderTop: i > 0 ? `1px solid ${cr}` : 'none' }}>
-                <span style={{ width: 18, height: 18, borderRadius: '50%', background: sg, color: 'white', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>{i + 1}</span>
-                <span style={{ fontSize: 13, color: ink, lineHeight: 1.6 }}>{step}</span>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => onNavigate(f.tab)} style={{ marginTop: 14, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${sg}`, background: 'white', color: sg, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
-            開始 {f.title} →
-          </button>
-        </div>
-      ))}
 
       {/* FAQ */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '22px 24px', marginBottom: 0 }}>
