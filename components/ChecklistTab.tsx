@@ -255,7 +255,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [page, setPageRaw] = useState<1 | 2 | 3>(1)
   const setPage = (p: 1 | 2 | 3) => { setPageRaw(p); saveLS(CL_PAGE_KEY, p) }
 
-  const [space, setSpace] = useState('living')
+  const [space, setSpace] = useState('bag')
   const [checked, setChecked] = useState<Record<string, boolean[]>>({})
   const [customItems, setCustomItems] = useState<Record<string, CustomItem[]>>({})
   const [newItemText, setNewItemText] = useState('')
@@ -263,11 +263,11 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
 
   const [beforePhotos, setBeforePhotos] = useState<PhotoSet>([])
   const [afterPhotos, setAfterPhotos] = useState<PhotoSet>([])
-  const [skipBefore, setSkipBefore] = useState(false)
+  const [skipBefore, setSkipBefore] = useState(true)
   const [skipAfter, setSkipAfter] = useState(false)
   const [editingPhoto, setEditingPhoto] = useState<{ type: 'before' | 'after'; index: number; src: string } | null>(null)
 
-  const [targetMins, setTargetMins] = useState(30)
+  const [targetMins, setTargetMins] = useState(10)
   const [customMins, setCustomMins] = useState('')
   const [useCustom, setUseCustom] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
@@ -752,19 +752,19 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         <div style={{ fontSize: 12, color: mf, marginTop: 6 }}>已設定：<strong style={{ color: ink }}>{effectiveMins} 分鐘</strong></div>
       </div>
 
+      <button onClick={startTimer} disabled={!beforeReady}
+        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: beforeReady ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: beforeReady ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
+        {beforeReady ? '開始整理 ▶' : '請先處理整理前照片'}
+      </button>
+
       {/* 預約行事曆 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 20 }}>
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginTop: 16, marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 8 }}>📅 預約整理時間</div>
         <div style={{ fontSize: 13, color: ml, marginBottom: 14, lineHeight: 1.6 }}>選好日期時間，下載行事曆加入手機。預約時的空間選擇、整理前照片都會一起儲存，當天可直接從預約清單開始整理。</div>
         <button onClick={() => setShowCalModal(true)} style={{ padding: '9px 18px', border: '1.5px solid #4285F4', borderRadius: 8, background: 'white', color: '#4285F4', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
           📅 預約並加入行事曆
         </button>
       </div>
-
-      <button onClick={startTimer} disabled={!beforeReady}
-        style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: beforeReady ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: beforeReady ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
-        {beforeReady ? '開始整理 ▶' : '請先處理整理前照片'}
-      </button>
 
       {showCalModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
