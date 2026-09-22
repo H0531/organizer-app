@@ -13,6 +13,7 @@ import {
   sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog,
   sbLoadDeclutterRecords, sbSaveDeclutterRecord, sbDeleteDeclutterRecord,
 } from '@/lib/supabase'
+import { uploadPhoto } from '@/lib/photos'
 
 export type AppTab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
@@ -77,15 +78,109 @@ export default function Home() {
   const [loading, setLoading]                   = useState(false)
   const [toast, setToast]                       = useState<{ message: string; type: ToastType } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 同一次登入生命週期（同一次 mount）只執行一次 guest→cloud migration，
+  // 避免 page.tsx 初始化流程與 MemberTab.tsx 的 auth=success 流程同時觸發兩次
+  const migratedEmailsRef = useRef<Set<string>>(new Set())
 
   const showToast = useCallback((message: string, type: ToastType = 'error') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast({ message, type })
   }, [])
 
+  // Guest LocalStorage 資料 → 登入後 migration 至該 email 的 Supabase
+  // 只處理 checklist_logs 與 declutter_records（不處理 challenge_data）
+  const migrateGuestData = useCallback(async (u: OAuthUser) => {
+    // ── checklist_logs ──
+    const guestLogsRaw = localStorage.getItem(LS_CHECKLIST_LOGS)
+    if (guestLogsRaw) {
+      try {
+        const guestLogs = JSON.parse(guestLogsRaw) as ChecklistLog[]
+        if (Array.isArray(guestLogs) && guestLogs.length > 0) {
+          let allOk = true
+          for (const log of guestLogs) {
+            try {
+              const migratedBefore: string[] = []
+              for (let i = 0; i < log.beforePhotos.length; i++) {
+                const src = log.beforePhotos[i]
+                if (src && src.startsWith('data:')) {
+                  const url = await uploadPhoto(u.email, `checklist_${log.id}_before_${i}`, src)
+                  if (!url) { allOk = false; break }
+                  migratedBefore.push(url)
+                } else {
+                  migratedBefore.push(src)
+                }
+              }
+              if (!allOk) break
+
+              const migratedAfter: string[] = []
+              for (let i = 0; i < log.afterPhotos.length; i++) {
+                const src = log.afterPhotos[i]
+                if (src && src.startsWith('data:')) {
+                  const url = await uploadPhoto(u.email, `checklist_${log.id}_after_${i}`, src)
+                  if (!url) { allOk = false; break }
+                  migratedAfter.push(url)
+                } else {
+                  migratedAfter.push(src)
+                }
+              }
+              if (!allOk) break
+
+              const migratedLog: ChecklistLog = { ...log, beforePhotos: migratedBefore, afterPhotos: migratedAfter }
+              const saved = await sbSaveChecklistLog(u.email, migratedLog)
+              if (!saved) { allOk = false; break }
+            } catch (err) {
+              console.error('migrateGuestData: checklist log migration failed', err)
+              allOk = false
+              break
+            }
+          }
+          if (allOk) {
+            localStorage.removeItem(LS_CHECKLIST_LOGS)
+          } else {
+            showToast('部分整理紀錄同步失敗，資料仍保留在本機，之後可以再次同步。')
+          }
+        }
+      } catch (err) {
+        console.error('migrateGuestData: checklist_logs parse failed', err)
+      }
+    }
+
+    // ── declutter_records ──
+    const guestRecordsRaw = localStorage.getItem(LS_DECLUTTER_RECORDS)
+    if (guestRecordsRaw) {
+      try {
+        const guestRecords = JSON.parse(guestRecordsRaw) as DeclutterRecord[]
+        if (Array.isArray(guestRecords) && guestRecords.length > 0) {
+          let allOk = true
+          for (const record of guestRecords) {
+            try {
+              const saved = await sbSaveDeclutterRecord(u.email, record)
+              if (!saved) { allOk = false; break }
+            } catch (err) {
+              console.error('migrateGuestData: declutter record migration failed', err)
+              allOk = false
+              break
+            }
+          }
+          if (allOk) {
+            localStorage.removeItem(LS_DECLUTTER_RECORDS)
+          } else {
+            showToast('部分斷捨離紀錄同步失敗，資料仍保留在本機，之後可以再次同步。')
+          }
+        }
+      } catch (err) {
+        console.error('migrateGuestData: declutter_records parse failed', err)
+      }
+    }
+  }, [showToast])
+
   const loadUserData = useCallback(async (u: OAuthUser) => {
     setLoading(true)
     try {
+      if (!migratedEmailsRef.current.has(u.email)) {
+        migratedEmailsRef.current.add(u.email)
+        await migrateGuestData(u)
+      }
       const [logs, records] = await Promise.all([
         sbLoadChecklistLogs(u.email),
         sbLoadDeclutterRecords(u.email),
@@ -97,7 +192,7 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [showToast, migrateGuestData])
 
   useEffect(() => {
     if (/Line\//.test(navigator.userAgent)) {
