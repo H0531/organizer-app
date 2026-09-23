@@ -301,6 +301,9 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [editNote, setEditNote] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [savedPopupEntry, setSavedPopupEntry] = useState<ChecklistLog | null>(null)
+  // 剛完成的這一次整理（只存在記憶體，離開成果頁或重整後即消失）
+  const [justCompletedId, setJustCompletedId] = useState<string | null>(null)
+  useEffect(() => { if (page !== 3) setJustCompletedId(null) }, [page])
   // 放棄草稿後觸發重新 render（草稿提示區塊是直接讀 localStorage，不是 state）
   const [, setDraftVersion] = useState(0)
 
@@ -964,6 +967,24 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       </div>
       <PageDots page={3} />
 
+      {/* 剛完成整理的一次性完成卡片 */}
+      {(() => {
+        const justEntry = justCompletedId ? logs.find(l => l.id === justCompletedId) : undefined
+        if (!justEntry) return null
+        return (
+          <div style={{ background: '#EAF2EE', border: `1.5px solid ${sg}`, borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, fontWeight: 700, color: '#2E6B50', marginBottom: 8 }}>🎉 {justEntry.space}整理完成！</div>
+            <div style={{ fontSize: 13, color: ml, lineHeight: 1.8, marginBottom: 14 }}>
+              今天花了 {fmtMins(justEntry.duration)}，完成這次整理。<br />
+              這次的整理紀錄已經保存下來了。
+            </div>
+            <button onClick={() => setShareEntry(justEntry)} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+              查看這次整理成果 →
+            </button>
+          </div>
+        )
+      })()}
+
       <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 13, color: '#2E6B50' }}>要開始新的整理嗎？</span>
         <button onClick={() => setPage(1)} style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>前往 →</button>
@@ -1088,8 +1109,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       {savedPopupEntry && (
         <SavedPopup
           entry={savedPopupEntry}
-          onShare={() => { setShareEntry(savedPopupEntry); setSavedPopupEntry(null) }}
-          onClose={() => setSavedPopupEntry(null)}
+          onShare={() => { setShareEntry(savedPopupEntry); setJustCompletedId(savedPopupEntry.id); setSavedPopupEntry(null) }}
+          onClose={() => { setJustCompletedId(savedPopupEntry.id); setSavedPopupEntry(null) }}
         />
       )}
     </div>
