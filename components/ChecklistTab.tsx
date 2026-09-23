@@ -931,8 +931,14 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
 
       {/* 儲存按鈕 — 在紀念文下方 */}
       {!canSave && (
-        <div style={{ fontSize: 12, color: '#C47B5A', marginBottom: 8, padding: '8px 12px', background: '#FDF5F0', borderRadius: 8, border: '1px solid #E8B89A' }}>
-          儲存前需完成：{!checklistDone && `整理清單（還有 ${total - done} 項）`}{!checklistDone && !afterReady && '、'}{!afterReady && '整理後照片（上傳或選擇不上傳）'}
+        <div style={{ marginBottom: 10, padding: '12px 16px', background: ww, borderRadius: 10, border: `1px solid ${bd}` }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: ink, marginBottom: 8 }}>完成以下步驟，就可以儲存這次整理紀錄</div>
+          <div style={{ fontSize: 13, lineHeight: 1.9, color: checklistDone ? sg : ml }}>
+            {checklistDone ? '✓ 整理清單：已完成' : `☐ 整理清單：還有 ${total - done} 項未完成`}
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.9, color: afterReady ? sg : ml }}>
+            {afterPhotos.length > 0 ? '✓ 整理後照片：已上傳' : skipAfter ? '✓ 整理後照片：已選擇不上傳' : '☐ 整理後照片：上傳或選擇不上傳'}
+          </div>
         </div>
       )}
       {checklistDone && (
