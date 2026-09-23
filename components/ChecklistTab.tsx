@@ -147,12 +147,12 @@ function PhotoStrip({ photos, onAdd, onRemove, onEdit, skipped, onSkip, label, c
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ fontSize: 13, color: ml, fontWeight: 500 }}>{label}</div>
-        <button onClick={onSkip} style={{ fontSize: 12, color: skipped ? sg : mf, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+        <button onClick={onSkip} style={{ fontSize: 12, color: skipped ? sg : ml, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
           {skipped ? '取消略過' : '不上傳照片'}
         </button>
       </div>
       {skipped ? (
-        <div style={{ padding: '10px 14px', borderRadius: 8, background: cr, fontSize: 13, color: mf, textAlign: 'center' }}>已略過照片上傳</div>
+        <div style={{ padding: '10px 14px', borderRadius: 8, background: cr, fontSize: 13, color: ml, textAlign: 'center' }}>已略過照片上傳</div>
       ) : (
         <>
           {photos.length === 0 && (
@@ -731,13 +731,13 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       {/* 整理前照片 */}
       <div style={{ background: ww, border: `1px solid ${beforeReady ? bd : '#E8A87C'}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <PhotoStrip photos={beforePhotos} onAdd={f => addPhotos('before', f)} onRemove={i => removePhoto('before', i)} onEdit={i => openPhotoEditor('before', i)}
-          skipped={skipBefore} onSkip={() => { setSkipBefore(s => !s); setBeforePhotos([]) }} label="📷 整理前照片" color={mf} />
+          skipped={skipBefore} onSkip={() => { setSkipBefore(s => !s); setBeforePhotos([]) }} label="📷 整理前照片" color={sg} />
         {!beforeReady && <div style={{ fontSize: 12, color: '#C47B5A', marginTop: 8 }}>請上傳照片或選擇「不上傳照片」才能繼續</div>}
       </div>
 
       {/* 計時設定 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>⏱ 設定整理時間</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: ml, letterSpacing: '0.08em', marginBottom: 14 }}>⏱ 設定整理時間</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
           {PRESET_MINS.map(m => (
             <button key={m} onClick={() => { setTargetMins(m); setUseCustom(false) }} style={{ padding: '8px 16px', borderRadius: 20, border: `1px solid ${!useCustom && targetMins === m ? sg : bd}`, background: !useCustom && targetMins === m ? sg : 'white', color: !useCustom && targetMins === m ? 'white' : ml, fontSize: 13, cursor: 'pointer' }}>
@@ -872,7 +872,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       {/* 整理清單 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>{SP[space].label}</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: ml, letterSpacing: '0.08em' }}>{SP[space].label}</div>
           <span style={{ fontSize: 12, color: mf }}>{done} / {total}</span>
         </div>
         {allItems.map((item, i) => {
@@ -884,7 +884,6 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                 {getC()[i] && <svg width="10" height="7" viewBox="0 0 10 7" fill="none"><path d="M1 3.5L3.5 6L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               </div>
               <span onClick={() => toggleC(i)} style={{ fontSize: 14, flex: 1, textDecoration: getC()[i] ? 'line-through' : 'none', color: getC()[i] ? mf : ink, cursor: 'pointer' }}>{item.text}</span>
-              {'badge' in item && item.badge && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#F0E2C0', color: '#C4953A', fontWeight: 500 }}>{item.badge}</span>}
               {isCustom && customId && (
                 <button onClick={() => removeCustomItem(customId)} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', flexShrink: 0 }} title="移除此項目">✕</button>
               )}
