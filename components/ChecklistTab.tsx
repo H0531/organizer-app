@@ -1001,17 +1001,10 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         </div>
       ) : logs.map(entry => (
         <div key={entry.id} style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: ink }}>{entry.space}整理</span>
-              <span style={{ fontSize: 12, color: mf }}>{entry.date}</span>
-              <span style={{ fontSize: 12, color: mf }}>· {fmtMins(entry.duration)}</span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShareEntry(entry)} style={{ flex: 1, fontSize: 13, color: 'white', background: sg, border: 'none', borderRadius: 8, cursor: 'pointer', padding: '8px 0', fontWeight: 500 }}>檢視</button>
-              <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }} style={{ flex: 1, fontSize: 13, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>編輯</button>
-              <button onClick={() => setConfirmDeleteId(entry.id)} style={{ flex: 1, fontSize: 13, color: '#C47B5A', background: 'none', border: '1px solid #C47B5A', borderRadius: 8, cursor: 'pointer', padding: '8px 0' }}>刪除</button>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: ink }}>{entry.space}整理</span>
+            <span style={{ fontSize: 12, color: mf }}>{entry.date}</span>
+            <span style={{ fontSize: 12, color: mf }}>· {fmtMins(entry.duration)}</span>
           </div>
           {editingId === entry.id ? (
             <div>
@@ -1022,24 +1015,36 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
               </div>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: ml, margin: '0 0 8px', lineHeight: 1.6 }}>{entry.note}</p>
+            // 系統自動產生的心得（與標題資訊重複）只在列表中不顯示，資料本身保留
+            entry.note !== `完成了${entry.space}整理，用時 ${fmtMins(entry.duration)}。` && (
+              <p style={{ fontSize: 13, color: ml, margin: '0 0 8px', lineHeight: 1.6 }}>{entry.note}</p>
+            )
           )}
           {(entry.beforePhotos.length > 0 || entry.afterPhotos.length > 0) && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {/* AFTER 優先、較大、依原始比例不裁切 */}
+              {entry.afterPhotos.slice(0, 2).map((p, i) => (
+                <div key={`a${i}`} style={{ position: 'relative' }}>
+                  <img src={p} alt="" style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 150, maxHeight: 180, borderRadius: 6, border: `1.5px solid ${sg}` }} />
+                  <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(122,158,138,0.85)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>A</span>
+                </div>
+              ))}
               {entry.beforePhotos.slice(0, 2).map((p, i) => (
                 <div key={`b${i}`} style={{ position: 'relative' }}>
                   <img src={p} alt="" style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, filter: 'grayscale(20%)' }} />
                   <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>B</span>
                 </div>
               ))}
-              {entry.afterPhotos.slice(0, 2).map((p, i) => (
-                <div key={`a${i}`} style={{ position: 'relative' }}>
-                  <img src={p} alt="" style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, border: `1.5px solid ${sg}` }} />
-                  <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(122,158,138,0.85)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>A</span>
-                </div>
-              ))}
             </div>
           )}
+          {/* 操作區：檢視（主要）→ 編輯心得（次要）／刪除（文字連結） */}
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => setShareEntry(entry)} style={{ display: 'block', width: '100%', fontSize: 13, color: 'white', background: sg, border: 'none', borderRadius: 8, cursor: 'pointer', padding: '8px 0', fontWeight: 500 }}>檢視</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+              <button onClick={() => { setEditingId(entry.id); setEditNote(entry.note) }} style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}>編輯心得</button>
+              <button onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0', textDecoration: 'underline' }}>刪除</button>
+            </div>
+          </div>
         </div>
       ))}
 
