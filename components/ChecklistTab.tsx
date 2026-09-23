@@ -937,12 +937,12 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       )}
       {checklistDone && (
         <div style={{ background: '#EAF2EE', border: `1.5px solid ${sg}`, borderRadius: 10, padding: '10px 16px', marginBottom: 12, textAlign: 'center', fontSize: 13, color: '#2E6B50', fontWeight: 500 }}>
-          🎉 清單全部完成！記得上傳整理後照片再儲存
+          🎉 清單全部完成！上傳整理後照片，就能保存這次整理紀錄
         </div>
       )}
       <button onClick={saveLog} disabled={!canSave || isSavingUI}
         style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : isSavingUI ? '#9BC4AE' : canSave ? ink : '#C8C2B8', color: 'white', fontSize: 16, cursor: (canSave && !isSavingUI) ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.3s', marginBottom: 24 }}>
-        {saveFlash ? '✅ 已儲存整理成果！' : isSavingUI ? '⏳ 上傳中⋯' : '💾 儲存整理成果'}
+        {saveFlash ? '✅ 已儲存整理成果！' : isSavingUI ? '⏳ 上傳中⋯' : '💾 儲存這次整理紀錄'}
       </button>
 
       {editingPhoto && <PhotoEditor src={editingPhoto.src} onDone={applyPhotoEdit} onCancel={() => setEditingPhoto(null)} />}
