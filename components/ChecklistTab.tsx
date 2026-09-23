@@ -301,6 +301,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [editNote, setEditNote] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [savedPopupEntry, setSavedPopupEntry] = useState<ChecklistLog | null>(null)
+  // 放棄草稿後觸發重新 render（草稿提示區塊是直接讀 localStorage，不是 state）
+  const [, setDraftVersion] = useState(0)
 
   // 同步外部傳入的 logs（登入後 Supabase 載入完成時）
   useEffect(() => {
@@ -653,7 +655,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
               }} style={{ fontSize: 12, color: 'white', background: '#C4953A', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}>
                 繼續整理
               </button>
-              <button onClick={() => saveLS(CL_DRAFT_KEY, null)} style={{ fontSize: 12, color: mf, background: 'none', border: `1px solid ${bd}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}>
+              <button onClick={() => { clearDraft(); setDraftVersion(v => v + 1) }} style={{ fontSize: 12, color: mf, background: 'none', border: `1px solid ${bd}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}>
                 放棄
               </button>
             </div>
