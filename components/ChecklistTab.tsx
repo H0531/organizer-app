@@ -215,17 +215,16 @@ function SavedPopup({ entry, onShare, onClose }: { entry: ChecklistLog; onShare:
           {entry.space}整理完成囉！
         </div>
         <div style={{ fontSize: 13, color: ml, lineHeight: 1.8, marginBottom: 20 }}>
-          整理紀錄已製成圖卡 📸<br />
-          可以點左上角分享、儲存圖片，<br />
-          或到<strong style={{ color: sg }}>會員區</strong>隨時回顧每次整理成果。
+          今天完成了一個小整理，<br />
+          這次的成果已經幫你保存下來了。
         </div>
         <button onClick={onShare}
           style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600, marginBottom: 10 }}>
-          📷 查看並分享整理圖卡
+          📷 查看這次整理成果
         </button>
         <button onClick={onClose}
-          style={{ width: '100%', padding: '10px', borderRadius: 12, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>
-          先到成果紀錄看看
+          style={{ width: '100%', padding: '8px', borderRadius: 12, border: 'none', background: 'none', color: ml, fontSize: 13, cursor: 'pointer' }}>
+          先到成果紀錄看看 →
         </button>
       </div>
     </div>
@@ -1077,17 +1076,29 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
               {shareEntry.note && <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 12, fontSize: 13, color: ink, lineHeight: 1.8 }}>{shareEntry.note}</div>}
               <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #生活整理</div>
             </div>
-            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button onClick={() => captureAndShare(shareEntry)} style={{ display: 'block', width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+            <div style={{ marginTop: 16 }}>
+              {/* 第一層：儲存圖片 */}
+              <button onClick={() => captureAndShare(shareEntry)} style={{ display: 'block', width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
                 {saveShareLabel()}
               </button>
-              {SHARE_BTNS.map(p => (
-                <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry))}
-                  style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                  {p.label}（純文字）
-                </button>
-              ))}
-              <button onClick={() => setShareEntry(null)} style={{ width: '100%', padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
+              <div style={{ fontSize: 12, color: mf, textAlign: 'center', marginTop: 6 }}>{isChrome() ? '下載成果圖片（PNG 檔）' : '開啟系統分享選單；不支援時會直接下載圖片'}</div>
+
+              {/* 第二層：分享（純文字） */}
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${bd}` }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: ink, marginBottom: 2 }}>分享</div>
+                <div style={{ fontSize: 12, color: mf, marginBottom: 10 }}>以文字分享這次整理紀錄</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {SHARE_BTNS.map(p => (
+                    <button key={p.id} onClick={() => shareToSocial(p.id, shareText(shareEntry))}
+                      style={{ flex: 1, padding: '8px 4px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: p.color, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 第三層：關閉 */}
+              <button onClick={() => setShareEntry(null)} style={{ display: 'block', width: '100%', marginTop: 14, padding: '8px', border: 'none', background: 'none', color: ml, fontSize: 13, cursor: 'pointer' }}>關閉</button>
             </div>
           </div>
         </div>
