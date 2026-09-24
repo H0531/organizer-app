@@ -308,7 +308,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       {/* 儲存後慶賀提示 */}
       {justSaved && (
         <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '14px 18px', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 4 }}>✅ 紀錄已儲存到會員頁</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 4 }}>✅ 紀錄已儲存到我的整理</div>
           <div style={{ fontSize: 12, color: ml, marginBottom: 10 }}>
             今天你放手了 {tossItems.length + donateItems.length} 件，留下 {keepItems.length} 件，讓空間清爽了一點。
           </div>
@@ -447,13 +447,15 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   // ── STAGE: review ────────────────────────────────────────────
   if (stage === 'review') return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>分流處理</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>決定好了！</h1>
         <button onClick={() => onGoToMember('declutter')}
           style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0 }}>
           查看紀錄 →
         </button>
       </div>
+
+      <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: '0 0 16px' }}>可以直接儲存；想多做一點，也可以指定分類、設定送出提醒或寫告別文。</p>
 
       {/* 返回修改決定 — Quick Win */}
       <button onClick={() => setStage('input')}
@@ -468,7 +470,10 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           <div style={{ fontSize: 12, color: ml, marginBottom: 10 }}>
             今天你放手了 {tossItems.length + donateItems.length} 件，讓空間清爽了一點。你已經做了很好的第一步。
           </div>
-          <button onClick={() => onGoToMember('declutter')} style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>前往查看 →</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={resetAll} style={{ fontSize: 12, color: 'white', background: sg, border: `1px solid ${sg}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>再來一輪整理</button>
+            <button onClick={() => onGoToMember('declutter')} style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>前往查看 →</button>
+          </div>
         </div>
       )}
 
@@ -617,7 +622,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
         </div>
       )}
 
-      {items.length > 0 && (
+      {items.length > 0 && !justSaved && (
         <button onClick={handleSave}
           style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600, marginTop: 8, transition: 'background 0.3s' }}>
           {saveFlash ? '✅ 已儲存整理成果！' : '💾 儲存斷捨離紀錄'}
@@ -632,19 +637,22 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           <div style={{ background: '#FAF8F4', borderRadius: 20, padding: '28px 24px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>✨</div>
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: '#2C2820', marginBottom: 8, fontWeight: 700 }}>
-              斷捨離紀錄已儲存！
+              這次斷捨離完成了！
             </div>
             <div style={{ fontSize: 13, color: '#6B6358', lineHeight: 1.8, marginBottom: 20 }}>
-              紀錄已製成圖卡 📸<br />
-              可以點左上角的分享按鈕儲存或分享圖片，<br />
-              也可到<strong style={{ color: '#7A9E8A' }}>會員區</strong>隨時回顧每次斷捨離紀錄。
+              今天已經替這些物品做出了決定。<br />
+              這次的紀錄已經幫你保存下來了。
             </div>
-            <button onClick={() => { setShowSavedPopup(false); onGoToMember('declutter') }}
+            <button onClick={() => { setShowSavedPopup(false); resetAll() }}
               style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#7A9E8A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600, marginBottom: 10 }}>
-              前往會員區查看紀錄
+              再來一輪整理
+            </button>
+            <button onClick={() => { setShowSavedPopup(false); onGoToMember('declutter') }}
+              style={{ width: '100%', padding: '8px', borderRadius: 12, border: 'none', background: 'none', color: '#6B6358', fontSize: 13, cursor: 'pointer' }}>
+              查看斷捨離紀錄 →
             </button>
             <button onClick={() => setShowSavedPopup(false)}
-              style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px solid #DDD8CF', background: 'white', color: '#6B6358', fontSize: 13, cursor: 'pointer' }}>
+              style={{ width: '100%', padding: '4px', borderRadius: 12, border: 'none', background: 'none', color: '#A39B8E', fontSize: 12, cursor: 'pointer' }}>
               關閉
             </button>
           </div>
@@ -815,19 +823,22 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           <div style={{ background: '#FAF8F4', borderRadius: 20, padding: '28px 24px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>✨</div>
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: '#2C2820', marginBottom: 8, fontWeight: 700 }}>
-              斷捨離紀錄已儲存！
+              這次斷捨離完成了！
             </div>
             <div style={{ fontSize: 13, color: '#6B6358', lineHeight: 1.8, marginBottom: 20 }}>
-              告別文已製成圖卡 📸<br />
-              可以點左上角的分享按鈕儲存或分享圖片，<br />
-              也可到<strong style={{ color: '#7A9E8A' }}>會員區</strong>隨時回顧每次斷捨離紀錄。
+              今天已經替這些物品做出了決定。<br />
+              這次的紀錄已經幫你保存下來了。
             </div>
-            <button onClick={() => { setShowSavedPopup(false); onGoToMember('declutter') }}
+            <button onClick={() => { setShowSavedPopup(false); resetAll() }}
               style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#7A9E8A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600, marginBottom: 10 }}>
-              前往會員區查看紀錄
+              再來一輪整理
+            </button>
+            <button onClick={() => { setShowSavedPopup(false); onGoToMember('declutter') }}
+              style={{ width: '100%', padding: '8px', borderRadius: 12, border: 'none', background: 'none', color: '#6B6358', fontSize: 13, cursor: 'pointer' }}>
+              查看斷捨離紀錄 →
             </button>
             <button onClick={() => setShowSavedPopup(false)}
-              style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px solid #DDD8CF', background: 'white', color: '#6B6358', fontSize: 13, cursor: 'pointer' }}>
+              style={{ width: '100%', padding: '4px', borderRadius: 12, border: 'none', background: 'none', color: '#A39B8E', fontSize: 12, cursor: 'pointer' }}>
               關閉
             </button>
           </div>

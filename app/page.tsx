@@ -23,7 +23,7 @@ const TABS: { id: AppTab; label: string; icon: string }[] = [
   { id: 'declutter', label: '斷捨離',  icon: '♻️' },
   { id: 'challenge', label: '每日丟一物', icon: '🎯' },
   { id: 'recommend', label: '收納推薦', icon: '📦' },
-  { id: 'member',    label: '會員',    icon: '👤' },
+  { id: 'member',    label: '我的整理', icon: '👤' },
 ]
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358'

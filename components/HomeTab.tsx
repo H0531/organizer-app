@@ -380,7 +380,7 @@ export default function HomeTab({
                 <button onClick={() => onNavigate('member')} style={{ background: cr, border: `1px solid ${bd}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, color: ml, lineHeight: 1 }}>📓</div>
                   <div style={{ fontSize: 11, color: ml, marginTop: 3 }}>查看全部紀錄</div>
-                  <div style={{ fontSize: 10, color: mf, marginTop: 2 }}>會員頁</div>
+                  <div style={{ fontSize: 10, color: mf, marginTop: 2 }}>我的整理</div>
                 </button>
               )}
             </div>
@@ -429,7 +429,7 @@ export default function HomeTab({
           ['行事曆功能怎麼用？', '整理清單頁可預約下次整理時間，會下載 .ics 檔案，點開即可加入手機行事曆，系統會提前一天提醒。斷捨離送出的物品也可設定提醒日期。'],
           ['照片可以裁切或旋轉嗎？', '可以！在整理清單的拍照步驟，上傳後可以進行裁切和旋轉，調整到最佳角度再儲存。'],
           ['可以在手機上使用嗎？', '可以，支援手機瀏覽器，建議使用 Safari 或 Chrome，介面專為手機螢幕優化。'],
-          ['會員頁面有什麼資料？', '登入後，整理日記、斷捨離紀錄（含每件物品明細）、每日丟一物挑戰進度，都會在「我的整理」頁面完整呈現。'],
+          ['我的整理裡有什麼？', '登入後，整理日記、斷捨離紀錄（含每件物品明細）、每日丟一物挑戰進度，都會在「我的整理」頁面完整呈現。'],
         ].map(([q, a], i, arr) => (
           <div key={i} style={{ padding: '12px 0', borderBottom: i < arr.length - 1 ? `1px solid ${cr}` : 'none' }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: ink, marginBottom: 4 }}>Q：{q}</div>
