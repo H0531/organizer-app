@@ -514,82 +514,15 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>斷捨離紀錄（{declutterRecords.length} 次）</div>
 
-          {/* ── 統計圖表 ── */}
+          {/* 總成果摘要（圖表改由「統計」分頁呈現） */}
           {total > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              {/* 留送丟圓餅圖 */}
-              <div style={{ background: 'white', border: `1px solid ${bd}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: mf, marginBottom: 12, fontWeight: 500 }}>物品流向總覽</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <svg width="80" height="80" viewBox="0 0 80 80">
-                    {(() => {
-                      const data = [
-                        { value: keepCount, color: '#7A9E8A' },
-                        { value: donateCount, color: '#4285F4' },
-                        { value: tossCount, color: '#C47B5A' },
-                      ].filter(d => d.value > 0)
-                      let angle = -Math.PI / 2
-                      return data.map((d, i) => {
-                        const pct = d.value / total
-                        const startAngle = angle
-                        angle += pct * 2 * Math.PI
-                        const x1 = 40 + 36 * Math.cos(startAngle)
-                        const y1 = 40 + 36 * Math.sin(startAngle)
-                        const x2 = 40 + 36 * Math.cos(angle)
-                        const y2 = 40 + 36 * Math.sin(angle)
-                        const large = pct > 0.5 ? 1 : 0
-                        return (
-                          <path key={i}
-                            d={`M40,40 L${x1},${y1} A36,36 0 ${large},1 ${x2},${y2} Z`}
-                            fill={d.color} />
-                        )
-                      })
-                    })()}
-                    <circle cx="40" cy="40" r="20" fill={ww} />
-                    <text x="40" y="44" textAnchor="middle" fontSize="11" fill={ink} fontWeight="600">{total}件</text>
-                  </svg>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {[
-                      { label: '留下', count: keepCount, color: '#7A9E8A', bg: '#EAF2EE' },
-                      { label: '送出', count: donateCount, color: '#4285F4', bg: '#EEF3FE' },
-                      { label: '丟棄', count: tossCount, color: '#C47B5A', bg: '#FDF5F0' },
-                    ].map(d => (
-                      <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: ml, flex: 1 }}>{d.label}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: ink }}>{d.count} 件</span>
-                        <span style={{ fontSize: 11, color: mf }}>（{total > 0 ? Math.round(d.count / total * 100) : 0}%）</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <div style={{ background: 'white', border: `1px solid ${bd}`, borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: ink, marginBottom: 6 }}>共處理 {total} 件物品</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 13 }}>
+                <span style={{ color: '#2E6B50' }}>留 {keepCount}</span>
+                <span style={{ color: '#4285F4' }}>送 {donateCount}</span>
+                <span style={{ color: '#C47B5A' }}>丟 {tossCount}</span>
               </div>
-
-              {/* 留下分類長條圖 */}
-              {keepCount > 0 && (
-                <div style={{ background: 'white', border: `1px solid ${bd}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, color: mf, marginBottom: 12, fontWeight: 500 }}>留下物品分類</div>
-                  {catCounts.length === 0 && uncategorizedKeep.length > 0 ? (
-                    <div style={{ fontSize: 12, color: mf }}>尚未填寫分類，可在紀錄中補填</div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {catCounts.map(({ cat, count }) => (
-                        <div key={cat}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: ml, marginBottom: 3 }}>
-                            <span>{cat}</span><span>{count} 件</span>
-                          </div>
-                          <div style={{ background: bd, borderRadius: 4, height: 6 }}>
-                            <div style={{ background: sg, borderRadius: 4, height: 6, width: `${Math.round(count / keepCount * 100)}%` }} />
-                          </div>
-                        </div>
-                      ))}
-                      {uncategorizedKeep.length > 0 && (
-                        <div style={{ fontSize: 11, color: mf, marginTop: 4 }}>未分類：{uncategorizedKeep.length} 件，可在紀錄中補填</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
           {declutterRecords.length === 0 ? (
@@ -603,23 +536,49 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 </button>
               )}
             </div>
-          ) : declutterRecords.map((record, i) => (
+          ) : declutterRecords.map((record, i) => {
+            // ── 收合摘要（僅顯示用計算，不改資料） ──
+            const dateMatch = record.savedAt.match(/\d{4}\/(\d{1,2})\/(\d{1,2})/)
+            const shortDate = dateMatch ? `${Number(dateMatch[1])}/${Number(dateMatch[2])}` : record.savedAt
+            const recKeep = record.items.filter(x => x.decision === 'keep').length
+            const recDonate = record.items.filter(x => x.decision === 'donate').length
+            const recToss = record.items.filter(x => x.decision === 'toss').length
+            const previewItems = record.items.filter(x => x.name && x.name.trim()).slice(0, 3)
+            const moreCount = record.items.length - previewItems.length
+            const isExpanded = expandedRecord === record.savedAt
+            return (
             <div key={i} style={{ borderBottom: i < declutterRecords.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: ink }}>{record.items.length} 件物品</span>
-                  <span style={{ fontSize: 12, color: mf, marginLeft: 8 }}>{record.savedAt}</span>
+              <div style={{ cursor: 'pointer', minWidth: 0 }} onClick={() => setExpandedRecord(isExpanded ? null : record.savedAt)}>
+                <div style={{ fontSize: 12, color: mf, marginBottom: 2 }}>{shortDate}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: ink, marginBottom: 4 }}>這次處理了 {record.items.length} 件物品</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 12px', fontSize: 12, marginBottom: previewItems.length > 0 ? 6 : 0 }}>
+                  <span style={{ color: '#2E6B50' }}>留 {recKeep}</span>
+                  <span style={{ color: '#4285F4' }}>送 {recDonate}</span>
+                  <span style={{ color: '#C47B5A' }}>丟 {recToss}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {previewItems.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 10px', fontSize: 12, color: ml }}>
+                    {previewItems.map((item, k) => (
+                      <span key={k} style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.decision === 'keep' ? '✓' : item.decision === 'toss' ? '🗑' : '📦'} {item.name}
+                      </span>
+                    ))}
+                    {moreCount > 0 && <span style={{ color: mf }}>＋{moreCount}</span>}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+                <button onClick={() => setExpandedRecord(isExpanded ? null : record.savedAt)}
+                  style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontWeight: 500 }}>
+                  {isExpanded ? '收起紀錄 ↑' : '查看這次紀錄 →'}
+                </button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
                   {record.items.length > 0 && (
                     <button onClick={() => setShareModal({ title: '分享斷捨離紀錄', text: declutterShareText(record) })}
-                      style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
+                      style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>分享</button>
                   )}
                   <button onClick={() => setConfirmDelete({ type: 'declutter', savedAt: record.savedAt })}
-                    style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
-                  <span style={{ fontSize: 13, color: sg, cursor: 'pointer' }} onClick={() => setExpandedRecord(expandedRecord === record.savedAt ? null : record.savedAt)}>
-                    {expandedRecord === record.savedAt ? '▲' : '▼'}
-                  </span>
+                    style={{ fontSize: 11, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>刪除</button>
                 </div>
               </div>
               {expandedRecord === record.savedAt && (
@@ -691,7 +650,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
