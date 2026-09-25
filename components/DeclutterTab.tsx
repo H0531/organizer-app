@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage, saveShareLabel, isChrome, drawDeclutterCard } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 
@@ -173,6 +173,15 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   const isSavingRef = useRef(false)
 
   const setStage = (s: Stage) => { setStageRaw(s); saveLS(STAGE_KEY, s) }
+
+  // 切換階段（含子流程下一件、儲存完成）時回到畫面最上方；首次掛載不處理（切換 tab 時 page.tsx 已置頂）
+  const isFirstStageRender = useRef(true)
+  useLayoutEffect(() => {
+    if (isFirstStageRender.current) { isFirstStageRender.current = false; return }
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }, [stage, flowIndex, justSaved])
 
   useEffect(() => {
     const draft = loadLS<{ items: DeclutterItem[]; tossEntries: TossEntry[] } | null>(DRAFT_KEY, null)
@@ -438,7 +447,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           }
         }}
           style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600 }}>
-          進入分流處理 →
+          查看決定 →
         </button>
       )}
     </div>
@@ -691,7 +700,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
             {flowType === 'toss' && <div style={{ fontSize: 14, color: ml, marginBottom: 20, lineHeight: 1.8, padding: '12px 16px', background: cr, borderRadius: 10 }}>辛苦了！道別是為迎接更美好的未來，你做的很棒 🌱</div>}
             <button onClick={() => setStage(flowType === 'toss' ? 'tosslist' : 'review')}
               style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer' }}>
-              {flowType === 'toss' ? '查看告別紀念文' : '返回分流處理總覽'}
+              {flowType === 'toss' ? '查看告別紀念文' : '← 返回決定頁'}
             </button>
           </div>
         ) : (
@@ -809,7 +818,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
 
       <button onClick={() => setStage('review')}
         style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
-        返回分流處理總覽 →
+        ← 返回決定頁
       </button>
       <div style={{ textAlign: 'center', fontSize: 13, color: ml, marginTop: 14, lineHeight: 1.8 }}>
         辛苦了！道別是為迎接更美好的未來，你做的很棒 🌱
