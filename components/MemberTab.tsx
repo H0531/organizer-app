@@ -215,7 +215,13 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
-  const [expandedRecord, setExpandedRecord] = useState<string | null>(null)
+  // 每筆斷捨離紀錄各自展開／收合（以既有唯一鍵 savedAt 控制，與刪除共用同一個鍵）
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set())
+  const toggleRecord = (key: string) => setExpandedRecords(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge' | 'stats'>('diary')
   const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean; photo?: string } | null>(null)
@@ -545,10 +551,10 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             const recToss = record.items.filter(x => x.decision === 'toss').length
             const previewItems = record.items.filter(x => x.name && x.name.trim()).slice(0, 3)
             const moreCount = record.items.length - previewItems.length
-            const isExpanded = expandedRecord === record.savedAt
+            const isExpanded = expandedRecords.has(record.savedAt)
             return (
             <div key={i} style={{ borderBottom: i < declutterRecords.length - 1 ? `1px solid ${cr}` : 'none', paddingBottom: 12, marginBottom: 12 }}>
-              <div style={{ cursor: 'pointer', minWidth: 0 }} onClick={() => setExpandedRecord(isExpanded ? null : record.savedAt)}>
+              <div style={{ cursor: 'pointer', minWidth: 0 }} onClick={() => toggleRecord(record.savedAt)}>
                 <div style={{ fontSize: 12, color: mf, marginBottom: 2 }}>{shortDate}</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: ink, marginBottom: 4 }}>這次處理了 {record.items.length} 件物品</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 12px', fontSize: 12, marginBottom: previewItems.length > 0 ? 6 : 0 }}>
@@ -557,18 +563,23 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                   <span style={{ color: '#C47B5A' }}>丟 {recToss}</span>
                 </div>
                 {previewItems.length > 0 && (
+                  <>
+                  <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>這次主要處理：</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 10px', fontSize: 12, color: ml }}>
                     {previewItems.map((item, k) => (
                       <span key={k} style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {item.decision === 'keep' ? '✓' : item.decision === 'toss' ? '🗑' : '📦'} {item.name}
                       </span>
                     ))}
-                    {moreCount > 0 && <span style={{ color: mf }}>＋{moreCount}</span>}
+                    {moreCount > 0 && !isExpanded && (
+                      <span style={{ color: sg, background: '#EAF2EE', borderRadius: 10, padding: '1px 8px', whiteSpace: 'nowrap' }}>＋{moreCount} 件</span>
+                    )}
                   </div>
+                  </>
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
-                <button onClick={() => setExpandedRecord(isExpanded ? null : record.savedAt)}
+                <button onClick={() => toggleRecord(record.savedAt)}
                   style={{ fontSize: 13, color: sg, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontWeight: 500 }}>
                   {isExpanded ? '收起紀錄 ↑' : '查看這次紀錄 →'}
                 </button>
@@ -581,7 +592,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                     style={{ fontSize: 11, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>刪除</button>
                 </div>
               </div>
-              {expandedRecord === record.savedAt && (
+              {isExpanded && (
                 <div style={{ marginTop: 12 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                     {(['keep', 'donate', 'toss'] as const).map(d => {

@@ -264,8 +264,13 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     setDonateCalItems(prev => new Set([...prev, itemId]))
   }
 
-  const handleSave = async () => {
-    if (items.length === 0 || isSavingRef.current) return
+  // 這一輪是否已寫入紀錄（防止「儲存」與「查看紀錄」重複寫入同一輪）
+  const hasSavedRef = useRef(false)
+
+  // 共用：把目前這一輪組成 DeclutterRecord 並交給 page.tsx 寫入（state + LocalStorage / Supabase）
+  // 回傳 true 表示這次有實際寫入
+  const persistRecord = async (): Promise<boolean> => {
+    if (items.length === 0 || isSavingRef.current || hasSavedRef.current) return false
     isSavingRef.current = true
     try {
       // 上傳 toss 照片至 Supabase Storage，將 tossEntries 裡的 photo 換成 URL
@@ -285,6 +290,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
         items, tossEntries: uploadedEntries,
       }
       onSaveToMember(record)
+      hasSavedRef.current = true
       // GA: 斷捨離儲存
       if (typeof window !== 'undefined' && window.gtag) {
         window.gtag('event', 'declutter_saved', {
@@ -294,16 +300,34 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           toss_count: tossItems.length,
         })
       }
-      setSaveFlash(true)
-      setTimeout(() => {
-        setSaveFlash(false); setJustSaved(true)
-        saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
-        setShowSavedPopup(true)
-      }, 600)
+      return true
     } finally { isSavingRef.current = false }
   }
 
+  // 「💾 儲存斷捨離紀錄」按鈕：行為與原本相同（閃動 → 慶賀 → popup）
+  const handleSave = async () => {
+    const saved = await persistRecord()
+    if (!saved) return
+    setSaveFlash(true)
+    setTimeout(() => {
+      setSaveFlash(false); setJustSaved(true)
+      saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
+      setShowSavedPopup(true)
+    }, 600)
+  }
+
+  // 「決定好了！」右上角「查看紀錄」：尚未儲存時先寫入這一輪，再前往我的整理
+  const handleViewRecords = async () => {
+    const saved = await persistRecord()
+    if (saved) {
+      // 這一輪已成為正式紀錄，清掉草稿，回來時不會再重複儲存
+      saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
+    }
+    onGoToMember('declutter')
+  }
+
   const resetAll = () => {
+    hasSavedRef.current = false
     setItems([]); setTossEntries([]); setStage('input'); setJustSaved(false)
     saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, 'input')
   }
@@ -458,7 +482,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0, flex: 1 }}>決定好了！</h1>
-        <button onClick={() => onGoToMember('declutter')}
+        <button onClick={handleViewRecords}
           style={{ fontSize: 12, color: sg, background: 'none', border: `1px solid ${sg}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0 }}>
           查看紀錄 →
         </button>
