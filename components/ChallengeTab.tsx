@@ -11,7 +11,7 @@ type TossEntry = { day: number; item: string; origin: string; reason: string; fe
 // ── 徽章定義 ─────────────────────────────────────────────────
 const BADGES: { day: number; icon: string; label: string; desc: string }[] = [
   { day: 7,   icon: '🌱', label: '破冰徽章',   desc: '完成第一週，踏出最難的第一步' },
-  { day: 14,  icon: '🌿', label: '習慣徽章',   desc: '連續兩週，整理已成為生活的一部分' },
+  { day: 14,  icon: '🌿', label: '習慣徽章',   desc: '累積 14 次，整理逐漸成為生活的一部分' },
   { day: 30,  icon: '🌳', label: '一個月徽章', desc: '30 天，你讓空間輕盈了 30 次' },
   { day: 60,  icon: '✨', label: '進階徽章',   desc: '兩個月的堅持，非常了不起' },
   { day: 100, icon: '🏆', label: '百日傳說',   desc: '100 天挑戰完成，你是整理大師' },
@@ -81,7 +81,7 @@ function CompletionCeremony({ mode, entries, onNewRound }: {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
           {[
             { num: entries.length, label: '件物品放手' },
-            { num: mode, label: '天連續打卡' },
+            { num: mode, label: '完成天數' },
             { num: BADGES.filter(b => b.day <= mode && entries.length >= b.day).length, label: '枚徽章獲得' },
           ].map(({ num, label }) => (
             <div key={label} style={{ background: cr, borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
@@ -146,6 +146,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const [templateIdx, setTemplateIdx] = useState(0)
   const [showHistory, setShowHistory] = useState(false)
   const [showBadges, setShowBadges] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const [fItem, setFItem] = useState('')
   const [fOrigin, setFOrigin] = useState('')
@@ -297,7 +298,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
       <div>
         {syncToastUI}
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>每日丟一物挑戰</h1>
-        <p style={{ color: ml, fontSize: 14, marginBottom: 24 }}>連續打卡，每天放手一件東西，讓生活越來越輕盈</p>
+        <p style={{ color: ml, fontSize: 14, marginBottom: 24 }}>每天完成一件，慢慢累積整理的成果。</p>
 
         {/* 鼓勵文字：有舊紀錄時才顯示 */}
         {prevEntryCount > 0 && (
@@ -308,6 +309,16 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
             <div style={{ fontSize: 12, color: ml }}>選擇天數，重新開始累積你的紀錄。</div>
           </div>
         )}
+
+        {/* 極簡三步驟 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 20 }}>
+          {['找一件不需要的東西', '記錄它', '讓它離開生活'].map((t, i) => (
+            <div key={t} style={{ background: cr, borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, fontWeight: 700, color: sg, marginBottom: 4 }}>{['①', '②', '③'][i]}</div>
+              <div style={{ fontSize: 12, color: ink, lineHeight: 1.5 }}>{t}</div>
+            </div>
+          ))}
+        </div>
 
         {/* 選擇天數 */}
         <div style={{ fontSize: 13, color: ml, marginBottom: 14 }}>選擇挑戰長度：</div>
@@ -322,8 +333,11 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
               padding: '22px 12px', border: `1.5px solid ${pendingMode === m ? sg : bd}`,
               borderRadius: 12, background: pendingMode === m ? '#EAF2EE' : ww,
               cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s',
-              WebkitTapHighlightColor: 'transparent',
+              WebkitTapHighlightColor: 'transparent', position: 'relative',
             }}>
+              {m === 7 && (
+                <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, color: '#2E6B50', background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '1px 8px' }}>入門推薦</span>
+              )}
               <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 28, fontWeight: 700, color: sg, marginBottom: 4 }}>{m}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: ink, marginBottom: 4 }}>天 · {label}</div>
               <div style={{ fontSize: 11, color: mf }}>{sub}</div>
@@ -333,8 +347,8 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
 
         {pendingMode && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ background: '#FDF9F0', border: '1px solid #C4953A', borderRadius: 10, padding: '12px 16px', marginBottom: 12, fontSize: 13, color: '#7A5E2A', lineHeight: 1.7 }}>
-              ⚠️ 開始後若中途中斷，需從第 1 天重新計算。請確認你已準備好每天打卡！
+            <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '12px 16px', marginBottom: 12, fontSize: 13, color: '#2E6B50', lineHeight: 1.7 }}>
+              每天完成一件，慢慢累積整理的成果。
             </div>
             <button
               onClick={() => {
@@ -353,9 +367,9 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>關於這個挑戰</div>
           {[
-            ['每天只丟一件', '不需要大整理，找一件用不到的東西，決定它的去留'],
-            ['記錄物品故事', '簡短記錄它的來歷和感受，整理記憶也是整理的一部分'],
-            ['連續打卡不中斷', '若中斷需從第 1 天重新計算，達成後可立即開始新的一輪'],
+            ['每天只處理一件', '找一件用不到的東西，決定它的去留。'],
+            ['想寫再寫', '物品名稱必填，其他內容都可以自由留下。'],
+            ['慢慢累積', '每天完成一件，逐步累積你的整理紀錄。'],
             ['獲得徽章與成就', '7 / 14 / 30 / 60 / 100 天各有徽章，完成可分享到社群'],
           ].map(([t, d], i) => (
             <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < 3 ? `1px solid ${cr}` : 'none' }}>
@@ -407,6 +421,65 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
       <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, marginBottom: 6, color: ink }}>每日丟一物挑戰</h1>
       <p style={{ color: ml, fontSize: 14, marginBottom: 20 }}>{mode} 天挑戰進行中</p>
 
+      {/* 今日任務 */}
+      {!todayDone ? (
+        <div style={{ background: ww, border: `1.5px solid ${sg}`, borderRadius: 12, padding: '22px 24px', marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: sg, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 6 }}>Day {currentDay} · 今日任務</div>
+          <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: ink, marginBottom: 6 }}>今天只做一件事</div>
+          <div style={{ fontSize: 14, color: ink, marginBottom: 12 }}>找一件你已經不需要的東西。</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: '#2E6B50', fontWeight: 500 }}>
+            {['找到', '記錄', '放手'].map((s, i) => (
+              <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {i > 0 && <span style={{ color: mf }}>→</span>}
+                <span style={{ background: '#EAF2EE', borderRadius: 20, padding: '4px 12px' }}>{s}</span>
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: ml, marginBottom: 4 }}>不用整理整個房間，也不用一次處理很多。</div>
+          <div style={{ fontSize: 12, color: mf, marginBottom: 16 }}>放手可以是丟掉、回收或送人，依照物品狀況決定。</div>
+
+          {!showForm ? (
+            <button onClick={() => setShowForm(true)} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600 }}>
+              ＋ 記錄今天的物品
+            </button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, color: '#2E6B50', background: '#EAF2EE', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+                先記下物品名稱就可以，其他想寫再寫。
+              </div>
+              {[
+                { label: '物品名稱 *', val: fItem, set: setFItem, ph: '例：七年前買的馬克杯' },
+                { label: '它從哪裡來？（可略）', val: fOrigin, set: setFOrigin, ph: '例：大學時朋友送的、自己買的' },
+                { label: '為什麼要放手？（可略）', val: fReason, set: setFReason, ph: '例：已經有新的替代品了' },
+                { label: '放掉之後的感受？（可略）', val: fFeeling, set: setFFeeling, ph: '例：有點輕鬆，但也有點捨不得' },
+              ].map(({ label, val, set, ph }) => (
+                <div key={label} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: label.startsWith('物品名稱') ? ink : mf, fontWeight: label.startsWith('物品名稱') ? 600 : 400, marginBottom: 4 }}>{label}</div>
+                  <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
+                    style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                <button onClick={submitEntry} style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
+                  打卡完成 ✓
+                </button>
+                <button onClick={() => setShowForm(false)} style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>取消</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 14, textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>✅</div>
+          <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: '#2E6B50', marginBottom: 4 }}>今天已打卡！</div>
+          <div style={{ fontSize: 14, color: '#2E6B50', marginBottom: 6 }}>今天已經讓一件物品離開生活。</div>
+          <div style={{ fontSize: 13, color: ml }}>繼續保持，明天再來記錄 Day {entries.length + 1}</div>
+          {streak >= 3 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: mf }}>🔥 已連續 {streak} 天，太厲害了！</div>
+          )}
+        </div>
+      )}
+
       {/* 進度卡：天數 + streak + 進度條 + 下個徽章 */}
       <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -424,7 +497,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
               <span style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: streak > 0 ? '#C4953A' : mf }}>{streak}</span>
             </div>
             <div style={{ fontSize: 11, color: mf }}>連續天數</div>
-            <button onClick={handleResetChallenge} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}>重新選擇</button>
+            <button onClick={() => setShowResetConfirm(true)} style={{ fontSize: 11, color: mf, background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}>重新選擇</button>
           </div>
         </div>
 
@@ -440,36 +513,6 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
             <span>再 {nextBadge.day - entries.length} 天解鎖「{nextBadge.label}」</span>
           </div>
         )}
-      </div>
-
-      {/* 徽章區 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>徽章</div>
-          <button onClick={() => setShowBadges(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>{showBadges ? '收起' : '查看全部'}</button>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {(showBadges ? BADGES : BADGES.filter(b => b.day <= mode)).map(b => {
-            const earned = entries.length >= b.day
-            return (
-              <div key={b.day} title={b.desc} style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: earned ? '#EAF2EE' : cr,
-                border: `1px solid ${earned ? sg : bd}`,
-                borderRadius: 20, padding: '5px 12px',
-                opacity: b.day > mode && !earned ? 0.4 : earned ? 1 : 0.6,
-                transition: 'all 0.2s',
-              }}>
-                <span style={{ fontSize: 14 }}>{b.icon}</span>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: earned ? '#2E6B50' : mf }}>{b.label}</div>
-                  {earned && <div style={{ fontSize: 10, color: '#2E6B50' }}>{b.day} 天達成</div>}
-                  {!earned && <div style={{ fontSize: 10, color: mf }}>{b.day} 天解鎖</div>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
       </div>
 
       {/* 打點格 */}
@@ -501,56 +544,42 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         </div>
       </div>
 
-      {/* 今日行動 */}
-      {!todayDone ? (
-        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: ink, marginBottom: 4 }}>Day {currentDay} — 今天要丟什麼？</div>
-          <div style={{ fontSize: 13, color: ml, marginBottom: 16 }}>找一件用不到的東西，記錄它的故事後放手</div>
-
-          {!showForm ? (
-            <button onClick={() => setShowForm(true)} style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 500 }}>
-              ＋ 記錄今天的物品
-            </button>
-          ) : (
-            <div>
-              {[
-                { label: '物品名稱 *', val: fItem, set: setFItem, ph: '例：七年前買的馬克杯' },
-                { label: '它從哪裡來？（可略）', val: fOrigin, set: setFOrigin, ph: '例：大學時朋友送的、自己買的' },
-                { label: '為什麼要放手？（可略）', val: fReason, set: setFReason, ph: '例：已經有新的替代品了' },
-                { label: '放掉之後的感受？（可略）', val: fFeeling, set: setFFeeling, ph: '例：有點輕鬆，但也有點捨不得' },
-              ].map(({ label, val, set, ph }) => (
-                <div key={label} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, color: mf, marginBottom: 4 }}>{label}</div>
-                  <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
-                    style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: ink, background: 'white' }} />
+      {/* 徽章區 */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '16px 20px', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>徽章</div>
+          <button onClick={() => setShowBadges(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>{showBadges ? '收起' : '查看所有徽章'}</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {(showBadges ? BADGES : BADGES.filter(b => b.day <= mode)).map(b => {
+            const earned = entries.length >= b.day
+            return (
+              <div key={b.day} title={b.desc} style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: earned ? '#EAF2EE' : cr,
+                border: `1px solid ${earned ? sg : bd}`,
+                borderRadius: 20, padding: '5px 12px',
+                opacity: b.day > mode && !earned ? 0.4 : earned ? 1 : 0.6,
+                transition: 'all 0.2s',
+              }}>
+                <span style={{ fontSize: 14 }}>{b.icon}</span>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: earned ? '#2E6B50' : mf }}>{b.label}</div>
+                  {earned && <div style={{ fontSize: 10, color: '#2E6B50' }}>{b.day} 天達成</div>}
+                  {!earned && <div style={{ fontSize: 10, color: mf }}>{b.day} 天解鎖</div>}
                 </div>
-              ))}
-              <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                <button onClick={submitEntry} style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
-                  打卡完成 ✓
-                </button>
-                <button onClick={() => setShowForm(false)} style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>取消</button>
               </div>
-            </div>
-          )}
+            )
+          })}
         </div>
-      ) : (
-        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 12, padding: '20px 24px', marginBottom: 14, textAlign: 'center' }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>✅</div>
-          <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: '#2E6B50', marginBottom: 4 }}>今天已打卡！</div>
-          <div style={{ fontSize: 13, color: ml }}>繼續保持，明天再來記錄 Day {entries.length + 1}</div>
-          {streak >= 3 && (
-            <div style={{ marginTop: 10, fontSize: 12, color: '#C4953A' }}>🔥 已連續 {streak} 天，太厲害了！</div>
-          )}
-        </div>
-      )}
+      </div>
 
       {/* 歷史紀錄 */}
       {entries.length > 0 && (
         <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: mf, letterSpacing: '0.08em' }}>過去紀錄</div>
-            <button onClick={() => setShowHistory(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>{showHistory ? '收起' : '查看全部'}</button>
+            <button onClick={() => setShowHistory(s => !s)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>{showHistory ? '收起' : '查看完整紀錄'}</button>
           </div>
           {(showHistory ? [...entries].reverse() : [...entries].reverse().slice(0, 3)).map((entry, i) => (
             <div key={i} onClick={() => { setShowMemorial(entry); setTemplateIdx(0) }}
@@ -562,6 +591,22 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
               {entry.feeling && <div style={{ fontSize: 12, color: ml, marginTop: 2 }}>{entry.feeling}</div>}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 重新選擇確認 */}
+      {showResetConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 360, width: '100%' }}>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, fontWeight: 700, marginBottom: 8 }}>要重新選擇挑戰嗎？</div>
+            <div style={{ fontSize: 13, color: ml, lineHeight: 1.7, marginBottom: 20 }}>目前這一輪的進度和紀錄會被清除，且無法復原。</div>
+            <button onClick={() => setShowResetConfirm(false)} style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: ink, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}>
+              繼續目前挑戰
+            </button>
+            <button onClick={() => { setShowResetConfirm(false); handleResetChallenge() }} style={{ width: '100%', padding: '11px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>
+              重新選擇
+            </button>
+          </div>
         </div>
       )}
 
