@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { loadLS, saveLS, LS_CHALLENGE_DATA } from '@/lib/types'
-import { sbLoadChallengeData, sbSaveChallengeData } from '@/lib/supabase'
+import { sbLoadChallengeDataStatus, sbSaveChallengeData } from '@/lib/supabase'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
@@ -41,6 +41,18 @@ function calcStreak(entries: TossEntry[]): number {
     }
   }
   return streak
+}
+
+// ── 匿名資料遷移用：檢查 LocalStorage 內容格式是否有效 ─────────
+const VALID_MODES: ChallengeMode[] = [7, 30, 60, 100]
+function isValidChallengeData(v: unknown): v is { mode: ChallengeMode | null; entries: TossEntry[] } {
+  if (!v || typeof v !== 'object') return false
+  const { mode, entries } = v as { mode?: unknown; entries?: unknown }
+  if (!Array.isArray(entries)) return false
+  const modeOk = mode === null || VALID_MODES.includes(mode as ChallengeMode)
+  if (!modeOk) return false
+  if (!entries.every(e => e && typeof e === 'object' && typeof (e as TossEntry).item === 'string' && typeof (e as TossEntry).date === 'string')) return false
+  return mode !== null || entries.length > 0
 }
 
 // ── 完成儀式感頁面 ───────────────────────────────────────────
@@ -159,30 +171,39 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const [syncToast, setSyncToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
   useEffect(() => {
+    // 非同步安全：userId 變動（登入／登出）後，舊的讀取結果一律丟棄
+    let cancelled = false
     loadedRef.current = false
     setMode(null)
     setEntries([])
     setSyncToast(null)
+    setSyncing(!!userId)
     const load = async () => {
       let loadedMode: ChallengeMode | null = null
       let loadedEntries: TossEntry[] = []
+      // 只有「雲端確認查無有效資料」時才允許搬移匿名資料；查詢失敗一律不搬
+      let remoteConfirmedEmpty = false
+      let remoteFailed = false
 
       if (userId) {
-        setSyncing(true)
         try {
-          const remote = await sbLoadChallengeData(userId)
-          if (remote && (remote.mode !== null || (remote.entries as TossEntry[]).length > 0)) {
+          const { data: remote, error } = await sbLoadChallengeDataStatus(userId)
+          if (error) {
+            remoteFailed = true
+          } else if (remote && (remote.mode !== null || (remote.entries as TossEntry[]).length > 0)) {
             loadedMode = remote.mode as ChallengeMode | null
             loadedEntries = remote.entries as TossEntry[]
+          } else {
+            remoteConfirmedEmpty = true
           }
         } catch {
-          // 雲端失敗 → fallback localStorage
-        } finally {
-          setSyncing(false)
+          remoteFailed = true
         }
+        if (cancelled) return
+        setSyncing(false)
       }
 
-      // 沒有雲端資料 → 讀 localStorage（含未登入情況）
+      // 沒有雲端資料 → 讀 localStorage（含未登入情況；登入時讀帳號專屬 key）
       if (loadedMode === null) {
         const saved = loadLS<{ mode: ChallengeMode | null; entries: TossEntry[] }>(
           LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
@@ -191,11 +212,39 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         loadedEntries = saved.entries ?? []
       }
 
+      // 登入後：雲端確認無資料 + 帳號專屬 key 也無資料 → 檢查匿名 challenge_data
+      let guestToMigrate: { mode: ChallengeMode | null; entries: TossEntry[] } | null = null
+      if (userId && remoteConfirmedEmpty && loadedMode === null && loadedEntries.length === 0) {
+        const guest = loadLS<unknown>(LS_CHALLENGE_DATA, null)
+        if (isValidChallengeData(guest)) {
+          guestToMigrate = guest
+          loadedMode = guest.mode
+          loadedEntries = guest.entries
+        }
+      }
+
+      if (cancelled) return
       setMode(loadedMode)
       setEntries(loadedEntries)
       loadedRef.current = true
+
+      if (userId && remoteFailed) {
+        setSyncToast({ msg: '雲端同步失敗，進度已存本機', ok: false })
+        setTimeout(() => setSyncToast(null), 2800)
+      }
+
+      // 搬移：帳號 key 與 Supabase 都寫入成功，才刪除匿名 challenge_data
+      if (userId && guestToMigrate) {
+        const lsOk = saveLS(LS_CHALLENGE_DATA, guestToMigrate, userId)
+        const sbOk = await sbSaveChallengeData(userId, guestToMigrate)
+        if (lsOk && sbOk) localStorage.removeItem(LS_CHALLENGE_DATA)
+        if (cancelled) return
+        setSyncToast({ msg: sbOk ? '進度已同步到雲端 ☁️' : '雲端同步失敗，進度已存本機', ok: sbOk })
+        setTimeout(() => setSyncToast(null), 2800)
+      }
     }
     load()
+    return () => { cancelled = true }
   }, [userId])
 
   // 直接 save：永遠存 localStorage，有 userId 時額外同步 Supabase

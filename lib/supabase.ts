@@ -99,6 +99,27 @@ export async function sbLoadChallengeData(email: string): Promise<{ mode: number
   return data?.data ?? null
 }
 
+// 可區分「查無資料」與「查詢失敗」的版本：
+// - 查無資料 → { data: null, error: null }
+// - 查詢失敗 → { data: null, error }
+export async function sbLoadChallengeDataStatus(email: string): Promise<{
+  data: { mode: number | null; entries: unknown[] } | null
+  error: unknown | null
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('challenge_data')
+      .select('data')
+      .eq('user_email', email)
+      .maybeSingle()
+    if (error) { console.error('sbLoadChallengeDataStatus', error); return { data: null, error } }
+    return { data: data?.data ?? null, error: null }
+  } catch (err) {
+    console.error('sbLoadChallengeDataStatus', err)
+    return { data: null, error: err }
+  }
+}
+
 export async function sbSaveChallengeData(email: string, payload: unknown): Promise<boolean> {
   const { error } = await supabase
     .from('challenge_data')
