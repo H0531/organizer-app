@@ -61,13 +61,24 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
   }
   const beforeList = log?.beforePhotos ?? []
   const afterList = log?.afterPhotos ?? []
+  // 整理日記（有 log）：固定操作區＋預覽可滾動；斷捨離／挑戰（無 log）：維持原本版面
+  const fixedLayout = !!log
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: fixedLayout ? '20px 20px calc(20px + env(safe-area-inset-bottom))' : 20 }}>
+      {/* 高度上限：先用 vh，支援 dvh 的瀏覽器改用 dvh（手機網址列收合時更準確） */}
+      {fixedLayout && <style>{`.member-share-modal { max-height: 85vh; max-height: 85dvh; }`}</style>}
+      <div className={fixedLayout ? 'member-share-modal' : undefined} style={fixedLayout
+        ? { background: ww, borderRadius: 16, maxWidth: 380, width: '100%', height: 'auto', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+        : { background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        {/* 上方標題區 */}
+        <div style={fixedLayout
+          ? { flexShrink: 0, padding: '20px 24px 12px', fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink }
+          : { fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
+        {/* 中間分享預覽區（整理日記時可滾動） */}
+        <div style={fixedLayout ? { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: '0 24px' } : undefined}>
         {captureRef && log && (
           <div ref={captureRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
-            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 2 }}>{log.space}整理紀錄</div>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 2 }}>{log.space}整理</div>
             <div style={{ fontSize: 12, color: mf, marginBottom: 14 }}>{log.date} · 用時 {fmtMins(log.duration)}</div>
             {beforeList.length > 0 && (
               <div style={{ marginBottom: 14 }}>
@@ -107,7 +118,11 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
         {!captureRef && (
           <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 14, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        </div>
+        {/* 下方操作區（整理日記時固定在 Modal 底部） */}
+        <div style={fixedLayout
+          ? { flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 24px 16px', borderTop: `1px solid ${bd}`, background: ww }
+          : { display: 'flex', flexDirection: 'column', gap: 8 }}>
           {captureRef && (
             <button onClick={captureAndShare} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: sg, color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
               {saveShareLabel()}
