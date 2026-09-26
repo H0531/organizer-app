@@ -63,6 +63,30 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
   const afterList = log?.afterPhotos ?? []
   // 整理日記（有 log）：固定操作區＋預覽可滾動；斷捨離／挑戰（無 log）：維持原本版面
   const fixedLayout = !!log
+  // 滑動提示（僅整理日記）：以實際 scrollHeight > clientHeight 判斷，使用者開始滑動後淡出
+  const previewScrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollPreview, setCanScrollPreview] = useState(false)
+  const [hasScrolledPreview, setHasScrolledPreview] = useState(false)
+  useEffect(() => {
+    if (!fixedLayout) return
+    const el = previewScrollRef.current
+    if (!el) return
+    const check = () => setCanScrollPreview(el.scrollHeight > el.clientHeight + 1)
+    check()
+    // 圖片載入、視窗尺寸改變都會影響高度，用 ResizeObserver 監看容器與內容
+    let ro: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(check)
+      ro.observe(el)
+      Array.from(el.children).forEach(c => ro!.observe(c))
+    }
+    window.addEventListener('resize', check)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', check) }
+  }, [fixedLayout])
+  const onPreviewScroll = () => {
+    if (!hasScrolledPreview && (previewScrollRef.current?.scrollTop ?? 0) > 4) setHasScrolledPreview(true)
+  }
+  const showScrollHint = fixedLayout && canScrollPreview && !hasScrolledPreview
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: fixedLayout ? '20px 20px calc(20px + env(safe-area-inset-bottom))' : 20 }}>
       {/* 高度上限：先用 vh，支援 dvh 的瀏覽器改用 dvh（手機網址列收合時更準確） */}
@@ -75,7 +99,10 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
           ? { flexShrink: 0, padding: '20px 24px 12px', fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink }
           : { fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
         {/* 中間分享預覽區（整理日記時可滾動） */}
-        <div style={fixedLayout ? { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: '0 24px' } : undefined}>
+        {/* 外層 relative 包裝僅在整理日記時作用，讓提示以疊加方式呈現、不佔預覽高度 */}
+        <div style={fixedLayout ? { position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : undefined}>
+        <div ref={previewScrollRef} onScroll={fixedLayout ? onPreviewScroll : undefined}
+          style={fixedLayout ? { flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: '0 24px' } : undefined}>
         {captureRef && log && (
           <div ref={captureRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 2 }}>{log.space}整理</div>
@@ -117,6 +144,18 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
         )}
         {!captureRef && (
           <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 14, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
+        )}
+        </div>
+        {/* 低調滑動提示：疊加在預覽區底部、不攔截觸控，開始滑動後淡出 */}
+        {fixedLayout && (
+          <div aria-hidden="true" style={{
+            position: 'absolute', left: 0, right: 0, bottom: 8, display: 'flex', justifyContent: 'center',
+            pointerEvents: 'none', opacity: showScrollHint ? 1 : 0, transition: 'opacity 0.4s ease',
+          }}>
+            <span style={{ fontSize: 11, color: mf, background: 'rgba(250,248,244,0.92)', border: `1px solid ${bd}`, borderRadius: 20, padding: '3px 10px', letterSpacing: '0.04em' }}>
+              預覽可上下滑動 ↕
+            </span>
+          </div>
         )}
         </div>
         {/* 下方操作區（整理日記時固定在 Modal 底部） */}
