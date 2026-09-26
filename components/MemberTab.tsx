@@ -325,7 +325,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
 
       {/* 未登入：登入橫幅 */}
       {!user && (
-        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+        <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: ink, marginBottom: 2 }}>登入後跨裝置保存成果</div>
@@ -402,45 +402,11 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         </div>
       </div>}
 
-      {/* 成就大數字區 */}
-      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: mf, letterSpacing: '0.08em', marginBottom: 14 }}>累計整理成就</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 12 }}>
-          {[
-            { num: totalSessions, unit: '次', label: '整理打卡', icon: '📓', color: sg },
-            { num: totalReleasedItems, unit: '件', label: '已放手物品', icon: '♻️', color: '#C47B5A' },
-            { num: totalMins, unit: '分鐘', label: '累計整理時間', icon: '⏱', color: '#4285F4' },
-            { num: challengeDays, unit: '天', label: '每日挑戰累計', icon: '🎯', color: '#C4953A' },
-          ].map(({ num, unit, label, icon, color }) => (
-            <div key={label} style={{ background: cr, borderRadius: 10, padding: '14px 12px' }}>
-              <div style={{ fontSize: 14, marginBottom: 6 }}>{icon}</div>
-              <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>
-                {num}<span style={{ fontSize: 12, fontWeight: 400, color: mf }}> {unit}</span>
-              </div>
-              <div style={{ fontSize: 11, color: mf, marginTop: 4 }}>{label}</div>
-            </div>
-          ))}
-        </div>
-        {/* 里程碑文字 */}
-        {totalSessions > 0 && (
-          <div style={{ fontSize: 12, color: ml, background: '#EAF2EE', borderRadius: 8, padding: '9px 12px', lineHeight: 1.7 }}>
-            ✦ {
-              totalSessions >= 30 ? `你已整理 ${totalSessions} 次，整理早已成為你的生活習慣。` :
-              totalSessions >= 10 ? `你已整理 ${totalSessions} 次，空間越來越有你的風格。` :
-              totalSessions >= 3 ? `你已整理 ${totalSessions} 次，繼續保持，空間正在慢慢改變。` :
-              `你已經做了很好的第一步。每一次整理，都讓空間輕一點。`
-            }
-          </div>
-        )}
-        {totalSessions === 0 && (
-          <div style={{ fontSize: 12, color: mf, textAlign: 'center', padding: '8px 0' }}>
-            完成第一次整理，成就數字就會出現
-          </div>
-        )}
-      </div>
+      {/* 我的整理紀錄：區隔標題 */}
+      <div style={{ fontSize: 13, fontWeight: 600, color: ink, letterSpacing: '0.06em', marginBottom: 8 }}>我的整理紀錄</div>
 
       {/* 分頁切換 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
         {[
           { key: 'diary' as const, icon: '📓', label: '日記', count: checklistLogs.length },
           { key: 'declutter' as const, icon: '♻️', label: '斷捨離', count: declutterRecords.length },
@@ -451,12 +417,12 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
             style={{
               background: activeSection === s.key ? '#EAF2EE' : ww,
               border: `1px solid ${activeSection === s.key ? sg : bd}`,
-              borderRadius: 10, padding: '10px 6px', textAlign: 'center', cursor: 'pointer',
+              borderRadius: 10, padding: '10px 4px', minHeight: 64, minWidth: 0, textAlign: 'center', cursor: 'pointer',
               WebkitTapHighlightColor: 'transparent',
             }}>
-            <div style={{ fontSize: 18 }}>{s.icon}</div>
-            <div style={{ fontSize: 11, color: activeSection === s.key ? '#2E6B50' : mf, marginTop: 2 }}>{s.label}</div>
-            {s.count !== null && <div style={{ fontSize: 11, fontWeight: 600, color: activeSection === s.key ? sg : mf }}>{s.count}</div>}
+            <div style={{ fontSize: 18, lineHeight: 1.2 }}>{s.icon}</div>
+            <div style={{ fontSize: 12, color: activeSection === s.key ? '#2E6B50' : mf, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: activeSection === s.key ? 600 : 400 }}>{s.label}</div>
+            {s.count !== null && <div style={{ fontSize: 11, fontWeight: 600, color: activeSection === s.key ? sg : mf, whiteSpace: 'nowrap' }}>{s.count}</div>}
           </button>
         ))}
       </div>
@@ -725,6 +691,32 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       {activeSection === 'stats' && (
         <StatsCharts checklistLogs={checklistLogs} declutterRecords={declutterRecords} />
       )}
+
+      {/* 精簡版「我的整理成果」（沿用既有成就數字，不重新計算） */}
+      <div style={{ background: ww, border: `1px solid ${bd}`, borderRadius: 12, padding: '14px 16px', marginTop: 16 }}>
+        <div style={{ fontSize: 12, color: mf, letterSpacing: '0.08em', marginBottom: 6 }}>我的整理成果</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px 0', fontSize: 13, color: ml }}>
+          {[
+            { label: '整理', num: totalSessions, unit: '次' },
+            { label: '', num: totalMins, unit: '分鐘' },
+            { label: '放手', num: totalReleasedItems, unit: '件' },
+            { label: '挑戰', num: challengeDays, unit: '天' },
+          ].map((s, i) => (
+            <span key={s.unit} style={{ whiteSpace: 'nowrap' }}>
+              {i > 0 && <span style={{ color: bd, margin: '0 8px' }}>・</span>}
+              {s.label && `${s.label} `}<strong style={{ fontWeight: 600, color: ink }}>{s.num}</strong> {s.unit}
+            </span>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, color: totalSessions > 0 ? '#2E6B50' : mf, marginTop: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {totalSessions > 0 ? `✦ ${
+            totalSessions >= 30 ? '整理已成為你的生活習慣。' :
+            totalSessions >= 10 ? '空間越來越有你的風格。' :
+            totalSessions >= 3 ? '繼續保持，空間正在慢慢改變。' :
+            '每一次整理，都讓空間輕一點。'
+          }` : '完成第一次整理，成果就會出現在這裡'}
+        </div>
+      </div>
 
       {/* 分享 Modal */}
       {shareModal && (
