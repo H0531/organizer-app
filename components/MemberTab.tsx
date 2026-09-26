@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
-import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, drawDeclutterCard, saveOrShareImage, isIOSChrome } from '@/lib/types'
+import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, drawDeclutterCard, drawChecklistCard, saveOrShareImage, isIOSChrome } from '@/lib/types'
 import { sbLoadChallengeData } from '@/lib/supabase'
 import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
 import StatsCharts from './StatsCharts'
@@ -28,13 +28,29 @@ function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onCon
 }
 
 // ── 分享 Modal ───────────────────────────────────────────────
-function ShareModal({ title, text, photo, captureRef, onClose }: {
-  title: string; text: string; photo?: string
+// 整理日記分享預覽用：照片完整顯示（等比例、不裁切）
+const diaryPreviewImg = (count: number, border: string): React.CSSProperties => ({
+  width: count === 1 ? '100%' : 'calc(50% - 4px)', height: 'auto',
+  maxHeight: count === 1 ? 360 : 240, objectFit: 'contain',
+  borderRadius: 10, border, display: 'block', alignSelf: 'flex-start',
+})
+
+function ShareModal({ title, text, photo, log, captureRef, onClose }: {
+  title: string; text: string; photo?: string; log?: ChecklistLog
   captureRef?: React.RefObject<HTMLDivElement | null>; onClose: () => void
 }) {
   const captureAndShare = async () => {
     if (!captureRef?.current) return
     try {
+      // 整理日記：與 ChecklistTab 共用 drawChecklistCard（含 Before / After 照片）
+      if (log) {
+        const canvas = await drawChecklistCard({
+          space: log.space, date: log.date, duration: log.duration,
+          beforePhotos: log.beforePhotos ?? [], afterPhotos: log.afterPhotos ?? [], note: log.note,
+        })
+        await saveOrShareImage(canvas, 'organizer-diary.png', text)
+        return
+      }
       const itemName = title.replace('告別紀念文 · ', '')
       const memo = text.split('\n').slice(1, -1).join('\n')
       const canvas = photo
@@ -43,11 +59,45 @@ function ShareModal({ title, text, photo, captureRef, onClose }: {
       await saveOrShareImage(canvas, 'organizer-share.png', text)
     } catch { shareToSocial('copy', text) }
   }
+  const beforeList = log?.beforePhotos ?? []
+  const afterList = log?.afterPhotos ?? []
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(44,40,32,0.48)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: ww, borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>{title}</div>
-        {captureRef && (
+        {captureRef && log && (
+          <div ref={captureRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
+            <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 18, color: ink, marginBottom: 2 }}>{log.space}整理紀錄</div>
+            <div style={{ fontSize: 12, color: mf, marginBottom: 14 }}>{log.date} · 用時 {fmtMins(log.duration)}</div>
+            {beforeList.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
+                  <div style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 800, color: '#7A6A50', background: '#EDE2CC', padding: '4px 14px', borderRadius: 30, border: '1px solid #CDB98A' }}>BEFORE</div>
+                  <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {beforeList.map((p, i) => <img key={i} src={p} alt="" style={diaryPreviewImg(beforeList.length, 'none')} />)}
+                </div>
+              </div>
+            )}
+            {afterList.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
+                  <div style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 800, color: '#2E6B50', background: '#E0F0E8', padding: '4px 14px', borderRadius: 30, border: `1.5px solid ${sg}` }}>AFTER</div>
+                  <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {afterList.map((p, i) => <img key={i} src={p} alt="" style={diaryPreviewImg(afterList.length, `2px solid ${sg}`)} />)}
+                </div>
+              </div>
+            )}
+            {log.note && <div style={{ background: cr, borderRadius: 10, padding: '12px 14px', marginBottom: 12, fontSize: 13, color: ink, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{log.note}</div>}
+            <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #生活整理</div>
+          </div>
+        )}
+        {captureRef && !log && (
           <div ref={captureRef} style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 8 }}>{title}</div>
             <div style={{ fontSize: 13, color: ml, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{text}</div>
@@ -224,7 +274,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   })
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState<'diary' | 'declutter' | 'challenge' | 'stats'>('diary')
-  const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean; photo?: string } | null>(null)
+  const [shareModal, setShareModal] = useState<{ title: string; text: string; withCapture?: boolean; photo?: string; log?: ChecklistLog } | null>(null)
   const shareCaptureRef = useRef<HTMLDivElement>(null)
   const [challengeMode, setChallengeMode] = useState<number | null>(null)
   const [challengeEntries, setChallengeEntries] = useState<ChallengeEntry[]>([])
@@ -451,7 +501,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                   <span style={{ fontSize: 12, color: mf, marginLeft: 6 }}>· {fmtMins(log.duration)}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log), withCapture: true })}
+                  <button onClick={() => setShareModal({ title: '分享整理日記', text: diaryShareText(log), withCapture: true, log })}
                     style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
                   <button onClick={() => setConfirmDelete({ type: 'diary', id: log.id })}
                     style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
@@ -465,12 +515,18 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                   <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: '0 0 6px' }}>{log.note}</p>
                   <div style={{ fontSize: 12, color: mf }}>目標 {log.targetMinutes} 分鐘</div>
                   {(log.beforePhotos?.length > 0 || log.afterPhotos?.length > 0) && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                       {log.beforePhotos?.map((p, idx) => (
-                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `1px solid ${bd}` }} />
+                        <div key={`b${idx}`} style={{ flex: '1 1 130px', maxWidth: 'calc(50% - 4px)', minWidth: 120 }}>
+                          <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>整理前</div>
+                          <img src={p} alt="整理前" style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', background: cr, borderRadius: 6, border: `1px solid ${bd}`, display: 'block' }} />
+                        </div>
                       ))}
                       {log.afterPhotos?.map((p, idx) => (
-                        <img key={idx} src={p} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `2px solid ${sg}` }} />
+                        <div key={`a${idx}`} style={{ flex: '1 1 130px', maxWidth: 'calc(50% - 4px)', minWidth: 120 }}>
+                          <div style={{ fontSize: 11, color: sg, marginBottom: 3 }}>整理後</div>
+                          <img src={p} alt="整理後" style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', background: cr, borderRadius: 6, border: `2px solid ${sg}`, display: 'block' }} />
+                        </div>
                       ))}
                     </div>
                   )}
@@ -721,7 +777,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       {/* 分享 Modal */}
       {shareModal && (
         <ShareModal
-          title={shareModal.title} text={shareModal.text} photo={shareModal.photo}
+          title={shareModal.title} text={shareModal.text} photo={shareModal.photo} log={shareModal.log}
           captureRef={shareModal.withCapture ? shareCaptureRef : undefined}
           onClose={() => setShareModal(null)}
         />

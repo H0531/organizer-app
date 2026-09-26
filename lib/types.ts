@@ -413,27 +413,87 @@ function drawWatermark(ctx: CanvasRenderingContext2D, y: number, cw: number, tag
 }
 
 // ── ChecklistTab 分享卡 ──────────────────────
+// 照片以原始比例完整顯示（等比例縮放、不裁切、不變形），並限制最大高度
+const CL_PHOTO_MAX_H_SINGLE = 360   // 單張照片最大高度
+const CL_PHOTO_MAX_H_DOUBLE = 260   // 兩張並排時每張最大高度
+const CL_PHOTO_GAP = 8
+
+type PhotoBox = { img: HTMLImageElement; x: number; y: number; w: number; h: number }
+
+// 依圖片比例計算一組（最多 2 張）照片的位置，回傳每張的繪製框與該列高度
+function layoutPhotoRow(imgs: HTMLImageElement[], left: number, areaW: number): { boxes: PhotoBox[]; rowH: number } {
+  if (imgs.length === 0) return { boxes: [], rowH: 0 }
+  const cols = imgs.length === 1 ? 1 : 2
+  const cellW = cols === 1 ? areaW : (areaW - CL_PHOTO_GAP) / 2
+  const maxH = cols === 1 ? CL_PHOTO_MAX_H_SINGLE : CL_PHOTO_MAX_H_DOUBLE
+  const sized = imgs.map(img => {
+    const ratio = img.height / img.width
+    let w = cellW, h = cellW * ratio
+    if (h > maxH) { h = maxH; w = maxH / ratio }
+    return { img, w, h }
+  })
+  const rowH = Math.max(...sized.map(s => s.h))
+  const boxes = sized.map((s, i) => ({
+    img: s.img,
+    x: left + i * (cellW + CL_PHOTO_GAP) + (cellW - s.w) / 2,  // 在格子內水平置中
+    y: (rowH - s.h) / 2,                                        // 相對列頂端，垂直置中
+    w: s.w, h: s.h,
+  }))
+  return { boxes, rowH }
+}
+
+function drawLoadedPhoto(ctx: CanvasRenderingContext2D, b: PhotoBox, top: number, r: number, borderColor?: string) {
+  const y = top + b.y
+  ctx.save()
+  roundRect(ctx, b.x, y, b.w, b.h, r)
+  ctx.clip()
+  ctx.drawImage(b.img, b.x, y, b.w, b.h)
+  ctx.restore()
+  if (borderColor) {
+    ctx.save()
+    roundRect(ctx, b.x, y, b.w, b.h, r)
+    ctx.strokeStyle = borderColor
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.restore()
+  }
+}
+
+async function loadImages(srcs: string[]): Promise<HTMLImageElement[]> {
+  const results = await Promise.all(srcs.map(src => loadImage(src).catch(() => null)))
+  return results.filter((x): x is HTMLImageElement => x !== null)
+}
+
 export async function drawChecklistCard(entry: {
   space: string; date: string; duration: number
   beforePhotos: string[]; afterPhotos: string[]; note: string
 }): Promise<HTMLCanvasElement> {
   const W = 375
-  const PHOTO_H = 160
   const LINE_H  = 20
-  const hasB = entry.beforePhotos.length > 0
-  const hasA = entry.afterPhotos.length > 0
-  const fmtMins = (s: number) => s >= 60 ? `${Math.floor(s/60)}hr${s%60?` ${s%60}min`:''}` : `${s}min`
+  const LABEL_H = 26
+  const areaW = W - PAD * 2
+  // duration 單位為「秒」；格式與 ChecklistTab / MemberTab 的 fmtMins 一致
+  const fmtMins = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return sec > 0 ? `${m} 分 ${sec} 秒` : `${m} 分鐘` }
 
-  // 先算高度
+  // 先載入照片（最多各 2 張，與原本一致），無法載入的照片略過
+  const beforeImgs = await loadImages(entry.beforePhotos.slice(0, 2))
+  const afterImgs  = await loadImages(entry.afterPhotos.slice(0, 2))
+  const beforeRow = layoutPhotoRow(beforeImgs, PAD, areaW)
+  const afterRow  = layoutPhotoRow(afterImgs, PAD, areaW)
+  const hasB = beforeRow.boxes.length > 0
+  const hasA = afterRow.boxes.length > 0
+
+  // 先算高度（與下方繪製的位移一致）
   const ctx0 = document.createElement('canvas').getContext('2d')!
   ctx0.font = '13px sans-serif'
-  const noteLines = entry.note ? wrapText(ctx0, entry.note, W - PAD * 2 - 24) : []
+  const noteLines = entry.note ? wrapText(ctx0, entry.note, areaW - 24) : []
   const noteH = entry.note ? noteLines.length * LINE_H + 24 : 0
 
-  let H = PAD + 28 + 8 + 16  // title + date + gap
-  if (hasB) H += 24 + PHOTO_H + 14
-  if (hasA) H += 24 + PHOTO_H + 14
-  H += noteH + 20 + PAD       // note + watermark + bottom
+  let H = PAD + 28 + 22 + 14            // 標題 + 日期 + 分隔
+  if (hasB) H += LABEL_H + beforeRow.rowH + 14
+  if (hasA) H += LABEL_H + afterRow.rowH + 14
+  if (entry.note) H += noteH + 12
+  H += 14 + PAD                         // 浮水印 + 底部
 
   const { canvas, ctx } = setupCanvas(W, H)
 
@@ -462,9 +522,7 @@ export async function drawChecklistCard(entry: {
 
   // BEFORE 照片
   if (hasB) {
-    // label
     ctx.font = '700 11px sans-serif'
-    ctx.fillStyle = '#7A6A50'
     ctx.textAlign = 'center'
     ctx.fillStyle = '#EDE2CC'
     roundRect(ctx, W/2 - 36, y, 72, 20, 10)
@@ -474,18 +532,10 @@ export async function drawChecklistCard(entry: {
     ctx.fillStyle = '#7A6A50'
     ctx.fillText('BEFORE', W/2, y + 14)
     ctx.textAlign = 'left'
-    y += 26
+    y += LABEL_H
 
-    const n = entry.beforePhotos.length
-    if (n === 1) {
-      await drawPhoto(ctx, entry.beforePhotos[0], PAD, y, W - PAD*2, PHOTO_H)
-    } else {
-      const colW = (W - PAD*2 - 8) / 2
-      for (let i = 0; i < Math.min(n, 2); i++) {
-        await drawPhoto(ctx, entry.beforePhotos[i], PAD + i*(colW+8), y, colW, PHOTO_H)
-      }
-    }
-    y += PHOTO_H + 14
+    beforeRow.boxes.forEach(b => drawLoadedPhoto(ctx, b, y, 8))
+    y += beforeRow.rowH + 14
   }
 
   // AFTER 照片
@@ -500,24 +550,16 @@ export async function drawChecklistCard(entry: {
     ctx.fillStyle = '#2E6B50'
     ctx.fillText('AFTER', W/2, y + 14)
     ctx.textAlign = 'left'
-    y += 26
+    y += LABEL_H
 
-    const n = entry.afterPhotos.length
-    if (n === 1) {
-      await drawPhoto(ctx, entry.afterPhotos[0], PAD, y, W - PAD*2, PHOTO_H, 8, C_SG)
-    } else {
-      const colW = (W - PAD*2 - 8) / 2
-      for (let i = 0; i < Math.min(n, 2); i++) {
-        await drawPhoto(ctx, entry.afterPhotos[i], PAD + i*(colW+8), y, colW, PHOTO_H, 8, C_SG)
-      }
-    }
-    y += PHOTO_H + 14
+    afterRow.boxes.forEach(b => drawLoadedPhoto(ctx, b, y, 8, C_SG))
+    y += afterRow.rowH + 14
   }
 
   // 備註
   if (entry.note) {
     ctx.fillStyle = C_CR
-    roundRect(ctx, PAD, y, W - PAD*2, noteH, 10)
+    roundRect(ctx, PAD, y, areaW, noteH, 10)
     ctx.fill()
     ctx.font = '13px sans-serif'
     ctx.fillStyle = C_INK
