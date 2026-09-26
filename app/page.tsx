@@ -70,6 +70,43 @@ function LoadingOverlay() {
   )
 }
 
+// ── ChecklistLog 資料統一 ─────────────────────────────────────
+// Guest（LocalStorage）與登入（Supabase）兩種來源進入 state 前都經過這裡：
+// - 補齊欄位預設值，確保 MemberTab / ChecklistTab 拿到同一種 ChecklistLog 結構
+// - 照片保留原字串（Guest 為 data URL、登入後為 Storage URL，兩者都可直接當 img src）
+// - 依建立時間排序（id = 建立時的 Date.now()），新到舊；
+//   Supabase 原本依 updated_at 排序，migration 或編輯心得後順序會與 Guest 不同
+function normalizeChecklistLogs(list: unknown): ChecklistLog[] {
+  if (!Array.isArray(list)) return []
+  const toStr = (v: unknown) => (typeof v === 'string' ? v : '')
+  const toNum = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+  const toPhotos = (v: unknown) => Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string' && p !== '') : []
+  const logs: ChecklistLog[] = list
+    .filter(l => l && typeof l === 'object')
+    .map(raw => {
+      const l = raw as Partial<ChecklistLog>
+      return {
+        ...l,
+        id: String(l.id ?? ''),
+        date: toStr(l.date),
+        space: toStr(l.space),
+        note: toStr(l.note),
+        beforePhotos: toPhotos(l.beforePhotos),
+        afterPhotos: toPhotos(l.afterPhotos),
+        duration: toNum(l.duration),
+        targetMinutes: toNum(l.targetMinutes),
+      }
+    })
+  return logs
+    .map((l, i) => ({ l, i }))
+    .sort((a, b) => {
+      const x = Number(a.l.id), y = Number(b.l.id)
+      if (Number.isFinite(x) && Number.isFinite(y) && x !== y) return y - x
+      return a.i - b.i
+    })
+    .map(o => o.l)
+}
+
 export default function Home() {
   const [tab, setTab]                           = useState<AppTab>('home')
   const [user, setUser]                         = useState<OAuthUser | null>(null)
@@ -81,6 +118,15 @@ export default function Home() {
   // 同一次登入生命週期（同一次 mount）只執行一次 guest→cloud migration，
   // 避免 page.tsx 初始化流程與 MemberTab.tsx 的 auth=success 流程同時觸發兩次
   const migratedEmailsRef = useRef<Set<string>>(new Set())
+  // 目前畫面所屬的登入帳號（null = Guest）。非同步載入完成時用來確認使用者沒有在途中登出／切換，
+  // 避免已登出後，晚回來的 Supabase 私人資料被寫進畫面（進而被 Guest 儲存寫入 LocalStorage）
+  const activeEmailRef = useRef<string | null>(null)
+
+  // Guest 資料：一律從 LocalStorage 讀取（只讀不寫，不會把 Supabase 資料複製回來）
+  const loadGuestData = useCallback(() => {
+    setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
+    setChecklistLogs(normalizeChecklistLogs(loadLS<unknown>(LS_CHECKLIST_LOGS, [])))
+  }, [])
 
   const showToast = useCallback((message: string, type: ToastType = 'error') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -175,6 +221,7 @@ export default function Home() {
   }, [showToast])
 
   const loadUserData = useCallback(async (u: OAuthUser) => {
+    activeEmailRef.current = u.email
     setLoading(true)
     try {
       if (!migratedEmailsRef.current.has(u.email)) {
@@ -185,7 +232,9 @@ export default function Home() {
         sbLoadChecklistLogs(u.email),
         sbLoadDeclutterRecords(u.email),
       ])
-      setChecklistLogs(logs)
+      // 載入期間已登出或換帳號 → 丟棄結果
+      if (activeEmailRef.current !== u.email) return
+      setChecklistLogs(normalizeChecklistLogs(logs))
       setDeclutterRecords(records)
     } catch {
       showToast('載入資料失敗，請重新整理')
@@ -214,11 +263,8 @@ export default function Home() {
 
     const u = getUserFromCookie()
     if (u) { setUser(u); loadUserData(u) }
-    else {
-      setDeclutterRecords(loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, []))
-      setChecklistLogs(loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, []))
-    }
-  }, [loadUserData])
+    else { activeEmailRef.current = null; loadGuestData() }
+  }, [loadUserData, loadGuestData])
 
   // ── Tab 切換（共用，帶捲到頂）────────────────────────────────
   const handleTabChange = useCallback((newTab: AppTab) => {
@@ -312,7 +358,11 @@ export default function Home() {
   const handleUserChange = async (u: OAuthUser | null) => {
     setUser(u)
     if (u) await loadUserData(u)
-    else { setDeclutterRecords([]); setChecklistLogs([]) }
+    else {
+      // 登出：清掉登入帳號的資料，改載入本機 Guest 資料（若有）
+      activeEmailRef.current = null
+      loadGuestData()
+    }
   }
 
   // DeclutterTab → MemberTab 跳轉（帶子區塊）
