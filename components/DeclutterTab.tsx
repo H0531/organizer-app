@@ -40,6 +40,23 @@ function downloadIcs(content: string, filename: string) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+// 告別文照片壓縮：與 ChecklistTab 整理日記相同（長邊最大 800px、JPEG、quality 0.5）
+// 無法解碼的圖片保留原始字串，不讓儲存流程卡住
+function compressPhoto(src: string): Promise<string> {
+  return new Promise(res => {
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
+      c.width = img.width * r; c.height = img.height * r
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      res(c.toDataURL('image/jpeg', 0.5))
+    }
+    img.onerror = () => res(src)
+    img.src = src
+  })
+}
+
 function readFile(file: File): Promise<string> {
   return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(file) })
 }
@@ -273,16 +290,19 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     if (items.length === 0 || isSavingRef.current || hasSavedRef.current) return false
     isSavingRef.current = true
     try {
-      // 上傳 toss 照片至 Supabase Storage，將 tossEntries 裡的 photo 換成 URL
+      // 告別文照片：先壓縮（同整理日記），登入時再上傳至 Supabase Storage
+      // - Guest：photo = 壓縮後的 JPEG data URL
+      // - 登入：photo = Storage URL；上傳失敗則保留壓縮後的 data URL，不丟照片
       const uploadedEntries = await Promise.all(
         tossEntries.map(async (e) => {
-          if (!e.photo) return e
+          if (!e.photo || !e.photo.startsWith('data:')) return e
+          const compressed = await compressPhoto(e.photo)
           if (userEmail) {
             const { uploadPhoto } = await import('@/lib/photos')
-            const url = await uploadPhoto(userEmail, `toss_photo_${e.id}`, e.photo)
+            const url = await uploadPhoto(userEmail, `toss_photo_${e.id}`, compressed)
             if (url) return { ...e, photo: url }
           }
-          return e  // 未登入或上傳失敗：保留原始 dataUrl（本機用）
+          return { ...e, photo: compressed }
         })
       )
       const record: DeclutterRecord = {

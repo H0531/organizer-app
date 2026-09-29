@@ -6,8 +6,8 @@ import DeclutterTab from '@/components/DeclutterTab'
 import ChallengeTab from '@/components/ChallengeTab'
 import RecommendTab from '@/components/RecommendTab'
 import MemberTab from '@/components/MemberTab'
-import type { DeclutterRecord, ChecklistLog } from '@/lib/types'
-import { loadLS, saveLS, savePhoto, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
+import type { DeclutterRecord, ChecklistLog, TossEntry } from '@/lib/types'
+import { loadLS, saveLS, savePhoto, loadPhoto, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
 import { getUserFromCookie, type OAuthUser } from '@/lib/auth'
 import {
   sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog,
@@ -107,6 +107,23 @@ function normalizeChecklistLogs(list: unknown): ChecklistLog[] {
     .map(o => o.l)
 }
 
+// 舊 Guest 告別文照片（IndexedDB 內可能是未壓縮原圖）在 migration 上傳前壓縮：
+// 與整理日記相同規格（長邊最大 800px、JPEG、quality 0.5）；無法解碼時原樣上傳
+function compressPhotoForUpload(src: string): Promise<string> {
+  return new Promise(res => {
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
+      c.width = img.width * r; c.height = img.height * r
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      res(c.toDataURL('image/jpeg', 0.5))
+    }
+    img.onerror = () => res(src)
+    img.src = src
+  })
+}
+
 export default function Home() {
   const [tab, setTab]                           = useState<AppTab>('home')
   const [user, setUser]                         = useState<OAuthUser | null>(null)
@@ -200,7 +217,33 @@ export default function Home() {
           let allOk = true
           for (const record of guestRecords) {
             try {
-              const saved = await sbSaveDeclutterRecord(u.email, record)
+              // 告別文照片 migration（比照整理日記）：
+              // - photo 為 data: → 上傳 Storage，換成遠端 URL
+              // - 舊 Guest 紀錄沒有 photo → 嘗試從 IndexedDB 讀 toss_photo_${id}，讀得到再壓縮上傳
+              // - IDB 也沒有 → 維持無照片
+              // - 上傳失敗 → 與整理日記相同：中止、保留本機資料、稍後可再同步
+              const migratedEntries: TossEntry[] = []
+              for (const e of record.tossEntries ?? []) {
+                let src = e.photo
+                let fromIdb = false
+                if (!src) {
+                  try { src = await loadPhoto(`toss_photo_${e.id}`) } catch { src = undefined }
+                  fromIdb = !!src
+                }
+                if (src && src.startsWith('data:')) {
+                  // 舊 IDB 照片可能是未壓縮原圖，先壓縮避免超過上傳大小限制
+                  const payload = fromIdb ? await compressPhotoForUpload(src) : src
+                  const url = await uploadPhoto(u.email, `toss_photo_${e.id}`, payload)
+                  if (!url) { allOk = false; break }
+                  migratedEntries.push({ ...e, photo: url })
+                } else {
+                  migratedEntries.push(src ? { ...e, photo: src } : e)
+                }
+              }
+              if (!allOk) break
+
+              const migratedRecord: DeclutterRecord = { ...record, tossEntries: migratedEntries }
+              const saved = await sbSaveDeclutterRecord(u.email, migratedRecord)
               if (!saved) { allOk = false; break }
             } catch (err) {
               console.error('migrateGuestData: declutter record migration failed', err)
@@ -288,26 +331,32 @@ export default function Home() {
 
   // ── 資料操作 handlers ────────────────────────────────────────
   const handleDeclutterSave = async (record: DeclutterRecord) => {
-    // 未登入：照片存 IDB，record 裡的 photo 清掉（避免塞爆 localStorage）
+    // 告別文照片保留在 TossEntry.photo（DeclutterTab 已壓縮）：
+    // Guest 為壓縮後的 data URL、登入為 Storage URL（上傳失敗時為 data URL）
+    // 未登入時另寫一份到 IndexedDB 當快取，但 IDB 不再是照片唯一來源
     if (!user) {
       await Promise.all(
         record.tossEntries.map(e => {
-          if (e.photo) return savePhoto(`toss_photo_${e.id}`, e.photo)
+          if (e.photo && e.photo.startsWith('data:')) return savePhoto(`toss_photo_${e.id}`, e.photo)
           return Promise.resolve()
         })
       )
     }
-    const recordToSave: DeclutterRecord = {
-      ...record,
-      tossEntries: record.tossEntries.map(e => ({ ...e, photo: undefined })),
-    }
+    const recordToSave: DeclutterRecord = record
     setDeclutterRecords(prev => [recordToSave, ...prev])
     if (user) {
       const ok = await sbSaveDeclutterRecord(user.email, recordToSave)
       if (!ok) showToast('儲存失敗，請檢查網路連線')
       else showToast('斷捨離紀錄已儲存', 'success')
     } else {
-      saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])
+      const next = [recordToSave, ...declutterRecords]
+      if (!saveLS(LS_DECLUTTER_RECORDS, next)) {
+        // LocalStorage 容量不足：退回舊做法，data URL 照片只留在 IndexedDB，至少文字紀錄不遺失
+        saveLS(LS_DECLUTTER_RECORDS, next.map(r => ({
+          ...r,
+          tossEntries: r.tossEntries.map(e => (e.photo && e.photo.startsWith('data:') ? { ...e, photo: undefined } : e)),
+        })))
+      }
     }
   }
 

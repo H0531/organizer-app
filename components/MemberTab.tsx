@@ -377,12 +377,19 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
   }, [user?.email])
 
   useEffect(() => {
+    // 照片優先使用紀錄本身的 TossEntry.photo（data URL 或 Storage URL，顯示時直接用）；
+    // 只有舊資料（沒有 photo）才退回 loadPhoto（IndexedDB → 雲端 fallback）
+    // 登入／登出切換時清掉舊的載入結果，並忽略切換前晚回來的結果
+    setTossPhotos({})
     if (declutterRecords.length === 0) return
+    let cancelled = false
     declutterRecords.flatMap(r => r.tossEntries).forEach(async e => {
+      if (e.photo) return
       const photo = await loadPhoto(`toss_photo_${e.id}`, user?.email)
-      if (photo) setTossPhotos(prev => ({ ...prev, [e.id]: photo }))
+      if (!cancelled && photo) setTossPhotos(prev => ({ ...prev, [e.id]: photo }))
     })
-  }, [declutterRecords])
+    return () => { cancelled = true }
+  }, [declutterRecords, user?.email])
 
   const handleGoogleLogin = () => { window.location.href = getGoogleAuthUrl() }
   const handleLogout = () => { clearUserCookie(); onUserChange(null) }
@@ -725,9 +732,9 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                             <div style={{ flex: 1 }}>
                               <strong>{e.name}</strong>
                               {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
-                              {tossPhotos[e.id] && <img src={tossPhotos[e.id]} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 6, marginTop: 8, display: 'block' }} />}
+                              {(e.photo || tossPhotos[e.id]) && <img src={e.photo || tossPhotos[e.id]} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 6, marginTop: 8, display: 'block' }} />}
                             </div>
-                            <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: !isIOSChrome(), photo: isIOSChrome() ? undefined : tossPhotos[e.id] })}
+                            <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: !isIOSChrome(), photo: isIOSChrome() ? undefined : (e.photo || tossPhotos[e.id]) })}
                               style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>分享</button>
                           </div>
                         </div>
