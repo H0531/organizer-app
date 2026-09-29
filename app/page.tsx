@@ -349,13 +349,19 @@ export default function Home() {
       if (!ok) showToast('儲存失敗，請檢查網路連線')
       else showToast('斷捨離紀錄已儲存', 'success')
     } else {
-      const next = [recordToSave, ...declutterRecords]
-      if (!saveLS(LS_DECLUTTER_RECORDS, next)) {
-        // LocalStorage 容量不足：退回舊做法，data URL 照片只留在 IndexedDB，至少文字紀錄不遺失
-        saveLS(LS_DECLUTTER_RECORDS, next.map(r => ({
-          ...r,
-          tossEntries: r.tossEntries.map(e => (e.photo && e.photo.startsWith('data:') ? { ...e, photo: undefined } : e)),
-        })))
+      // 先記下 LocalStorage 目前實際保存的舊紀錄（saveLS 失敗時會先刪除該 key，需要用這份還原）
+      const persistedOld = loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
+      if (!saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])) {
+        // LocalStorage 容量不足：只處理「這一筆新紀錄」—— 它的 data URL 照片退回 IndexedDB（上面已寫入），
+        // 文字照樣保存；舊紀錄一律用原本已保存的內容，不修改、不移除其照片
+        const newWithoutPhotos: DeclutterRecord = {
+          ...recordToSave,
+          tossEntries: recordToSave.tossEntries.map(e => (e.photo && e.photo.startsWith('data:') ? { ...e, photo: undefined } : e)),
+        }
+        if (!saveLS(LS_DECLUTTER_RECORDS, [newWithoutPhotos, ...persistedOld])) {
+          // 仍放不下：至少把舊紀錄原樣寫回，避免 saveLS 刪 key 後舊紀錄整批遺失
+          saveLS(LS_DECLUTTER_RECORDS, persistedOld)
+        }
       }
     }
   }

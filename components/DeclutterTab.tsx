@@ -42,10 +42,14 @@ function downloadIcs(content: string, filename: string) {
 }
 // 告別文照片壓縮：與 ChecklistTab 整理日記相同（長邊最大 800px、JPEG、quality 0.5）
 // 無法解碼的圖片保留原始字串，不讓儲存流程卡住
-function compressPhoto(src: string): Promise<string> {
+// skipIfCompressed：已是長邊 ≤ 800px 的 JPEG（選照片時已壓縮、或旋轉後的結果）就原樣回傳，避免二次壓縮
+function compressPhoto(src: string, opts?: { skipIfCompressed?: boolean }): Promise<string> {
   return new Promise(res => {
     const img = new Image()
     img.onload = () => {
+      if (opts?.skipIfCompressed && src.startsWith('data:image/jpeg') && Math.max(img.width, img.height) <= 800) {
+        res(src); return
+      }
       const c = document.createElement('canvas')
       const max = 800; const r = Math.min(max / img.width, max / img.height, 1)
       c.width = img.width * r; c.height = img.height * r
@@ -109,7 +113,10 @@ function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p:
       <input ref={ref} type="file" accept="image/*"
         {...(isChrome() ? {} : { capture: undefined })}
         style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-        onChange={async e => { if (e.target.files?.[0]) { onChange(await readFile(e.target.files[0])); e.target.value = '' } }} />
+        onChange={async e => {
+          // 選照片當下就壓縮（800px / JPEG 0.5），避免原圖進入 state 與 LocalStorage 草稿
+          if (e.target.files?.[0]) { onChange(await compressPhoto(await readFile(e.target.files[0]))); e.target.value = '' }
+        }} />
     </div>
   )
 }
@@ -296,7 +303,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       const uploadedEntries = await Promise.all(
         tossEntries.map(async (e) => {
           if (!e.photo || !e.photo.startsWith('data:')) return e
-          const compressed = await compressPhoto(e.photo)
+          // 選照片時通常已壓縮；舊草稿中的原圖仍會在這裡壓縮
+          const compressed = await compressPhoto(e.photo, { skipIfCompressed: true })
           if (userEmail) {
             const { uploadPhoto } = await import('@/lib/photos')
             const url = await uploadPhoto(userEmail, `toss_photo_${e.id}`, compressed)
@@ -860,8 +868,20 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
         </div>
       ))}
 
+      {/* 直接儲存：沿用決定頁同一個 handleSave（閃動 → 儲存完成 popup），不需先返回決定頁 */}
+      {items.length > 0 && !justSaved && (
+        <button onClick={handleSave}
+          style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saveFlash ? sg : ink, color: 'white', fontSize: 16, cursor: 'pointer', fontWeight: 600, marginBottom: 10, transition: 'background 0.3s' }}>
+          {saveFlash ? '✅ 已儲存整理成果！' : '💾 儲存斷捨離紀錄'}
+        </button>
+      )}
+      {justSaved && (
+        <div style={{ background: '#EAF2EE', border: `1px solid ${sg}`, borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, fontWeight: 600, color: '#2E6B50', textAlign: 'center' }}>
+          ✅ 紀錄已儲存到我的整理
+        </div>
+      )}
       <button onClick={() => setStage('review')}
-        style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: ink, color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 600 }}>
+        style={{ width: '100%', padding: '12px', borderRadius: 12, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
         ← 返回決定頁
       </button>
       <div style={{ textAlign: 'center', fontSize: 13, color: ml, marginTop: 14, lineHeight: 1.8 }}>
