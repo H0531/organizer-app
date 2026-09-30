@@ -225,7 +225,23 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   }
   const setDec = (id: string, d: Decision) =>
     setItems(prev => prev.map(x => x.id === id ? { ...x, decision: x.decision === d ? null : d } : x))
-  const removeItem = (id: string) => setItems(prev => prev.filter(x => x.id !== id))
+  // 刪除一件物品：所有以 item.id 綁定的資料一併移除（告別文與照片、送出備註／照片／日期／行事曆、編輯狀態）
+  const removeItem = (id: string) => {
+    const nextItems = items.filter(x => x.id !== id)
+    const omitId = <T,>(r: Record<string, T>): Record<string, T> => {
+      if (!(id in r)) return r
+      const next = { ...r }; delete next[id]; return next
+    }
+    setItems(nextItems)
+    setTossEntries(prev => prev.filter(e => e.id !== id))
+    setDonateMemos(omitId); setDonatePhotos(omitId); setDonateDates(omitId)
+    setDonateCalItems(prev => { if (!prev.has(id)) return prev; const next = new Set(prev); next.delete(id); return next })
+    if (editTossId === id) { setEditTossId(null); setEditTossMemo(''); setEditTossPhoto(undefined) }
+    if (editKeepId === id) setEditKeepId(null)
+    if (editingItemId === id) setEditingItemId(null)
+    // 刪到最後一件時，草稿 effect 不會寫入（items.length > 0 才寫），直接清掉舊草稿避免重新整理後復活
+    if (nextItems.length === 0) saveLS(DRAFT_KEY, null)
+  }
   const saveItemName = (id: string) => {
     const name = editingItemName.trim(); if (!name) return
     setItems(prev => prev.map(x => x.id === id ? { ...x, name } : x))
