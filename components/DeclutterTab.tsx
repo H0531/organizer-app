@@ -291,9 +291,33 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   // 這一輪是否已寫入紀錄（防止「儲存」與「查看紀錄」重複寫入同一輪）
   const hasSavedRef = useRef(false)
 
+  // 把「編輯中、尚未按『儲存告別文』」的內容合併進 tossEntries，回傳合併後的新陣列
+  // - 不依賴 setState 同步生效：呼叫端直接使用回傳值
+  // - 沒有正在編輯 → 原樣回傳 tossEntries
+  // - 該物品已有告別文 → 更新 memo / photo（保留原本位置與日期）
+  // - 該物品尚無告別文 → 有填文字或照片才新增；空白則不新增
+  // - 完成後關閉編輯狀態（「取消」不經過這裡，仍代表放棄）
+  const commitCurrentTossEdit = (): TossEntry[] => {
+    if (!editTossId) return tossEntries
+    const id = editTossId
+    let merged = tossEntries
+    if (tossEntries.some(e => e.id === id)) {
+      merged = tossEntries.map(e => e.id === id ? { ...e, memo: editTossMemo, photo: editTossPhoto } : e)
+    } else {
+      const item = items.find(x => x.id === id)
+      if (item && (editTossMemo.trim() || editTossPhoto)) {
+        merged = [...tossEntries, { id, name: item.name, memo: editTossMemo, date: new Date().toLocaleDateString('zh-TW'), photo: editTossPhoto }]
+      }
+    }
+    if (merged !== tossEntries) setTossEntries(merged)
+    setEditTossId(null)
+    return merged
+  }
+
   // 共用：把目前這一輪組成 DeclutterRecord 並交給 page.tsx 寫入（state + LocalStorage / Supabase）
+  // entries：要寫入的告別文（預設為目前 state；儲存前已合併編輯中內容時由呼叫端傳入）
   // 回傳 true 表示這次有實際寫入
-  const persistRecord = async (): Promise<boolean> => {
+  const persistRecord = async (entries: TossEntry[] = tossEntries): Promise<boolean> => {
     if (items.length === 0 || isSavingRef.current || hasSavedRef.current) return false
     isSavingRef.current = true
     try {
@@ -301,7 +325,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
       // - Guest：photo = 壓縮後的 JPEG data URL
       // - 登入：photo = Storage URL；上傳失敗則保留壓縮後的 data URL，不丟照片
       const uploadedEntries = await Promise.all(
-        tossEntries.map(async (e) => {
+        entries.map(async (e) => {
           if (!e.photo || !e.photo.startsWith('data:')) return e
           // 選照片時通常已壓縮；舊草稿中的原圖仍會在這裡壓縮
           const compressed = await compressPhoto(e.photo, { skipIfCompressed: true })
@@ -334,7 +358,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
 
   // 「💾 儲存斷捨離紀錄」按鈕：行為與原本相同（閃動 → 慶賀 → popup）
   const handleSave = async () => {
-    const saved = await persistRecord()
+    // 正在編輯告別文但尚未按「儲存告別文」→ 先合併，並把合併後的內容直接交給 persistRecord
+    const saved = await persistRecord(commitCurrentTossEdit())
     if (!saved) return
     setSaveFlash(true)
     setTimeout(() => {
@@ -346,7 +371,8 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
 
   // 「決定好了！」右上角「查看紀錄」：尚未儲存時先寫入這一輪，再前往我的整理
   const handleViewRecords = async () => {
-    const saved = await persistRecord()
+    // 與 handleSave 相同：這裡也會寫入正式紀錄，先合併編輯中的告別文
+    const saved = await persistRecord(commitCurrentTossEdit())
     if (saved) {
       // 這一輪已成為正式紀錄，清掉草稿，回來時不會再重複儲存
       saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
@@ -656,7 +682,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                             const updated: TossEntry = { id: item.id, name: item.name, memo: editTossMemo, date: entry?.date || new Date().toLocaleDateString('zh-TW'), photo: editTossPhoto }
                             setTossEntries(prev => [...prev.filter(e => e.id !== item.id), updated])
                             setEditTossId(null)
-                          }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存</button>
+                          }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存告別文</button>
                           <button onClick={() => setEditTossId(null)} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
                         </div>
                       </div>
@@ -670,7 +696,11 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                   </div>
                   {!isEditing && (
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button onClick={() => { setEditTossId(item.id); setEditTossMemo(entry?.memo || ''); setEditTossPhoto(entry?.photo) }}
+                      <button onClick={() => {
+                        // 切換編輯對象前，先保留上一篇編輯中的內容；並從合併後的資料取目前內容
+                        const current = commitCurrentTossEdit().find(e => e.id === item.id)
+                        setEditTossId(item.id); setEditTossMemo(current?.memo || ''); setEditTossPhoto(current?.photo)
+                      }}
                         style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>編輯</button>
                       {entry && <button onClick={() => setShareTossEntry(entry)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>}
                       <button onClick={() => removeItem(item.id)} style={{ fontSize: 12, color: '#C47B5A', background: 'none', border: 'none', cursor: 'pointer' }}>刪除</button>
@@ -825,7 +855,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <button onClick={() => setStage('review')} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← 返回</button>
+        <button onClick={() => { commitCurrentTossEdit(); setStage('review') }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← 返回</button>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 20, fontWeight: 700, color: ink, margin: 0 }}>告別紀念文</h1>
       </div>
 
@@ -842,7 +872,11 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => setShareTossEntry(entry)} style={{ fontSize: 12, color: sg, background: 'none', border: 'none', cursor: 'pointer' }}>分享</button>
-              <button onClick={() => { setEditTossId(entry.id); setEditTossMemo(entry.memo); setEditTossPhoto(entry.photo) }}
+              <button onClick={() => {
+                // 切換編輯對象前，先保留上一篇編輯中的內容；並從合併後的資料取目前內容
+                const current = commitCurrentTossEdit().find(e => e.id === entry.id) ?? entry
+                setEditTossId(entry.id); setEditTossMemo(current.memo); setEditTossPhoto(current.photo)
+              }}
                 style={{ fontSize: 12, color: mf, background: 'none', border: 'none', cursor: 'pointer' }}>編輯</button>
             </div>
           </div>
@@ -855,7 +889,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                 <button onClick={() => {
                   setTossEntries(prev => prev.map(e => e.id === entry.id ? { ...e, memo: editTossMemo, photo: editTossPhoto } : e))
                   setEditTossId(null)
-                }} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存</button>
+                }} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存告別文</button>
                 <button onClick={() => setEditTossId(null)} style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
               </div>
             </div>
@@ -880,7 +914,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           ✅ 紀錄已儲存到我的整理
         </div>
       )}
-      <button onClick={() => setStage('review')}
+      <button onClick={() => { commitCurrentTossEdit(); setStage('review') }}
         style={{ width: '100%', padding: '12px', borderRadius: 12, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
         ← 返回決定頁
       </button>
