@@ -682,7 +682,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                             const updated: TossEntry = { id: item.id, name: item.name, memo: editTossMemo, date: entry?.date || new Date().toLocaleDateString('zh-TW'), photo: editTossPhoto }
                             setTossEntries(prev => [...prev.filter(e => e.id !== item.id), updated])
                             setEditTossId(null)
-                          }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存告別文</button>
+                          }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存這則告別</button>
                           <button onClick={() => setEditTossId(null)} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
                         </div>
                       </div>
@@ -889,7 +889,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                 <button onClick={() => {
                   setTossEntries(prev => prev.map(e => e.id === entry.id ? { ...e, memo: editTossMemo, photo: editTossPhoto } : e))
                   setEditTossId(null)
-                }} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存告別文</button>
+                }} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: sg, color: 'white', fontSize: 12, cursor: 'pointer' }}>儲存這則告別</button>
                 <button onClick={() => setEditTossId(null)} style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 12, cursor: 'pointer' }}>取消</button>
               </div>
             </div>
