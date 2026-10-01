@@ -248,7 +248,7 @@ type ChecklistDraft = {
   useCustom: boolean
   customMins: string
 }
-type Props = { onSaveLog: (log: ChecklistLog) => void; onDeleteLog?: (id: string) => void; onEditLog?: (id: string, note: string) => void; initialLogs?: ChecklistLog[]; userId?: string }
+type Props = { onSaveLog: (log: ChecklistLog) => Promise<boolean>; onDeleteLog?: (id: string) => Promise<boolean>; onEditLog?: (id: string, note: string) => Promise<boolean>; initialLogs?: ChecklistLog[]; userId?: string }
 
 export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initialLogs, userId }: Props) {
   const [page, setPageRaw] = useState<1 | 2 | 3>(1)
@@ -507,8 +507,9 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     } as ChecklistDraft)
   }
 
-  const saveLog = async () => {
-    if (!canSave || isSavingRef.current) return
+  // 回傳 true 表示這筆日記已確實持久化；只有 true 才清草稿、進成功畫面
+  const saveLog = async (): Promise<boolean> => {
+    if (!canSave || isSavingRef.current) return false
     isSavingRef.current = true
     setIsSavingUI(true)
     const defaultNote = `完成了${SN[space]}整理，用時 ${fmtMins(elapsedSecs)}。`
@@ -544,8 +545,16 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       beforePhotos: bp, afterPhotos: ap,
       duration: elapsedSecs, targetMinutes: effectiveMins,
     }
+    // 等待實際持久化結果；失敗或例外 → 草稿、照片、心得、計時全部保留，不進成功畫面（page.tsx 已顯示失敗提示）
+    let ok = false
+    try { ok = await onSaveLog(entry) } catch { ok = false }
+    if (!ok) {
+      isSavingRef.current = false
+      setIsSavingUI(false)
+      return false
+    }
     const next = [entry, ...logs]
-    setLogs(next); onSaveLog(entry)
+    setLogs(next)
     // GA: 整理打卡儲存
     if (typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', 'checklist_saved', {
@@ -567,6 +576,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       setSaveFlash(false); setPage(3)
       setTimeout(() => setSavedPopupEntry(entry), 150)
     }, 600)
+    return true
   }
 
   const validateAndDownloadIcs = () => {
@@ -586,20 +596,33 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const removeScheduled = (id: string) => {
     const next = scheduledItems.filter(s => s.id !== id); setScheduledItems(next); saveLS('checklist_scheduled', next)
   }
-  const saveEdit = () => {
+  // 有 onEditLog / onDeleteLog 時：畫面以 page.tsx 的 state 為準（經 initialLogs 同步回來），
+  // 不在這裡先改 logs；寫入失敗時 page.tsx 不更新 state，畫面就維持原樣
+  const saveEdit = async () => {
     if (!editingId) return
-    const next = logs.map(l => l.id === editingId ? { ...l, note: editNote } : l)
-    setLogs(next)
-    if (onEditLog) onEditLog(editingId, editNote)
-    else saveLS(LS_CHECKLIST_LOGS, next, userId)
+    const id = editingId
+    if (onEditLog) {
+      const ok = await onEditLog(id, editNote)
+      if (!ok) return   // 失敗：編輯框與輸入內容保留
+    } else {
+      const next = logs.map(l => l.id === id ? { ...l, note: editNote } : l)
+      setLogs(next)
+      saveLS(LS_CHECKLIST_LOGS, next, userId)
+    }
     setEditingId(null)
   }
-  const deleteLog = (id: string) => {
-    const next = logs.filter(l => l.id !== id)
-    setLogs(next)
-    if (onDeleteLog) onDeleteLog(id)
-    else saveLS(LS_CHECKLIST_LOGS, next, userId)
-    setConfirmDeleteId(null); if (shareEntry?.id === id) setShareEntry(null)
+  const deleteLog = async (id: string) => {
+    if (onDeleteLog) {
+      const ok = await onDeleteLog(id)
+      setConfirmDeleteId(null)
+      if (!ok) return   // 失敗：紀錄仍顯示
+    } else {
+      const next = logs.filter(l => l.id !== id)
+      setLogs(next)
+      saveLS(LS_CHECKLIST_LOGS, next, userId)
+      setConfirmDeleteId(null)
+    }
+    if (shareEntry?.id === id) setShareEntry(null)
   }
   const shareText = (e: ChecklistLog) => `我完成了${e.space}整理！用時 ${fmtMins(e.duration)} ✨\n${e.note}\n#整理小幫手 #生活整理`
   const shareCardRef = useRef<HTMLDivElement>(null)

@@ -107,6 +107,25 @@ function normalizeChecklistLogs(list: unknown): ChecklistLog[] {
     .map(o => o.l)
 }
 
+// Guest checklist_logs 專用安全寫入：
+// 直接 setItem 覆蓋，失敗只 catch，不先 removeItem 再重試（saveLS 的做法在第二次也失敗時會讓舊資料整個消失）
+// setItem 拋出例外（例如容量不足）時，瀏覽器不會改動 key 原本的值 → 已成功保存的舊紀錄維持原樣
+function safeSaveChecklistLogs(next: ChecklistLog[]): boolean {
+  try {
+    localStorage.setItem(LS_CHECKLIST_LOGS, JSON.stringify(next))
+    return true
+  } catch (err) {
+    console.warn('safeSaveChecklistLogs: localStorage write failed', err)
+    return false
+  }
+}
+
+// Guest：讀取 LocalStorage 實際保存的 checklist_logs（以實際保存內容為基準組新資料，不依賴畫面 state）
+function loadPersistedChecklistLogs(): ChecklistLog[] {
+  const raw = loadLS<unknown>(LS_CHECKLIST_LOGS, [])
+  return Array.isArray(raw) ? (raw as ChecklistLog[]) : []
+}
+
 // 舊 Guest 告別文照片（IndexedDB 內可能是未壓縮原圖）在 migration 上傳前壓縮：
 // 與整理日記相同規格（長邊最大 800px、JPEG、quality 0.5）；無法解碼時原樣上傳
 function compressPhotoForUpload(src: string): Promise<string> {
@@ -377,14 +396,25 @@ export default function Home() {
     return false
   }
 
-  const handleChecklistSave = async (log: ChecklistLog) => {
-    setChecklistLogs(prev => [log, ...prev])
+  // 回傳 true 表示這筆日記已確實持久化（Supabase 或 LocalStorage）；ChecklistTab 只有在 true 時才進入成功流程
+  const handleChecklistSave = async (log: ChecklistLog): Promise<boolean> => {
     if (user) {
+      // 登入：先確實寫入 Supabase，成功後才更新畫面 state
       const ok = await sbSaveChecklistLog(user.email, log)
-      if (!ok) showToast('儲存失敗，請檢查網路連線')
-    } else {
-      saveLS(LS_CHECKLIST_LOGS, [log, ...checklistLogs])
+      if (!ok) {
+        showToast('儲存失敗，請檢查網路連線')
+        return false
+      }
+      setChecklistLogs(prev => [log, ...prev])
+      return true
     }
+    // Guest：以 LocalStorage 實際保存的資料為基準，安全寫入成功後才更新畫面；失敗時舊資料原樣保留
+    if (!safeSaveChecklistLogs([log, ...loadPersistedChecklistLogs()])) {
+      showToast('儲存失敗，本機儲存空間可能不足')
+      return false
+    }
+    setChecklistLogs(prev => [log, ...prev])
+    return true
   }
 
   const handleDeleteDeclutterRecord = async (savedAt: string) => {
@@ -446,28 +476,43 @@ export default function Home() {
     return true
   }
 
-  const handleDeleteChecklistLog = async (id: string) => {
-    setChecklistLogs(prev => prev.filter(l => l.id !== id))
+  const handleDeleteChecklistLog = async (id: string): Promise<boolean> => {
     if (user) {
+      // 登入：維持原本行為（本輪不修改）
+      setChecklistLogs(prev => prev.filter(l => l.id !== id))
       const ok = await sbDeleteChecklistLog(user.email, id)
       if (!ok) showToast('刪除失敗，請檢查網路連線')
-    } else {
-      saveLS(LS_CHECKLIST_LOGS, checklistLogs.filter(l => l.id !== id))
+      return ok
     }
+    // Guest：寫入成功後才更新畫面；失敗時 LocalStorage 與畫面都維持原樣（刪到 0 筆時寫入 []）
+    if (!safeSaveChecklistLogs(loadPersistedChecklistLogs().filter(l => l.id !== id))) {
+      showToast('刪除失敗，請稍後再試')
+      return false
+    }
+    setChecklistLogs(prev => prev.filter(l => l.id !== id))
+    return true
   }
 
-  const handleEditChecklistLog = async (id: string, note: string) => {
-    const updated = checklistLogs.map(l => l.id === id ? { ...l, note } : l)
-    setChecklistLogs(updated)
+  const handleEditChecklistLog = async (id: string, note: string): Promise<boolean> => {
     if (user) {
+      // 登入：維持原本行為（本輪不修改）
+      const updated = checklistLogs.map(l => l.id === id ? { ...l, note } : l)
+      setChecklistLogs(updated)
       const log = updated.find(l => l.id === id)
       if (log) {
         const ok = await sbSaveChecklistLog(user.email, log)
         if (!ok) showToast('編輯儲存失敗')
+        return ok
       }
-    } else {
-      saveLS(LS_CHECKLIST_LOGS, updated)
+      return true
     }
+    // Guest：寫入成功後才更新畫面；失敗時 LocalStorage 與畫面都維持原樣
+    if (!safeSaveChecklistLogs(loadPersistedChecklistLogs().map(l => l.id === id ? { ...l, note } : l))) {
+      showToast('編輯儲存失敗')
+      return false
+    }
+    setChecklistLogs(prev => prev.map(l => l.id === id ? { ...l, note } : l))
+    return true
   }
 
   const handleUserChange = async (u: OAuthUser | null) => {
