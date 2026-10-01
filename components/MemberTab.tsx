@@ -359,13 +359,18 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
       setAuthError(true)
       window.history.replaceState({}, '', '/')
     }
+    // 帳號切換／登出（user?.email 改變）或卸載時，cleanup 會把 cancelled 設為 true，
+    // 之後才回來的舊帳號 response（含 null 時的 LocalStorage fallback）一律不更新畫面
+    let cancelled = false
     if (user?.email) {
-      sbLoadChallengeData(user.email).then(remote => {
+      const email = user.email
+      sbLoadChallengeData(email).then(remote => {
+        if (cancelled) return
         if (remote) {
           setChallengeMode(remote.mode as number | null)
           setChallengeEntries(remote.entries as ChallengeEntry[])
         } else {
-          const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] }, user.email)
+          const saved = loadLS<{ mode: number | null; entries: ChallengeEntry[] }>(LS_CHALLENGE_DATA, { mode: null, entries: [] }, email)
           setChallengeMode(saved.mode); setChallengeEntries(saved.entries)
         }
       })
@@ -375,6 +380,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     }
     const sec = sessionStorage.getItem('member_section') as 'diary' | 'declutter' | 'challenge' | 'stats' | null
     if (sec) { setActiveSection(sec); sessionStorage.removeItem('member_section') }
+    return () => { cancelled = true }
   }, [user?.email])
 
   useEffect(() => {
