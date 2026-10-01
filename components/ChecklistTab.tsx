@@ -316,7 +316,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       const saved = loadLS<ChecklistLog[]>(LS_CHECKLIST_LOGS, [], userId)
       setLogs(saved)
     }
-    const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [])
+    const sched = loadLS<ScheduledItem[]>('checklist_scheduled', [], userId)
     setScheduledItems(sched)
     const savedCustom = loadLS<Record<string, CustomItem[]>>('checklist_custom_items', {})
     setCustomItems(savedCustom)
@@ -590,11 +590,11 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       id: Date.now().toString(), space, date: calDate, time: calTime,
       durationMins: effectiveMins, beforePhotos: [...beforePhotos], skipBefore,
     }
-    const next = [newItem, ...scheduledItems]; setScheduledItems(next); saveLS('checklist_scheduled', next)
+    const next = [newItem, ...scheduledItems]; setScheduledItems(next); saveLS('checklist_scheduled', next, userId)
     setShowCalModal(false)
   }
   const removeScheduled = (id: string) => {
-    const next = scheduledItems.filter(s => s.id !== id); setScheduledItems(next); saveLS('checklist_scheduled', next)
+    const next = scheduledItems.filter(s => s.id !== id); setScheduledItems(next); saveLS('checklist_scheduled', next, userId)
   }
   // 有 onEditLog / onDeleteLog 時：畫面以 page.tsx 的 state 為準（經 initialLogs 同步回來），
   // 不在這裡先改 logs；寫入失敗時 page.tsx 不更新 state，畫面就維持原樣

@@ -132,9 +132,9 @@ function loadPersistedChecklistLogs(): ChecklistLog[] {
 // 規則：帳號沒有自己的草稿 → 先把 Guest 原字串寫進帳號 key，全部成功後才刪 Guest key（永遠先寫後刪）
 //       帳號已有自己的草稿 → 兩份都不動，回報 conflict
 //       寫入失敗（例如容量不足）→ 撤回這次新寫入的帳號 key、保留 Guest key，回報 failed
-type DraftClaimResult = { conflict: boolean; failed: boolean }
+type DraftClaimResult = { conflict: boolean; failed: boolean; scheduledConflict: boolean; scheduledFailed: boolean }
 function claimGuestDrafts(email: string): DraftClaimResult {
-  const result: DraftClaimResult = { conflict: false, failed: false }
+  const result: DraftClaimResult = { conflict: false, failed: false, scheduledConflict: false, scheduledFailed: false }
   if (typeof window === 'undefined') return result
   const has = (raw: string | null) => raw !== null && raw !== 'null'
   const acct = (key: string) => `${key}__${email}`
@@ -176,6 +176,23 @@ function claimGuestDrafts(email: string): DraftClaimResult {
           // stage 寫入失敗：撤回剛寫入的帳號草稿（帳號原本沒有草稿），Guest 兩個 key 保持原樣
           if (draftWritten) { try { localStorage.removeItem(acct('declutter_draft')) } catch { /* ignore */ } }
           result.failed = true
+        }
+      }
+    }
+    // ── 整理清單預約（可能含整理前照片原圖）：同樣規則，直接搬原始字串；'[]' 視為沒有預約 ──
+    const hasScheduled = (raw: string | null) => has(raw) && raw !== '[]'
+    const scGuest = localStorage.getItem('checklist_scheduled')
+    if (hasScheduled(scGuest)) {
+      if (hasScheduled(localStorage.getItem(acct('checklist_scheduled')))) {
+        result.scheduledConflict = true
+      } else {
+        try {
+          localStorage.setItem(acct('checklist_scheduled'), scGuest as string)
+          localStorage.removeItem('checklist_scheduled')
+        } catch (err) {
+          // setItem 失敗不會寫入任何內容（帳號 key 維持原狀），Guest key 保留
+          console.warn('claimGuestDrafts: checklist_scheduled write failed', err)
+          result.scheduledFailed = true
         }
       }
     }
@@ -349,11 +366,16 @@ export default function Home() {
     // Guest 草稿認領：必須同步、在第一個 await 之前完成，
     // 讓之後才掛載的 ChecklistTab / DeclutterTab 一初始化就讀到帳號 key
     const claim = claimGuestDrafts(u.email)
-    if ((claim.failed || claim.conflict) && !draftNoticeShownRef.current.has(u.email)) {
+    // 同一次頁面生命週期、同一個 email 最多一則提示；優先順序：寫入失敗 > 未合併（草稿 > 預約）
+    const claimNotice =
+      claim.failed ? '本機儲存空間不足，訪客草稿暫時無法轉入你的帳號，草稿仍保留在本機。'
+      : claim.scheduledFailed ? '本機儲存空間不足，訪客預約暫時無法轉入你的帳號，預約仍保留在本機。'
+      : claim.conflict ? '本機還有一份訪客草稿，因為你已有進行中的草稿，所以沒有合併。'
+      : claim.scheduledConflict ? '本機還有一份訪客預約，因為你已有自己的預約，所以沒有合併。'
+      : null
+    if (claimNotice && !draftNoticeShownRef.current.has(u.email)) {
       draftNoticeShownRef.current.add(u.email)
-      showToast(claim.failed
-        ? '本機儲存空間不足，訪客草稿暫時無法轉入你的帳號，草稿仍保留在本機。'
-        : '本機還有一份訪客草稿，因為你已有進行中的草稿，所以沒有合併。')
+      showToast(claimNotice)
     }
     setLoading(true)
     try {
