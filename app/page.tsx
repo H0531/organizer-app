@@ -229,8 +229,11 @@ export default function Home() {
   const [toast, setToast]                       = useState<{ message: string; type: ToastType } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 同一次登入生命週期（同一次 mount）只執行一次 guest→cloud migration，
-  // 避免 page.tsx 初始化流程與 MemberTab.tsx 的 auth=success 流程同時觸發兩次
-  const migratedEmailsRef = useRef<Set<string>>(new Set())
+  // 避免 page.tsx 初始化流程與 MemberTab.tsx 的 auth=success 流程同時觸發兩次。
+  // 記錄每個 email 的 migration Promise（進行中或已完成都保留）：
+  // 之後同一 email 的 loadUserData 不重跑 migration，而是 await 同一個 Promise，
+  // 確保 migration 完成前不會讀雲端、也不會提前結束 loading
+  const migrationPromisesRef = useRef<Map<string, Promise<void>>>(new Map())
   // 目前畫面所屬的登入帳號（null = Guest）。非同步載入完成時用來確認使用者沒有在途中登出／切換，
   // 避免已登出後，晚回來的 Supabase 私人資料被寫進畫面（進而被 Guest 儲存寫入 LocalStorage）
   const activeEmailRef = useRef<string | null>(null)
@@ -379,10 +382,15 @@ export default function Home() {
     }
     setLoading(true)
     try {
-      if (!migratedEmailsRef.current.has(u.email)) {
-        migratedEmailsRef.current.add(u.email)
-        await migrateGuestData(u)
+      let migration = migrationPromisesRef.current.get(u.email)
+      if (!migration) {
+        // 只有第一次呼叫會建立並執行 migration（同步存入 Map，後續呼叫一定拿得到）
+        migration = migrateGuestData(u)
+        migrationPromisesRef.current.set(u.email, migration)
       }
+      // 所有呼叫等待同一個 Promise，得到一致結果；
+      // migrateGuestData 內部已自行處理各筆失敗（保留本機＋提示），萬一整體 reject 會進入下方既有的 catch
+      await migration
       const [logs, records] = await Promise.all([
         sbLoadChecklistLogs(u.email),
         sbLoadDeclutterRecords(u.email),
