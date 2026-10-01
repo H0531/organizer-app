@@ -126,6 +126,66 @@ function loadPersistedChecklistLogs(): ChecklistLog[] {
   return Array.isArray(raw) ? (raw as ChecklistLog[]) : []
 }
 
+// ── 草稿帳號隔離：登入時認領 Guest 草稿 ────────────────────
+// Guest 草稿 key：checklist_draft / declutter_draft / declutter_stage
+// 帳號草稿 key：同名加上 `__${email}`（與 loadLS / saveLS 第三個參數相同的命名）
+// 規則：帳號沒有自己的草稿 → 先把 Guest 原字串寫進帳號 key，全部成功後才刪 Guest key（永遠先寫後刪）
+//       帳號已有自己的草稿 → 兩份都不動，回報 conflict
+//       寫入失敗（例如容量不足）→ 撤回這次新寫入的帳號 key、保留 Guest key，回報 failed
+type DraftClaimResult = { conflict: boolean; failed: boolean }
+function claimGuestDrafts(email: string): DraftClaimResult {
+  const result: DraftClaimResult = { conflict: false, failed: false }
+  if (typeof window === 'undefined') return result
+  const has = (raw: string | null) => raw !== null && raw !== 'null'
+  const acct = (key: string) => `${key}__${email}`
+  try {
+    // ── 整理清單草稿 ──
+    const clGuest = localStorage.getItem('checklist_draft')
+    if (has(clGuest)) {
+      if (has(localStorage.getItem(acct('checklist_draft')))) {
+        result.conflict = true
+      } else {
+        try {
+          localStorage.setItem(acct('checklist_draft'), clGuest as string)
+          localStorage.removeItem('checklist_draft')
+        } catch (err) {
+          console.warn('claimGuestDrafts: checklist_draft write failed', err)
+          result.failed = true
+        }
+      }
+    }
+    // ── 斷捨離草稿 + 階段（一組；只有 stage 沒有 draft 時不認領、不刪除）──
+    const dcGuest = localStorage.getItem('declutter_draft')
+    if (has(dcGuest)) {
+      if (has(localStorage.getItem(acct('declutter_draft')))) {
+        result.conflict = true
+      } else {
+        const stGuest = localStorage.getItem('declutter_stage')
+        let draftWritten = false
+        try {
+          localStorage.setItem(acct('declutter_draft'), dcGuest as string)
+          draftWritten = true
+          // 帳號 stage 與 Guest 一致：Guest 有 stage 就一起搬；沒有則移除帳號殘留的 stage（沒有草稿時它沒有意義）
+          if (has(stGuest)) localStorage.setItem(acct('declutter_stage'), stGuest as string)
+          else localStorage.removeItem(acct('declutter_stage'))
+          // 兩者都寫入成功才刪 Guest
+          localStorage.removeItem('declutter_draft')
+          localStorage.removeItem('declutter_stage')
+        } catch (err) {
+          console.warn('claimGuestDrafts: declutter draft/stage write failed', err)
+          // stage 寫入失敗：撤回剛寫入的帳號草稿（帳號原本沒有草稿），Guest 兩個 key 保持原樣
+          if (draftWritten) { try { localStorage.removeItem(acct('declutter_draft')) } catch { /* ignore */ } }
+          result.failed = true
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('claimGuestDrafts failed', err)
+    result.failed = true
+  }
+  return result
+}
+
 // 舊 Guest 告別文照片（IndexedDB 內可能是未壓縮原圖）在 migration 上傳前壓縮：
 // 與整理日記相同規格（長邊最大 800px、JPEG、quality 0.5）；無法解碼時原樣上傳
 function compressPhotoForUpload(src: string): Promise<string> {
@@ -157,6 +217,8 @@ export default function Home() {
   // 目前畫面所屬的登入帳號（null = Guest）。非同步載入完成時用來確認使用者沒有在途中登出／切換，
   // 避免已登出後，晚回來的 Supabase 私人資料被寫進畫面（進而被 Guest 儲存寫入 LocalStorage）
   const activeEmailRef = useRef<string | null>(null)
+  // 草稿認領提示：同一次頁面生命週期、同一個 email 最多提示一次（OAuth 回來的重複 loadUserData、改名時不重複跳）
+  const draftNoticeShownRef = useRef<Set<string>>(new Set())
 
   // Guest 資料：一律從 LocalStorage 讀取（只讀不寫，不會把 Supabase 資料複製回來）
   const loadGuestData = useCallback(() => {
@@ -284,6 +346,15 @@ export default function Home() {
 
   const loadUserData = useCallback(async (u: OAuthUser) => {
     activeEmailRef.current = u.email
+    // Guest 草稿認領：必須同步、在第一個 await 之前完成，
+    // 讓之後才掛載的 ChecklistTab / DeclutterTab 一初始化就讀到帳號 key
+    const claim = claimGuestDrafts(u.email)
+    if ((claim.failed || claim.conflict) && !draftNoticeShownRef.current.has(u.email)) {
+      draftNoticeShownRef.current.add(u.email)
+      showToast(claim.failed
+        ? '本機儲存空間不足，訪客草稿暫時無法轉入你的帳號，草稿仍保留在本機。'
+        : '本機還有一份訪客草稿，因為你已有進行中的草稿，所以沒有合併。')
+    }
     setLoading(true)
     try {
       if (!migratedEmailsRef.current.has(u.email)) {

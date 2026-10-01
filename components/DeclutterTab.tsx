@@ -7,6 +7,7 @@ const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A3
 const KEEP_CATS = ['每天會用', '偶爾會用', '捨不得丟', '備用存放', '工作學習', '小孩的']
 const DRAFT_KEY = 'declutter_draft'
 const STAGE_KEY = 'declutter_stage'
+// 草稿與階段為一組：登入時以 loadLS / saveLS 第三個參数 userEmail 加上帳號後綴；Guest 用原 key
 
 // ── 擴充快速輸入，分類顯示 ───────────────────────────────────
 const QUICK_ITEM_GROUPS: { label: string; items: string[] }[] = [
@@ -196,7 +197,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   const [showSavedPopup, setShowSavedPopup] = useState(false)
   const isSavingRef = useRef(false)
 
-  const setStage = (s: Stage) => { setStageRaw(s); saveLS(STAGE_KEY, s) }
+  const setStage = (s: Stage) => { setStageRaw(s); saveLS(STAGE_KEY, s, userEmail) }
 
   // 切換階段（含子流程下一件、儲存完成）時回到畫面最上方；首次掛載不處理（切換 tab 時 page.tsx 已置頂）
   const isFirstStageRender = useRef(true)
@@ -208,15 +209,15 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   }, [stage, flowIndex, justSaved])
 
   useEffect(() => {
-    const draft = loadLS<{ items: DeclutterItem[]; tossEntries: TossEntry[] } | null>(DRAFT_KEY, null)
+    const draft = loadLS<{ items: DeclutterItem[]; tossEntries: TossEntry[] } | null>(DRAFT_KEY, null, userEmail)
     if (draft) { setItems(draft.items); setTossEntries(draft.tossEntries) }
-    const savedStage = loadLS<Stage | null>(STAGE_KEY, null)
+    const savedStage = loadLS<Stage | null>(STAGE_KEY, null, userEmail)
     if (savedStage) setStageRaw(savedStage)
-  }, [])
+  }, [userEmail])
 
   useEffect(() => {
-    if (items.length > 0) saveLS(DRAFT_KEY, { items, tossEntries })
-  }, [items, tossEntries])
+    if (items.length > 0) saveLS(DRAFT_KEY, { items, tossEntries }, userEmail)
+  }, [items, tossEntries, userEmail])
 
   const addItem = (name?: string) => {
     const v = name || input.trim(); if (!v) return
@@ -240,7 +241,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     if (editKeepId === id) setEditKeepId(null)
     if (editingItemId === id) setEditingItemId(null)
     // 刪到最後一件時，草稿 effect 不會寫入（items.length > 0 才寫），直接清掉舊草稿避免重新整理後復活
-    if (nextItems.length === 0) saveLS(DRAFT_KEY, null)
+    if (nextItems.length === 0) saveLS(DRAFT_KEY, null, userEmail)
   }
   const saveItemName = (id: string) => {
     const name = editingItemName.trim(); if (!name) return
@@ -383,7 +384,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     setSaveFlash(true)
     setTimeout(() => {
       setSaveFlash(false); setJustSaved(true)
-      saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
+      saveLS(DRAFT_KEY, null, userEmail); saveLS(STAGE_KEY, null, userEmail)
       setShowSavedPopup(true)
     }, 600)
   }
@@ -394,7 +395,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     const saved = await persistRecord(commitCurrentTossEdit())
     if (saved) {
       // 這一輪已成為正式紀錄，清掉草稿，回來時不會再重複儲存
-      saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, null)
+      saveLS(DRAFT_KEY, null, userEmail); saveLS(STAGE_KEY, null, userEmail)
     }
     onGoToMember('declutter')
   }
@@ -402,7 +403,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
   const resetAll = () => {
     hasSavedRef.current = false
     setItems([]); setTossEntries([]); setStage('input'); setJustSaved(false)
-    saveLS(DRAFT_KEY, null); saveLS(STAGE_KEY, 'input')
+    saveLS(DRAFT_KEY, null, userEmail); saveLS(STAGE_KEY, 'input', userEmail)
   }
 
   // ── STAGE: input ─────────────────────────────────────────────

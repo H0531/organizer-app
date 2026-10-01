@@ -232,7 +232,7 @@ function SavedPopup({ entry, onShare, onClose }: { entry: ChecklistLog; onShare:
 }
 
 const CL_PAGE_KEY = 'checklist_page'
-const CL_DRAFT_KEY = 'checklist_draft'  // 整理中草稿
+const CL_DRAFT_KEY = 'checklist_draft'  // 整理中草稿（登入時以 loadLS / saveLS 第三個參數 userId 加上帳號後綴；Guest 用原 key）
 
 type ChecklistDraft = {
   space: string
@@ -326,7 +326,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       setPageRaw(3)
     } else if (savedPage === 2) {
       // 恢復整理中草稿
-      const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null)
+      const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null, userId)
       if (draft) {
         setSpace(SP[draft.space] ? draft.space : 'living')
         setChecked(draft.checked)
@@ -412,12 +412,12 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
             skipBefore, skipAfter, note,
             accumulatedSecs, startedAt,
             targetMins, useCustom, customMins,
-          } as ChecklistDraft)
+          } as ChecklistDraft, userId)
         }
       }, 1000)
     } else { if (timerRef.current) clearInterval(timerRef.current) }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [timerRunning, startedAt, space, checked, beforePhotos, afterPhotos, skipBefore, skipAfter, note, accumulatedSecs, targetMins, useCustom, customMins])
+  }, [timerRunning, startedAt, space, checked, beforePhotos, afterPhotos, skipBefore, skipAfter, note, accumulatedSecs, targetMins, useCustom, customMins, userId])
 
   const addPhotos = (type: 'before' | 'after', files: FileList) => {
     const cur = type === 'before' ? beforePhotos : afterPhotos
@@ -437,7 +437,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         skipBefore, skipAfter, note,
         accumulatedSecs: elapsedSecs, startedAt: null,
         targetMins, useCustom, customMins,
-      } as ChecklistDraft)
+      } as ChecklistDraft, userId)
     })
   }
   const removePhoto = (type: 'before' | 'after', i: number) => {
@@ -479,9 +479,9 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       targetMins, useCustom, customMins,
       ...overrides,
     }
-    saveLS(CL_DRAFT_KEY, draft)
+    saveLS(CL_DRAFT_KEY, draft, userId)
   }
-  const clearDraft = () => saveLS(CL_DRAFT_KEY, null)
+  const clearDraft = () => saveLS(CL_DRAFT_KEY, null, userId)
 
   const startTimer = () => {
     const now = Date.now()
@@ -504,7 +504,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       skipBefore, skipAfter: false, note: '',
       accumulatedSecs: 0, startedAt: now,
       targetMins: effectiveMins, useCustom, customMins,
-    } as ChecklistDraft)
+    } as ChecklistDraft, userId)
   }
 
   // 回傳 true 表示這筆日記已確實持久化；只有 true 才清草稿、進成功畫面
@@ -638,7 +638,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     <div>
       {/* 繼續未完成整理的提示 */}
       {(() => {
-        const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null)
+        const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null, userId)
         if (!draft || !draft.space) return null
         const SN_MAP: Record<string, string> = { desk: '書桌', wardrobe: '衣櫃', kitchen: '廚房', bathroom: '浴室', bag: '包包', digital: '數位' }
         const spName = SN_MAP[draft.space] ?? draft.space
@@ -834,7 +834,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
             skipBefore, skipAfter, note,
             accumulatedSecs: newAcc, startedAt: null,
             targetMins, useCustom, customMins,
-          } as ChecklistDraft)
+          } as ChecklistDraft, userId)
           setPage(1)
         }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
         <h1 style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 22, fontWeight: 700, color: ink, margin: 0 }}>整理中</h1>
@@ -880,7 +880,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                 skipBefore, skipAfter, note,
                 accumulatedSecs: newAcc, startedAt: null,
                 targetMins, useCustom, customMins,
-              } as ChecklistDraft)
+              } as ChecklistDraft, userId)
             } else {
               // 繼續：記錄新的 startedAt
               setStartedAt(Date.now())
