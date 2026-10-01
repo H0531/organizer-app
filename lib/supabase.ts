@@ -8,13 +8,13 @@ export const supabase = createClient(SUPA_URL, SUPA_KEY)
 
 // ── Checklist Logs ────────────────────────────────────────────
 
-export async function sbLoadChecklistLogs(email: string): Promise<ChecklistLog[]> {
+export async function sbLoadChecklistLogs(email: string): Promise<ChecklistLog[] | null> {
   const { data, error } = await supabase
     .from('checklist_logs')
     .select('data')
     .eq('user_email', email)
     .order('updated_at', { ascending: false })
-  if (error) { console.error('sbLoadChecklistLogs', error); return [] }
+  if (error) { console.error('sbLoadChecklistLogs', error); return null }
   return (data ?? []).map((r: { data: unknown }) => r.data as ChecklistLog)
 }
 
@@ -41,13 +41,13 @@ export async function sbDeleteChecklistLog(email: string, id: string): Promise<b
 
 // ── Declutter Records ─────────────────────────────────────────
 
-export async function sbLoadDeclutterRecords(email: string): Promise<DeclutterRecord[]> {
+export async function sbLoadDeclutterRecords(email: string): Promise<DeclutterRecord[] | null> {
   const { data, error } = await supabase
     .from('declutter_records')
     .select('data')
     .eq('user_email', email)
     .order('updated_at', { ascending: false })
-  if (error) { console.error('sbLoadDeclutterRecords', error); return [] }
+  if (error) { console.error('sbLoadDeclutterRecords', error); return null }
   return (data ?? []).map((r: { data: unknown }) => r.data as DeclutterRecord)
 }
 

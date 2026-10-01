@@ -277,8 +277,13 @@ export default function Home() {
       ])
       // 載入期間已登出或換帳號 → 丟棄結果
       if (activeEmailRef.current !== u.email) return
-      setChecklistLogs(normalizeChecklistLogs(logs))
-      setDeclutterRecords(records)
+      // 讀取失敗（null）→ 保留既有 state，不誤當成 0 筆；成功（含真的 0 筆 []）→ 正常更新
+      let loadFailed = false
+      if (logs !== null) setChecklistLogs(normalizeChecklistLogs(logs))
+      else loadFailed = true
+      if (records !== null) setDeclutterRecords(records)
+      else loadFailed = true
+      if (loadFailed) showToast('載入資料失敗，請重新整理')
     } catch {
       showToast('載入資料失敗，請重新整理')
     } finally {
