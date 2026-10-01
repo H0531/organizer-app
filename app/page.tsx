@@ -383,12 +383,21 @@ export default function Home() {
   }
 
   const handleDeleteDeclutterRecord = async (savedAt: string) => {
-    setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
     if (user) {
+      // 登入：維持原本行為（本輪不修改）
+      setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
       const ok = await sbDeleteDeclutterRecord(user.email, savedAt)
       if (!ok) showToast('刪除失敗，請檢查網路連線')
+      return
+    }
+    // Guest：以 LocalStorage「實際保存的資料」為準（state 可能含 LocalStorage 已移除的照片，資料量較大）
+    const persisted = loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
+    if (saveLS(LS_DECLUTTER_RECORDS, persisted.filter(r => r.savedAt !== savedAt))) {
+      // 寫入成功後才更新畫面
+      setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
     } else {
-      saveLS(LS_DECLUTTER_RECORDS, declutterRecords.filter(r => r.savedAt !== savedAt))
+      // 寫入失敗：saveLS 可能已先移除 key，把原資料寫回；畫面 state 保持不變
+      saveLS(LS_DECLUTTER_RECORDS, persisted)
     }
   }
 
