@@ -488,6 +488,32 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button onClick={handleLogout} style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 13, cursor: 'pointer' }}>登出</button>
           <button onClick={() => {
+            // Guest → Google migration 只有全部成功才會移除 checklist_logs / declutter_records；
+            // 登入後這兩個 key 仍有資料 = 尚未同步到雲端（含 migration 失敗、部分成功、進行中）→ 禁止清除、不 reload
+            // 回傳：0 = key 不存在（確認沒有資料）；>0 = 待同步筆數；null = key 存在但無法解析成陣列（無法確認，禁止清除）
+            const countLS = (key: string): number | null => {
+              const raw = localStorage.getItem(key)
+              if (raw === null) return 0
+              try {
+                const v = JSON.parse(raw)
+                return Array.isArray(v) ? v.length : null
+              } catch { return null }
+            }
+            const pendingLogs = countLS('checklist_logs')
+            const pendingRecords = countLS('declutter_records')
+            if (pendingLogs === null || pendingRecords === null) {
+              alert('本機整理資料格式異常，為避免資料遺失，暫時無法清除。請先重新整理頁面或再次同步。')
+              return
+            }
+            if (pendingLogs > 0 || pendingRecords > 0) {
+              const parts = [
+                pendingLogs > 0 ? `${pendingLogs} 筆整理日記` : '',
+                pendingRecords > 0 ? `${pendingRecords} 筆斷捨離紀錄` : '',
+              ].filter(Boolean)
+              alert(`還有 ${parts.join('、')}尚未同步到雲端，請重新整理頁面讓系統再次同步，同步完成前無法清除。`)
+              return
+            }
+            if (!confirm('目前沒有待同步的整理資料。確定要清除舊版本機資料嗎？')) return
             Object.keys(localStorage).filter(k => k.startsWith('declutter_records') || k.startsWith('checklist_logs')).forEach(k => localStorage.removeItem(k))
             window.location.reload()
           }} style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: '#C47B5A', fontSize: 13, cursor: 'pointer' }}>清除本機舊資料</button>
