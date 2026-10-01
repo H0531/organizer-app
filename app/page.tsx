@@ -401,6 +401,46 @@ export default function Home() {
     }
   }
 
+  // 更新一筆既有的斷捨離紀錄（目前用於「補填分類」）
+  // original：畫面上的原紀錄物件（state 以物件本身比對替換，不依賴 savedAt）
+  // updated：只修改了指定欄位的新物件
+  // 回傳 true 表示已確實持久化，才更新畫面
+  const handleUpdateDeclutterRecord = async (original: DeclutterRecord, updated: DeclutterRecord): Promise<boolean> => {
+    if (user) {
+      // 登入：sbSaveDeclutterRecord 以 user_email + saved_at 找到既有列並更新整筆 data
+      const ok = await sbSaveDeclutterRecord(user.email, updated)
+      if (!ok) {
+        showToast('儲存失敗，請檢查網路連線')
+        return false
+      }
+      setDeclutterRecords(prev => prev.map(r => (r === original ? updated : r)))
+      return true
+    }
+    // Guest：以 LocalStorage 實際保存的資料為準（state 可能含 LocalStorage 沒有的照片）
+    const persisted = loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
+    // 對應的紀錄：savedAt 相同，且每件物品的 id 依序相同（避免舊的分鐘格式 savedAt 碰撞時改到別筆）
+    const idx = persisted.findIndex(r =>
+      r.savedAt === original.savedAt &&
+      r.items.length === original.items.length &&
+      r.items.every((it, i) => it.id === original.items[i].id))
+    if (idx < 0) return false
+    // 只把 original → updated 之間有變動的 category 套用到 LocalStorage 那一筆，其餘欄位維持 LocalStorage 原樣
+    const target = persisted[idx]
+    const nextTarget: DeclutterRecord = {
+      ...target,
+      items: target.items.map((it, i) =>
+        updated.items[i].category !== original.items[i].category ? { ...it, category: updated.items[i].category } : it),
+    }
+    const next = persisted.map((r, i) => (i === idx ? nextTarget : r))
+    if (!saveLS(LS_DECLUTTER_RECORDS, next)) {
+      // 寫入失敗：saveLS 可能已先移除 key，把原資料寫回；畫面 state 保持不變
+      saveLS(LS_DECLUTTER_RECORDS, persisted)
+      return false
+    }
+    setDeclutterRecords(prev => prev.map(r => (r === original ? updated : r)))
+    return true
+  }
+
   const handleDeleteChecklistLog = async (id: string) => {
     setChecklistLogs(prev => prev.filter(l => l.id !== id))
     if (user) {
@@ -532,6 +572,7 @@ export default function Home() {
             onUserChange={handleUserChange}
             onDeleteDeclutter={handleDeleteDeclutterRecord}
             onDeleteDiary={handleDeleteChecklistLog}
+            onUpdateDeclutter={handleUpdateDeclutterRecord}
             onNavigate={handleTabChange}
           />
         )}

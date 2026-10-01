@@ -312,10 +312,11 @@ type Props = {
   onUserChange: (u: OAuthUser | null) => void
   onDeleteDeclutter: (savedAt: string) => void
   onDeleteDiary: (id: string) => void
+  onUpdateDeclutter: (original: DeclutterRecord, updated: DeclutterRecord) => Promise<boolean>
   onNavigate?: (tab: AppTab) => void
 }
 
-export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange, onDeleteDeclutter, onDeleteDiary, onNavigate }: Props) {
+export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange, onDeleteDeclutter, onDeleteDiary, onUpdateDeclutter, onNavigate }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
@@ -705,16 +706,15 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
                         {editingCategory?.savedAt === record.savedAt && editingCategory?.itemIdx === j && (
                           <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                             {KEEP_CATS.map(cat => (
-                              <button key={cat} onClick={() => {
-                                // 更新 record 中這筆 item 的 category，透過 onDeleteDeclutter 的反向操作無法直接改，用 localStorage 直接寫
-                                const key = Object.keys(localStorage).find(k => k.startsWith('declutter_records'))
-                                if (key) {
-                                  const records = JSON.parse(localStorage.getItem(key) || '[]')
-                                  const recIdx = records.findIndex((r: DeclutterRecord) => r.savedAt === record.savedAt)
-                                  if (recIdx >= 0) { records[recIdx].items[j].category = cat; localStorage.setItem(key, JSON.stringify(records)) }
+                              <button key={cat} onClick={async () => {
+                                // 只修改這筆紀錄第 j 件物品的 category（建立新物件，不 mutate 原紀錄），交給 page.tsx 持久化
+                                const updated: DeclutterRecord = {
+                                  ...record,
+                                  items: record.items.map((it, idx) => (idx === j ? { ...it, category: cat } : it)),
                                 }
-                                setEditingCategory(null)
-                                window.location.reload()
+                                const ok = await onUpdateDeclutter(record, updated)
+                                // 成功才關閉選單（畫面隨 parent state 更新）；失敗保留選單，可再選一次
+                                if (ok) setEditingCategory(null)
                               }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${sg}`, background: '#EAF2EE', color: '#2E6B50', cursor: 'pointer' }}>{cat}</button>
                             ))}
                             <button onClick={() => setEditingCategory(null)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${bd}`, background: 'white', color: mf, cursor: 'pointer' }}>取消</button>
