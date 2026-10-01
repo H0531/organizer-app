@@ -375,6 +375,8 @@ export default function Home() {
         showToast('儲存失敗，請檢查網路連線')
         return false
       }
+      // 儲存期間已登出或換帳號 → 不寫進目前畫面（避免原帳號紀錄混入 Guest / 新帳號 state）；雲端已存好，仍回傳 true
+      if (activeEmailRef.current !== user.email) return true
       setDeclutterRecords(prev => [recordToSave, ...prev])
       showToast('斷捨離紀錄已儲存', 'success')
       return true
@@ -405,6 +407,8 @@ export default function Home() {
         showToast('儲存失敗，請檢查網路連線')
         return false
       }
+      // 儲存期間已登出或換帳號 → 不寫進目前畫面（避免原帳號紀錄混入 Guest / 新帳號 state）；雲端已存好，仍回傳 true
+      if (activeEmailRef.current !== user.email) return true
       setChecklistLogs(prev => [log, ...prev])
       return true
     }
