@@ -158,7 +158,7 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
 }
 
 type Stage = 'input' | 'review' | 'flow' | 'tosslist'
-type Props = { onSaveToMember: (record: DeclutterRecord) => void; onGoToMember: (section?: string) => void; userEmail?: string }
+type Props = { onSaveToMember: (record: DeclutterRecord) => Promise<boolean>; onGoToMember: (section?: string) => void; userEmail?: string }
 
 export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }: Props) {
   const [items, setItems] = useState<DeclutterItem[]>([])
@@ -357,7 +357,10 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
         savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         items, tossEntries: uploadedEntries,
       }
-      onSaveToMember(record)
+      // 等待實際持久化結果；失敗或例外 → 不標記已儲存、回傳 false（不清草稿、不進入成功流程）
+      let ok = false
+      try { ok = await onSaveToMember(record) } catch { ok = false }
+      if (!ok) return false
       hasSavedRef.current = true
       // GA: 斷捨離儲存
       if (typeof window !== 'undefined' && window.gtag) {

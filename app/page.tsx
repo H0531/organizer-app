@@ -330,7 +330,8 @@ export default function Home() {
   }, [])
 
   // ── 資料操作 handlers ────────────────────────────────────────
-  const handleDeclutterSave = async (record: DeclutterRecord) => {
+  // 回傳 true 表示這筆紀錄已確實持久化（Supabase 或 LocalStorage）；DeclutterTab 只有在 true 時才進入成功流程
+  const handleDeclutterSave = async (record: DeclutterRecord): Promise<boolean> => {
     // 告別文照片保留在 TossEntry.photo（DeclutterTab 已壓縮）：
     // Guest 為壓縮後的 data URL、登入為 Storage URL（上傳失敗時為 data URL）
     // 未登入時另寫一份到 IndexedDB 當快取，但 IDB 不再是照片唯一來源
@@ -343,27 +344,32 @@ export default function Home() {
       )
     }
     const recordToSave: DeclutterRecord = record
-    setDeclutterRecords(prev => [recordToSave, ...prev])
     if (user) {
+      // 登入：先確實寫入 Supabase，成功後才更新畫面 state（失敗時不加入假紀錄）
       const ok = await sbSaveDeclutterRecord(user.email, recordToSave)
-      if (!ok) showToast('儲存失敗，請檢查網路連線')
-      else showToast('斷捨離紀錄已儲存', 'success')
-    } else {
-      // 先記下 LocalStorage 目前實際保存的舊紀錄（saveLS 失敗時會先刪除該 key，需要用這份還原）
-      const persistedOld = loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
-      if (!saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])) {
-        // LocalStorage 容量不足：只處理「這一筆新紀錄」—— 它的 data URL 照片退回 IndexedDB（上面已寫入），
-        // 文字照樣保存；舊紀錄一律用原本已保存的內容，不修改、不移除其照片
-        const newWithoutPhotos: DeclutterRecord = {
-          ...recordToSave,
-          tossEntries: recordToSave.tossEntries.map(e => (e.photo && e.photo.startsWith('data:') ? { ...e, photo: undefined } : e)),
-        }
-        if (!saveLS(LS_DECLUTTER_RECORDS, [newWithoutPhotos, ...persistedOld])) {
-          // 仍放不下：至少把舊紀錄原樣寫回，避免 saveLS 刪 key 後舊紀錄整批遺失
-          saveLS(LS_DECLUTTER_RECORDS, persistedOld)
-        }
+      if (!ok) {
+        showToast('儲存失敗，請檢查網路連線')
+        return false
       }
+      setDeclutterRecords(prev => [recordToSave, ...prev])
+      showToast('斷捨離紀錄已儲存', 'success')
+      return true
     }
+    // Guest：維持原本順序與 LocalStorage fallback，只補上回傳值
+    setDeclutterRecords(prev => [recordToSave, ...prev])
+    // 先記下 LocalStorage 目前實際保存的舊紀錄（saveLS 失敗時會先刪除該 key，需要用這份還原）
+    const persistedOld = loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
+    if (saveLS(LS_DECLUTTER_RECORDS, [recordToSave, ...declutterRecords])) return true
+    // LocalStorage 容量不足：只處理「這一筆新紀錄」—— 它的 data URL 照片退回 IndexedDB（上面已寫入），
+    // 文字照樣保存；舊紀錄一律用原本已保存的內容，不修改、不移除其照片
+    const newWithoutPhotos: DeclutterRecord = {
+      ...recordToSave,
+      tossEntries: recordToSave.tossEntries.map(e => (e.photo && e.photo.startsWith('data:') ? { ...e, photo: undefined } : e)),
+    }
+    if (saveLS(LS_DECLUTTER_RECORDS, [newWithoutPhotos, ...persistedOld])) return true
+    // 仍放不下：至少把舊紀錄原樣寫回，避免 saveLS 刪 key 後舊紀錄整批遺失；新紀錄未寫入
+    saveLS(LS_DECLUTTER_RECORDS, persistedOld)
+    return false
   }
 
   const handleChecklistSave = async (log: ChecklistLog) => {
