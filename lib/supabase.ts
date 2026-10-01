@@ -1,10 +1,79 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type User } from '@supabase/supabase-js'
 import type { ChecklistLog, DeclutterRecord } from './types'
+import type { OAuthUser } from './auth'
 
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(SUPA_URL, SUPA_KEY)
+// 瀏覽器端 Supabase client（anon key + Supabase Auth session）：
+// - 登入後 session 由 supabase-js 自動保存與更新（persistSession / autoRefreshToken）
+// - OAuth 回來時自動從網址取得並交換 session（detectSessionInUrl，PKCE 流程）
+// - 登入後，所有資料庫請求自動帶目前使用者的 JWT
+export const supabase = createClient(SUPA_URL, SUPA_KEY, {
+  auth: {
+    flowType: 'pkce',
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})
+
+// ── Supabase Auth：App 唯一的登入身分來源 ─────────────────────
+// Supabase Auth User → 現有 OAuthUser 結構（其餘元件仍以 user.email 為帳號識別）
+// 沒有 email 的 session（例如匿名登入）一律不視為登入帳號
+export function toAppUser(u: User | null | undefined): OAuthUser | null {
+  const email = u?.email?.trim().toLowerCase()
+  if (!u || !email) return null
+  const meta = (u.user_metadata ?? {}) as Record<string, unknown>
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+  return {
+    name: str(meta.name) ?? str(meta.full_name) ?? email,
+    email,
+    picture: str(meta.avatar_url) ?? str(meta.picture),
+    provider: 'google',
+  }
+}
+
+// 初始化時取得目前登入者（讀 Supabase 保存的 session；OAuth 回來時會先完成 code 交換）
+// - error：無法確認身分（呼叫端不可當成 Guest 繼續讀寫資料）
+// - oauthError：網址帶有 OAuth 錯誤（例如使用者取消登入）→ 呼叫端以 Guest 繼續
+export async function getAuthUser(): Promise<{ user: OAuthUser | null; error: unknown | null; oauthError: boolean }> {
+  const search = new URLSearchParams(window.location.search)
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const oauthError = search.has('error') || hash.has('error')
+  try {
+    const { data, error } = await supabase.auth.getSession()
+    if (error && !oauthError) return { user: null, error, oauthError }
+    return { user: toAppUser(data.session?.user), error: null, oauthError }
+  } catch (err) {
+    if (oauthError) return { user: null, error: null, oauthError }
+    return { user: null, error: err, oauthError }
+  }
+}
+
+// Google 登入：由 Supabase Auth 處理 OAuth（state / PKCE / callback / session）
+export async function signInWithGoogle(): Promise<boolean> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: `${window.location.origin}/` },
+  })
+  if (error) { console.error('signInWithGoogle', error); return false }
+  return true
+}
+
+// 登出：成功時 Supabase 會發出 SIGNED_OUT 事件（page.tsx 監聽後切回 Guest）
+export async function signOutAuth(): Promise<boolean> {
+  const { error } = await supabase.auth.signOut()
+  if (error) { console.error('signOutAuth', error); return false }
+  return true
+}
+
+// 改名：寫入 Supabase Auth 的 user_metadata.name（只影響顯示名稱）
+export async function updateAuthDisplayName(name: string): Promise<boolean> {
+  const { error } = await supabase.auth.updateUser({ data: { name } })
+  if (error) { console.error('updateAuthDisplayName', error); return false }
+  return true
+}
 
 // ── Checklist Logs ────────────────────────────────────────────
 

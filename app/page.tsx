@@ -8,10 +8,11 @@ import RecommendTab from '@/components/RecommendTab'
 import MemberTab from '@/components/MemberTab'
 import type { DeclutterRecord, ChecklistLog, TossEntry } from '@/lib/types'
 import { loadLS, saveLS, savePhoto, loadPhoto, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
-import { getUserFromCookie, type OAuthUser } from '@/lib/auth'
+import type { OAuthUser } from '@/lib/auth'
 import {
   sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog,
   sbLoadDeclutterRecords, sbSaveDeclutterRecord, sbDeleteDeclutterRecord,
+  supabase, getAuthUser, toAppUser,
 } from '@/lib/supabase'
 import { uploadPhoto } from '@/lib/photos'
 
@@ -239,6 +240,12 @@ export default function Home() {
   const activeEmailRef = useRef<string | null>(null)
   // 草稿認領提示：同一次頁面生命週期、同一個 email 最多提示一次（OAuth 回來的重複 loadUserData、改名時不重複跳）
   const draftNoticeShownRef = useRef<Set<string>>(new Set())
+  // ── 登入身分（Supabase Auth）初始化狀態 ──
+  // authReady=false 時不渲染任何資料分頁：避免身分尚未確認就以 Guest 身分讀寫 LocalStorage
+  const [authReady, setAuthReady] = useState(false)
+  const [authError, setAuthError] = useState(false)
+  // 是否已套用過第一次身分（之後的 auth 事件只在「身分真的改變」時才切換資料）
+  const authResolvedRef = useRef(false)
 
   // Guest 資料：一律從 LocalStorage 讀取（只讀不寫，不會把 Supabase 資料複製回來）
   const loadGuestData = useCallback(() => {
@@ -411,6 +418,23 @@ export default function Home() {
     }
   }, [showToast, migrateGuestData])
 
+  // 套用 Supabase Auth 身分：
+  // - 第一次（初始化）一定套用
+  // - 之後只有 email 真的改變（null→A、A→B、A→null）才切換資料；
+  //   同一身分（TOKEN_REFRESHED、USER_UPDATED、重複 SIGNED_IN）只同步顯示名稱／頭像，不重跑 migration、不重新載入
+  const applyAuthUser = useCallback((u: OAuthUser | null) => {
+    const nextEmail = u?.email ?? null
+    if (authResolvedRef.current && nextEmail === activeEmailRef.current) {
+      if (u) setUser(prev => (prev && prev.email === u.email && prev.name === u.name && prev.picture === u.picture) ? prev : u)
+      return
+    }
+    authResolvedRef.current = true
+    setUser(u)
+    if (u) loadUserData(u)   // 同步部分：activeEmailRef = email → claimGuestDrafts（在分頁初始化之前）
+    else { activeEmailRef.current = null; loadGuestData() }
+    setAuthReady(true)
+  }, [loadUserData, loadGuestData])
+
   useEffect(() => {
     if (/Line\//.test(navigator.userAgent)) {
       const url = window.location.href
@@ -429,10 +453,37 @@ export default function Home() {
       if (savedTab && TABS.find(t => t.id === savedTab)) setTab(savedTab)
     }
 
-    const u = getUserFromCookie()
-    if (u) { setUser(u); loadUserData(u) }
-    else { activeEmailRef.current = null; loadGuestData() }
-  }, [loadUserData, loadGuestData])
+    // 登入身分只來自 Supabase Auth session（不再讀 organizer_user cookie）
+    let disposed = false
+    getAuthUser().then(({ user: u, error, oauthError }) => {
+      if (disposed) return
+      if (error) {
+        // 無法確認身分：維持 authReady=false，不以 Guest 身分讀寫任何資料
+        console.error('auth init failed', error)
+        setAuthError(true)
+        return
+      }
+      applyAuthUser(u)
+      if (oauthError) showToast('登入未完成，請再試一次')
+      // 清掉 OAuth 回來時網址上的參數（保留 ?tab= 等其他參數）
+      const url = new URL(window.location.href)
+      let changed = false
+      for (const k of ['code', 'error', 'error_code', 'error_description', 'state']) {
+        if (url.searchParams.has(k)) { url.searchParams.delete(k); changed = true }
+      }
+      if (url.hash && /(^#|&)(error|access_token)=/.test(url.hash)) { url.hash = ''; changed = true }
+      if (changed) window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+    })
+    // 之後的登入／登出／token 更新：延到下一個 tick 處理（避免在 Supabase auth callback 內直接呼叫其他 Supabase API）
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const next = toAppUser(session?.user)
+      setTimeout(() => {
+        if (disposed || !authResolvedRef.current) return   // 初始化由 getAuthUser 負責
+        applyAuthUser(next)
+      }, 0)
+    })
+    return () => { disposed = true; sub.subscription.unsubscribe() }
+  }, [applyAuthUser, showToast])
 
   // ── Tab 切換（共用，帶捲到頂）────────────────────────────────
   const handleTabChange = useCallback((newTab: AppTab) => {
@@ -669,7 +720,14 @@ export default function Home() {
       {/* 頁面內容 */}
       <div style={{ padding: '16px 16px calc(100px + env(safe-area-inset-bottom))', maxWidth: 480, margin: '0 auto' }}>
 
-        {tab === 'home' && (
+        {/* 登入身分確認前不渲染任何分頁（避免以錯誤身分讀寫本機資料） */}
+        {!authReady && (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: ml, fontSize: 14 }}>
+            {authError ? '無法確認登入狀態，請重新整理頁面。' : '確認登入狀態中⋯'}
+          </div>
+        )}
+
+        {authReady && tab === 'home' && (
           <HomeTab
             key="home"
             onNavigate={handleTabChange}
@@ -680,7 +738,7 @@ export default function Home() {
           />
         )}
 
-        {tab === 'checklist' && (
+        {authReady && tab === 'checklist' && (
           <ChecklistTab
             key="checklist"
             onSaveLog={handleChecklistSave}
@@ -691,7 +749,7 @@ export default function Home() {
           />
         )}
 
-        {tab === 'declutter' && (
+        {authReady && tab === 'declutter' && (
           <DeclutterTab
             key="declutter"
             onSaveToMember={handleDeclutterSave}
@@ -700,14 +758,14 @@ export default function Home() {
           />
         )}
 
-        {tab === 'challenge' && (
+        {authReady && tab === 'challenge' && (
           <ChallengeTab
             key="challenge"
             userId={user?.email}
           />
         )}
 
-        {tab === 'recommend' && (
+        {authReady && tab === 'recommend' && (
           <RecommendTab
             key="recommend"
             fromSpace={
@@ -718,7 +776,7 @@ export default function Home() {
           />
         )}
 
-        {tab === 'member' && (
+        {authReady && tab === 'member' && (
           <MemberTab
             key="member"
             declutterRecords={declutterRecords}

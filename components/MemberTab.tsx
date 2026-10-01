@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import type { DeclutterRecord, ChecklistLog, ChallengeEntry } from '@/lib/types'
 import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto, saveShareLabel, drawTextCard, drawDeclutterCard, drawChecklistCard, saveOrShareImage, isIOSChrome } from '@/lib/types'
-import { sbLoadChallengeData } from '@/lib/supabase'
-import { getGoogleAuthUrl, getUserFromCookie, clearUserCookie, type OAuthUser } from '@/lib/auth'
+import { sbLoadChallengeData, signInWithGoogle, signOutAuth, updateAuthDisplayName } from '@/lib/supabase'
+import { clearUserCookie, type OAuthUser } from '@/lib/auth'
 import StatsCharts from './StatsCharts'
 import type { AppTab } from '@/app/page'
 
@@ -316,7 +316,7 @@ type Props = {
   onNavigate?: (tab: AppTab) => void
 }
 
-export default function MemberTab({ declutterRecords, checklistLogs, user, onUserChange, onDeleteDeclutter, onDeleteDiary, onUpdateDeclutter, onNavigate }: Props) {
+export default function MemberTab({ declutterRecords, checklistLogs, user, onDeleteDeclutter, onDeleteDiary, onUpdateDeclutter, onNavigate }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [authError, setAuthError] = useState(false)
@@ -351,9 +351,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    // ?auth=success 只來自舊的自建 OAuth callback：登入身分改由 Supabase Auth 決定，這裡只清掉網址參數，不再讀 cookie
     if (params.get('auth') === 'success') {
-      const fresh = getUserFromCookie()
-      if (fresh) onUserChange(fresh)
       window.history.replaceState({}, '', '/')
     } else if (params.get('auth') === 'error') {
       setAuthError(true)
@@ -398,14 +397,24 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onUse
     return () => { cancelled = true }
   }, [declutterRecords, user?.email])
 
-  const handleGoogleLogin = () => { window.location.href = getGoogleAuthUrl() }
-  const handleLogout = () => { clearUserCookie(); onUserChange(null) }
+  // Google 登入：交給 Supabase Auth（整頁跳轉到 Google，回來後由 page.tsx 取得 session）
+  const handleGoogleLogin = async () => {
+    const ok = await signInWithGoogle()
+    if (!ok) setAuthError(true)
+  }
+  // 登出：Supabase Auth signOut 成功後發出 SIGNED_OUT，page.tsx 收到後切回 Guest；
+  // 失敗時維持登入狀態（不假裝已登出）。舊 organizer_user cookie 一併清掉（已不再作為身分依據）
+  const handleLogout = async () => {
+    const ok = await signOutAuth()
+    if (!ok) { alert('登出失敗，請檢查網路連線後再試一次'); return }
+    clearUserCookie()
+  }
 
-  const saveName = () => {
+  // 改名：寫入 Supabase Auth 的顯示名稱；成功後 USER_UPDATED 事件會更新畫面上的名稱
+  const saveName = async () => {
     if (!draftName.trim() || !user) return
-    const updated = { ...user, name: draftName.trim() }
-    onUserChange(updated)
-    document.cookie = `organizer_user=${encodeURIComponent(JSON.stringify(updated))}; Max-Age=${60 * 60 * 24 * 7}; path=/; SameSite=Lax`
+    const ok = await updateAuthDisplayName(draftName.trim())
+    if (!ok) { alert('改名失敗，請稍後再試'); return }
     setEditingName(false)
   }
 
