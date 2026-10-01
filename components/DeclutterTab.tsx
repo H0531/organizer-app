@@ -354,7 +354,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
         })
       )
       const record: DeclutterRecord = {
-        savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        savedAt: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         items, tossEntries: uploadedEntries,
       }
       onSaveToMember(record)
