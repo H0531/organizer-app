@@ -167,6 +167,9 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
 
   // load 完成才允許 save，避免初始化時空資料覆蓋真實紀錄
   const loadedRef = useRef(false)
+  // 這次載入時 Supabase 讀取是否失敗；失敗期間本機 state 可能不完整，禁止用它整份覆蓋雲端
+  // （「雲端確認沒有資料」不算失敗）
+  const remoteFailedRef = useRef(false)
   const [syncing, setSyncing] = useState(false)
   const [syncToast, setSyncToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
@@ -174,6 +177,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     // 非同步安全：userId 變動（登入／登出）後，舊的讀取結果一律丟棄
     let cancelled = false
     loadedRef.current = false
+    remoteFailedRef.current = false   // 身分改變／重新載入時重設，不沿用上一個身分的結果
     setMode(null)
     setEntries([])
     setSyncToast(null)
@@ -200,6 +204,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
           remoteFailed = true
         }
         if (cancelled) return
+        remoteFailedRef.current = remoteFailed
         setSyncing(false)
       }
 
@@ -252,6 +257,12 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     const payload = { mode: newMode, entries: newEntries }
     // 永遠先存 localStorage（含 userId suffix），確保重整後一定讀得到
     saveLS(LS_CHALLENGE_DATA, payload, userId)
+    // 雲端讀取失敗期間：只存本機，不呼叫 sbSaveChallengeData，避免不完整的本機資料覆蓋雲端
+    if (userId && remoteFailedRef.current) {
+      setSyncToast({ msg: '雲端同步失敗，進度已存本機', ok: false })
+      setTimeout(() => setSyncToast(null), 2800)
+      return
+    }
     // 有登入時額外非同步同步到 Supabase
     if (userId) {
       sbSaveChallengeData(userId, payload).then(ok => {
