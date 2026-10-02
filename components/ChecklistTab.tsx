@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { SHARE_BTNS, shareToSocial, loadLS, saveLS, LS_CHECKLIST_LOGS, saveOrShareImage, saveShareLabel, isChrome, drawChecklistCard } from '@/lib/types'
 import type { ChecklistLog } from '@/lib/types'
+import PhotoImg from '@/components/PhotoImg'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 
@@ -1048,13 +1049,13 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
               {/* AFTER 優先、較大、依原始比例不裁切 */}
               {entry.afterPhotos.slice(0, 2).map((p, i) => (
                 <div key={`a${i}`} style={{ position: 'relative' }}>
-                  <img src={p} alt="" style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 150, maxHeight: 180, borderRadius: 6, border: `1.5px solid ${sg}` }} />
+                  <PhotoImg src={p} alt="" style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 150, maxHeight: 180, borderRadius: 6, border: `1.5px solid ${sg}` }} />
                   <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(122,158,138,0.85)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>A</span>
                 </div>
               ))}
               {entry.beforePhotos.slice(0, 2).map((p, i) => (
                 <div key={`b${i}`} style={{ position: 'relative' }}>
-                  <img src={p} alt="" style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, filter: 'grayscale(20%)' }} />
+                  <PhotoImg src={p} alt="" style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, filter: 'grayscale(20%)' }} />
                   <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 8, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '1px 4px', borderRadius: 3 }}>B</span>
                 </div>
               ))}
@@ -1086,7 +1087,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                     <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {shareEntry.beforePhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.beforePhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10 }} />)}
+                    {shareEntry.beforePhotos.map((p, i) => <PhotoImg key={i} src={p} alt="" style={{ width: shareEntry.beforePhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10 }} />)}
                   </div>
                 </div>
               )}
@@ -1098,7 +1099,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                     <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {shareEntry.afterPhotos.map((p, i) => <img key={i} src={p} alt="" style={{ width: shareEntry.afterPhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, border: `2px solid ${sg}` }} />)}
+                    {shareEntry.afterPhotos.map((p, i) => <PhotoImg key={i} src={p} alt="" style={{ width: shareEntry.afterPhotos.length === 1 ? '100%' : 'calc(50% - 4px)', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 10, border: `2px solid ${sg}` }} />)}
                   </div>
                 </div>
               )}
