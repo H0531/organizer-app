@@ -116,7 +116,7 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
                   <div style={{ flex: 1, height: 1, background: '#E0D8CC' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {beforeList.map((p, i) => <img key={i} src={p} alt="" style={diaryPreviewImg(beforeList.length, 'none')} />)}
+                  {beforeList.map((p, i) => <PhotoImg key={i} src={p} alt="" style={diaryPreviewImg(beforeList.length, 'none')} />)}
                 </div>
               </div>
             )}
@@ -128,7 +128,7 @@ function ShareModal({ title, text, photo, log, captureRef, onClose }: {
                   <div style={{ flex: 1, height: 1, background: '#C8DDD2' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {afterList.map((p, i) => <img key={i} src={p} alt="" style={diaryPreviewImg(afterList.length, `2px solid ${sg}`)} />)}
+                  {afterList.map((p, i) => <PhotoImg key={i} src={p} alt="" style={diaryPreviewImg(afterList.length, `2px solid ${sg}`)} />)}
                 </div>
               </div>
             )}

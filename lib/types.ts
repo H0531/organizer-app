@@ -1,3 +1,6 @@
+import { parsePhotoRef } from './photoRef'
+import { getSignedPhotoUrl } from './photoSigner'
+
 export type Decision = 'keep' | 'donate' | 'toss'
 
 export type DeclutterItem = {
@@ -363,13 +366,29 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): st
   return lines
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+// 照片 reference → HTMLImageElement（Canvas 用）
+// - data URL：直接載入，不 signing
+// - Storage reference（path / Public URL）：parsePhotoRef → getSignedPhotoUrl → signed URL
+//   signed URL 取得失敗 → reject，不 fallback 到 public URL
+// - empty / invalid：reject
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  const ref = parsePhotoRef(src)
+  let resolvedSrc: string
+  if (ref.type === 'data') {
+    resolvedSrc = ref.value
+  } else if (ref.type === 'storage') {
+    const signed = await getSignedPhotoUrl(ref.path)
+    if (!signed) throw new Error('signed photo url unavailable')
+    resolvedSrc = signed
+  } else {
+    throw new Error('invalid photo reference')
+  }
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload  = () => resolve(img)
     img.onerror = () => reject(new Error('image load failed'))
-    img.src = src
+    img.src = resolvedSrc
   })
 }
 
