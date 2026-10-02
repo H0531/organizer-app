@@ -5,6 +5,7 @@ import { loadLS, saveLS, shareToSocial, SHARE_BTNS, LS_CHALLENGE_DATA, loadPhoto
 import { sbLoadChallengeData, signInWithGoogle, signOutAuth, updateAuthDisplayName } from '@/lib/supabase'
 import { clearUserCookie, type OAuthUser } from '@/lib/auth'
 import StatsCharts from './StatsCharts'
+import PhotoImg from './PhotoImg'
 import type { AppTab } from '@/app/page'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
@@ -622,13 +623,13 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onDel
                       {log.beforePhotos?.map((p, idx) => (
                         <div key={`b${idx}`} style={{ flex: '1 1 130px', maxWidth: 'calc(50% - 4px)', minWidth: 120 }}>
                           <div style={{ fontSize: 11, color: mf, marginBottom: 3 }}>整理前</div>
-                          <img src={p} alt="整理前" style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', background: cr, borderRadius: 6, border: `1px solid ${bd}`, display: 'block' }} />
+                          <PhotoImg src={p} alt="整理前" style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', background: cr, borderRadius: 6, border: `1px solid ${bd}`, display: 'block' }} />
                         </div>
                       ))}
                       {log.afterPhotos?.map((p, idx) => (
                         <div key={`a${idx}`} style={{ flex: '1 1 130px', maxWidth: 'calc(50% - 4px)', minWidth: 120 }}>
                           <div style={{ fontSize: 11, color: sg, marginBottom: 3 }}>整理後</div>
-                          <img src={p} alt="整理後" style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', background: cr, borderRadius: 6, border: `2px solid ${sg}`, display: 'block' }} />
+                          <PhotoImg src={p} alt="整理後" style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', background: cr, borderRadius: 6, border: `2px solid ${sg}`, display: 'block' }} />
                         </div>
                       ))}
                     </div>
@@ -773,7 +774,7 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onDel
                             <div style={{ flex: 1 }}>
                               <strong>{e.name}</strong>
                               {e.memo && <div style={{ marginTop: 4, color: ml }}>{e.memo}</div>}
-                              {(e.photo || tossPhotos[e.id]) && <img src={e.photo || tossPhotos[e.id]} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 6, marginTop: 8, display: 'block' }} />}
+                              {(e.photo || tossPhotos[e.id]) && <PhotoImg src={e.photo || tossPhotos[e.id]} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 6, marginTop: 8, display: 'block' }} />}
                             </div>
                             <button onClick={() => setShareModal({ title: `告別紀念文 · ${e.name}`, text: `放手了「${e.name}」\n${e.memo}\n#斷捨離 #整理小幫手`, withCapture: !isIOSChrome(), photo: isIOSChrome() ? undefined : (e.photo || tossPhotos[e.id]) })}
                               style={{ fontSize: 11, color: sg, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>分享</button>
