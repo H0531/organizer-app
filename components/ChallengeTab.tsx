@@ -55,6 +55,77 @@ function isValidChallengeData(v: unknown): v is { mode: ChallengeMode | null; en
   return mode !== null || entries.length > 0
 }
 
+// ── 本機／雲端一致性（P2-3-A）────────────────────────────────
+// 帳號 key 的本機 snapshot：updatedAt 與 pendingSync 跟著同一份資料一起保存
+type LocalSnapshot = { mode: ChallengeMode | null; entries: TossEntry[]; updatedAt?: number; pendingSync?: boolean }
+// 上雲的 payload：pendingSync 只存在本機，不上雲
+type CloudPayload = { mode: ChallengeMode | null; entries: TossEntry[]; updatedAt: number }
+type RemoteRead =
+  | { kind: 'failed' }
+  | { kind: 'none' }
+  | { kind: 'snapshot'; mode: ChallengeMode | null; entries: TossEntry[]; updatedAt?: number }
+type LoadDecision = { source: 'local' | 'remote'; mode: ChallengeMode | null; entries: TossEntry[]; updatedAt?: number; resync: boolean }
+
+function isValidUpdatedAt(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0
+}
+
+function readLocalSnapshot(uid: string): LocalSnapshot {
+  const raw = loadLS<unknown>(LS_CHALLENGE_DATA, null, uid)
+  if (!raw || typeof raw !== 'object') return { mode: null, entries: [] }
+  const r = raw as Record<string, unknown>
+  return {
+    mode: (r.mode as ChallengeMode | null | undefined) ?? null,
+    entries: Array.isArray(r.entries) ? (r.entries as TossEntry[]) : [],
+    updatedAt: isValidUpdatedAt(r.updatedAt) ? r.updatedAt : undefined,
+    pendingSync: r.pendingSync === true,
+  }
+}
+
+// 新格式（有 updatedAt）一律視為有效 snapshot，包含 reset 後的 { mode: null, entries: [] }
+// 舊格式（無 updatedAt）沿用原判斷：mode 與 entries 皆空 → 視為雲端無資料
+function classifyRemote(data: { mode: number | null; entries: unknown[] } | null): RemoteRead {
+  if (!data || typeof data !== 'object') return { kind: 'none' }
+  const d = data as { mode?: unknown; entries?: unknown; updatedAt?: unknown }
+  const mode = (d.mode as ChallengeMode | null | undefined) ?? null
+  const entries = Array.isArray(d.entries) ? (d.entries as TossEntry[]) : []
+  if (isValidUpdatedAt(d.updatedAt)) return { kind: 'snapshot', mode, entries, updatedAt: d.updatedAt }
+  if (mode !== null || entries.length > 0) return { kind: 'snapshot', mode, entries }
+  return { kind: 'none' }
+}
+
+// remote.entries 是否為 local.entries 的前綴（逐筆比對 item + date）
+function isEntriesPrefix(remote: TossEntry[], local: TossEntry[]): boolean {
+  if (remote.length > local.length) return false
+  return remote.every((e, i) => e?.item === local[i]?.item && e?.date === local[i]?.date)
+}
+
+function decideLoad(remote: RemoteRead, local: LocalSnapshot): LoadDecision {
+  const fromLocal = (resync: boolean): LoadDecision =>
+    ({ source: 'local', mode: local.mode, entries: local.entries, updatedAt: local.updatedAt, resync })
+  // 雲端讀取失敗：只用本機，不補送（維持 remoteFailedRef 行為）
+  if (remote.kind === 'failed') return fromLocal(false)
+  // 雲端無資料：本機有 pending 或有效資料 → 本機勝出並補送
+  if (remote.kind === 'none') return fromLocal(!!local.pendingSync || local.mode !== null || local.entries.length > 0)
+  const fromRemote: LoadDecision =
+    { source: 'remote', mode: remote.mode, entries: remote.entries, updatedAt: remote.updatedAt, resync: false }
+  if (!local.pendingSync) return fromRemote
+  if (isValidUpdatedAt(remote.updatedAt)) {
+    // 新格式：local 嚴格較新才勝出；相等或 remote 較新 → remote 勝出
+    return isValidUpdatedAt(local.updatedAt) && local.updatedAt > remote.updatedAt ? fromLocal(true) : fromRemote
+  }
+  // 舊格式（無 updatedAt）：保守的前綴規則
+  return local.mode === remote.mode && isEntriesPrefix(remote.entries, local.entries) ? fromLocal(true) : fromRemote
+}
+
+// cloud save 成功後：只有目前本機 snapshot 仍是同一版（updatedAt === t）才清除 pending
+function markSyncedIfCurrent(uid: string, t: number) {
+  const cur = loadLS<unknown>(LS_CHALLENGE_DATA, null, uid)
+  if (!cur || typeof cur !== 'object') return
+  const c = cur as LocalSnapshot
+  if (c.pendingSync === true && c.updatedAt === t) saveLS(LS_CHALLENGE_DATA, { ...c, pendingSync: false }, uid)
+}
+
 // ── 完成儀式感頁面 ───────────────────────────────────────────
 function CompletionCeremony({ mode, entries, onNewRound }: {
   mode: ChallengeMode
@@ -172,10 +243,33 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
   const remoteFailedRef = useRef(false)
   const [syncing, setSyncing] = useState(false)
   const [syncToast, setSyncToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  // cloud write 依序執行，避免舊 request 晚到覆蓋新 request
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve())
+  // 單調遞增的 updatedAt，避免同毫秒或時鐘倒退時產生相同／較舊的時間戳
+  const lastUpdatedAtRef = useRef(0)
+  // 目前畫面對應的身分；舊身分的 request 回來時不更新畫面
+  const activeUidRef = useRef<string | undefined>(undefined)
+
+  const nextUpdatedAt = () => {
+    const t = Math.max(Date.now(), lastUpdatedAtRef.current + 1)
+    lastUpdatedAtRef.current = t
+    return t
+  }
+
+  // 排入 cloud write 佇列；寫入對象固定為呼叫當下的 uid
+  const enqueueCloudSave = (uid: string, payload: CloudPayload): Promise<boolean> => {
+    const run = saveChainRef.current.then(() => sbSaveChallengeData(uid, payload).catch(() => false))
+    saveChainRef.current = run
+    return run.then(ok => {
+      if (ok) markSyncedIfCurrent(uid, payload.updatedAt)
+      return ok
+    })
+  }
 
   useEffect(() => {
     // 非同步安全：userId 變動（登入／登出）後，舊的讀取結果一律丟棄
     let cancelled = false
+    activeUidRef.current = userId
     loadedRef.current = false
     remoteFailedRef.current = false   // 身分改變／重新載入時重設，不沿用上一個身分的結果
     setMode(null)
@@ -188,30 +282,42 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
       // 只有「雲端確認查無有效資料」時才允許搬移匿名資料；查詢失敗一律不搬
       let remoteConfirmedEmpty = false
       let remoteFailed = false
+      // load 判定後需要補送雲端的 snapshot
+      let resyncPayload: CloudPayload | null = null
 
       if (userId) {
+        let remoteRead: RemoteRead
         try {
           const { data: remote, error } = await sbLoadChallengeDataStatus(userId)
-          if (error) {
-            remoteFailed = true
-          } else if (remote && (remote.mode !== null || (remote.entries as TossEntry[]).length > 0)) {
-            loadedMode = remote.mode as ChallengeMode | null
-            loadedEntries = remote.entries as TossEntry[]
-          } else {
-            remoteConfirmedEmpty = true
-          }
+          remoteRead = error ? { kind: 'failed' } : classifyRemote(remote)
         } catch {
-          remoteFailed = true
+          remoteRead = { kind: 'failed' }
         }
         if (cancelled) return
+        remoteFailed = remoteRead.kind === 'failed'
+        remoteConfirmedEmpty = remoteRead.kind === 'none'
         remoteFailedRef.current = remoteFailed
         setSyncing(false)
-      }
 
-      // 沒有雲端資料 → 讀 localStorage（含未登入情況；登入時讀帳號專屬 key）
-      if (loadedMode === null) {
+        // 登入：比較帳號專屬 key 與雲端 snapshot
+        const local = readLocalSnapshot(userId)
+        const decision = decideLoad(remoteRead, local)
+        loadedMode = decision.mode
+        loadedEntries = decision.entries
+        lastUpdatedAtRef.current = Math.max(lastUpdatedAtRef.current, local.updatedAt ?? 0, decision.updatedAt ?? 0)
+        if (decision.source === 'remote') {
+          // 雲端勝出 → 更新本機，清除 pending
+          saveLS(LS_CHALLENGE_DATA, { mode: decision.mode, entries: decision.entries, updatedAt: decision.updatedAt, pendingSync: false }, userId)
+        } else if (decision.resync) {
+          // 本機勝出 → 保持 pending，沿用同一份 snapshot 的 updatedAt 補送
+          const t = isValidUpdatedAt(local.updatedAt) ? local.updatedAt : nextUpdatedAt()
+          saveLS(LS_CHALLENGE_DATA, { mode: local.mode, entries: local.entries, updatedAt: t, pendingSync: true }, userId)
+          resyncPayload = { mode: local.mode, entries: local.entries, updatedAt: t }
+        }
+      } else {
+        // 未登入 → 讀匿名 localStorage（行為不變）
         const saved = loadLS<{ mode: ChallengeMode | null; entries: TossEntry[] }>(
-          LS_CHALLENGE_DATA, { mode: null, entries: [] }, userId
+          LS_CHALLENGE_DATA, { mode: null, entries: [] }
         )
         loadedMode = saved.mode ?? null
         loadedEntries = saved.entries ?? []
@@ -219,7 +325,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
 
       // 登入後：雲端確認無資料 + 帳號專屬 key 也無資料 → 檢查匿名 challenge_data
       let guestToMigrate: { mode: ChallengeMode | null; entries: TossEntry[] } | null = null
-      if (userId && remoteConfirmedEmpty && loadedMode === null && loadedEntries.length === 0) {
+      if (userId && remoteConfirmedEmpty && !resyncPayload && loadedMode === null && loadedEntries.length === 0) {
         const guest = loadLS<unknown>(LS_CHALLENGE_DATA, null)
         if (isValidChallengeData(guest)) {
           guestToMigrate = guest
@@ -238,10 +344,19 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
         setTimeout(() => setSyncToast(null), 2800)
       }
 
+      // 補送：本機 pending snapshot 勝出 → 依序寫回雲端；成功才清 pending
+      if (userId && resyncPayload) {
+        const ok = await enqueueCloudSave(userId, resyncPayload)
+        if (cancelled) return
+        setSyncToast({ msg: ok ? '進度已同步到雲端 ☁️' : '雲端同步失敗，進度已存本機', ok })
+        setTimeout(() => setSyncToast(null), 2800)
+      }
+
       // 搬移：帳號 key 與 Supabase 都寫入成功，才刪除匿名 challenge_data
       if (userId && guestToMigrate) {
-        const lsOk = saveLS(LS_CHALLENGE_DATA, guestToMigrate, userId)
-        const sbOk = await sbSaveChallengeData(userId, guestToMigrate)
+        const t = nextUpdatedAt()
+        const lsOk = saveLS(LS_CHALLENGE_DATA, { ...guestToMigrate, updatedAt: t, pendingSync: true }, userId)
+        const sbOk = await enqueueCloudSave(userId, { mode: guestToMigrate.mode, entries: guestToMigrate.entries, updatedAt: t })
         if (lsOk && sbOk) localStorage.removeItem(LS_CHALLENGE_DATA)
         if (cancelled) return
         setSyncToast({ msg: sbOk ? '進度已同步到雲端 ☁️' : '雲端同步失敗，進度已存本機', ok: sbOk })
@@ -254,22 +369,27 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
 
   // 直接 save：永遠存 localStorage，有 userId 時額外同步 Supabase
   const persistData = (newMode: ChallengeMode | null, newEntries: TossEntry[]) => {
-    const payload = { mode: newMode, entries: newEntries }
-    // 永遠先存 localStorage（含 userId suffix），確保重整後一定讀得到
-    saveLS(LS_CHALLENGE_DATA, payload, userId)
-    // 雲端讀取失敗期間：只存本機，不呼叫 sbSaveChallengeData，避免不完整的本機資料覆蓋雲端
-    if (userId && remoteFailedRef.current) {
+    const uid = userId
+    // 未登入：行為不變，只存匿名 localStorage
+    if (!uid) {
+      saveLS(LS_CHALLENGE_DATA, { mode: newMode, entries: newEntries })
+      return
+    }
+    // 登入：同一份 snapshot 帶 updatedAt；先標 pendingSync，雲端成功才清除
+    const t = nextUpdatedAt()
+    saveLS(LS_CHALLENGE_DATA, { mode: newMode, entries: newEntries, updatedAt: t, pendingSync: true }, uid)
+    // 雲端讀取失敗期間：只存本機（pending 保留），不呼叫 sbSaveChallengeData，避免不完整的本機資料覆蓋雲端
+    if (remoteFailedRef.current) {
       setSyncToast({ msg: '雲端同步失敗，進度已存本機', ok: false })
       setTimeout(() => setSyncToast(null), 2800)
       return
     }
-    // 有登入時額外非同步同步到 Supabase
-    if (userId) {
-      sbSaveChallengeData(userId, payload).then(ok => {
-        setSyncToast({ msg: ok ? '進度已同步到雲端 ☁️' : '雲端同步失敗，進度已存本機', ok })
-        setTimeout(() => setSyncToast(null), 2800)
-      })
-    }
+    enqueueCloudSave(uid, { mode: newMode, entries: newEntries, updatedAt: t }).then(ok => {
+      // 身分已切換：不更新新身分的畫面（本機 key 已由 markSyncedIfCurrent 依 uid 處理）
+      if (activeUidRef.current !== uid) return
+      setSyncToast({ msg: ok ? '進度已同步到雲端 ☁️' : '雲端同步失敗，進度已存本機', ok })
+      setTimeout(() => setSyncToast(null), 2800)
+    })
   }
 
   const _d = new Date()
