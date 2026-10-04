@@ -2,6 +2,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage, saveShareLabel, isChrome, drawDeclutterCard } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
+import PhotoImg from '@/components/PhotoImg'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 const KEEP_CATS = ['每天會用', '偶爾會用', '捨不得丟', '備用存放', '工作學習', '小孩的']
@@ -94,7 +95,7 @@ function PhotoUpload({ photo, onChange, label }: { photo?: string; onChange: (p:
       {photo ? (
         <div>
           <div style={{ position: 'relative', background: '#1a1a1a', borderRadius: 8, border: `1.5px solid ${sg}`, overflow: 'hidden', width: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img src={photo} alt="" style={{ width: 160, height: 'auto', maxHeight: 160, objectFit: 'contain', display: 'block' }} />
+            <PhotoImg src={photo} alt="" style={{ width: 160, height: 'auto', maxHeight: 160, objectFit: 'contain', display: 'block' }} />
             <button onClick={() => onChange(undefined)} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', color: 'white', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
@@ -137,7 +138,7 @@ function TossShareModal({ entry, onClose }: { entry: TossEntry; onClose: () => v
         <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 14 }}>分享告別文</div>
         <div style={{ background: ww, borderRadius: 12, padding: '16px 18px', marginBottom: 14, border: `1px solid ${bd}` }}>
           <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 16, color: ink, marginBottom: 6 }}>{entry.name}</div>
-          {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 8, marginBottom: 10, display: 'block' }} />}
+          {entry.photo && <PhotoImg src={entry.photo} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 8, marginBottom: 10, display: 'block' }} />}
           {entry.memo && <div style={{ fontSize: 13, color: ml, lineHeight: 1.8, whiteSpace: 'pre-line', marginBottom: 8 }}>{entry.memo}</div>}
           <div style={{ fontSize: 11, color: mf, textAlign: 'right' }}>整理小幫手 #斷捨離</div>
         </div>
@@ -709,7 +710,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
                     ) : (
                       <>
                         {entry?.memo && <p style={{ fontSize: 12, color: mf, margin: '0 0 4px', lineHeight: 1.6 }}>{entry.memo}</p>}
-                        {entry?.photo && <img src={entry.photo} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `1px solid ${bd}` }} />}
+                        {entry?.photo && <PhotoImg src={entry.photo} alt="" style={{ width: 80, height: 60, objectFit: 'contain', background: '#1a1a1a', borderRadius: 6, border: `1px solid ${bd}` }} />}
                         {!entry && <span style={{ fontSize: 12, color: mf }}>點「編輯」寫告別文（可略）</span>}
                       </>
                     )}
@@ -915,7 +916,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
             </div>
           ) : (
             <>
-              {entry.photo && <img src={entry.photo} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 8, marginBottom: 8, display: 'block' }} />}
+              {entry.photo && <PhotoImg src={entry.photo} alt="" style={{ width: '100%', background: '#1a1a1a', objectFit: 'contain', borderRadius: 8, marginBottom: 8, display: 'block' }} />}
               <p style={{ fontSize: 13, color: ml, lineHeight: 1.7, margin: 0 }}>{entry.memo || '（未寫告別文）'}</p>
             </>
           )}
