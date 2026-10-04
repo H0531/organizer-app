@@ -10,11 +10,12 @@ import type { DeclutterRecord, ChecklistLog, TossEntry } from '@/lib/types'
 import { loadLS, saveLS, savePhoto, loadPhoto, LS_CHECKLIST_LOGS, LS_DECLUTTER_RECORDS } from '@/lib/types'
 import type { OAuthUser } from '@/lib/auth'
 import {
-  sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog,
+  sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog, sbConfirmChecklistLog,
   sbLoadDeclutterRecords, sbSaveDeclutterRecord, sbDeleteDeclutterRecord,
   supabase, getAuthUser, toAppUser,
 } from '@/lib/supabase'
-import { uploadPhoto } from '@/lib/photos'
+import { uploadPhoto, deleteRemotePhoto, storageKeyFromPhotoRef } from '@/lib/photos'
+import { parsePhotoRef } from '@/lib/photoRef'
 
 export type AppTab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
@@ -550,17 +551,86 @@ export default function Home() {
     return false
   }
 
+  // ── Storage lifecycle helpers ──
+  // 從照片 references 取出「可以刪除」的 Storage object（key + path）；不符合條件的 reference 一律略過（不刪）
+  const collectStorageTargets = (
+    email: string,
+    entries: { ref: unknown; prefix: string; exact?: boolean }[]
+  ): { key: string; path: string }[] => {
+    const out = new Map<string, { key: string; path: string }>()
+    for (const { ref, prefix, exact } of entries) {
+      const key = storageKeyFromPhotoRef(ref, email, prefix, exact)
+      if (!key) continue
+      const parsed = parsePhotoRef(ref)
+      if (parsed.type !== 'storage') continue
+      out.set(parsed.path, { key, path: parsed.path })
+    }
+    return [...out.values()]
+  }
+  // 照片 references 中所有 Storage path（用於「是否仍被其他紀錄引用」判斷）
+  const referencedStoragePaths = (refs: unknown[]): Set<string> => {
+    const paths = new Set<string>()
+    for (const ref of refs) {
+      const parsed = parsePhotoRef(ref)
+      if (parsed.type === 'storage') paths.add(parsed.path)
+    }
+    return paths
+  }
+  const checklistPhotoEntries = (log: ChecklistLog) =>
+    [...(log.beforePhotos ?? []), ...(log.afterPhotos ?? [])].map(ref => ({ ref, prefix: `checklist_${log.id}_` }))
+  // best-effort 刪除：失敗只記錄 warning（保留 orphan），不 throw、不影響呼叫端結果
+  const cleanupStorageObjects = async (email: string, targets: { key: string; path: string }[], context: string) => {
+    if (targets.length === 0) return
+    const results = await Promise.all(targets.map(t => deleteRemotePhoto(email, t.key)))
+    const failed = targets.filter((_, i) => !results[i]).map(t => t.path)
+    if (failed.length > 0) {
+      console.warn(`[storage cleanup] ${context}: ${failed.length}/${targets.length} object(s) not deleted, left as orphan`, failed)
+    }
+  }
+
   // 回傳 true 表示這筆日記已確實持久化（Supabase 或 LocalStorage）；ChecklistTab 只有在 true 時才進入成功流程
   const handleChecklistSave = async (log: ChecklistLog): Promise<boolean> => {
     if (user) {
       // 登入：先確實寫入 Supabase，成功後才更新畫面 state
-      const ok = await sbSaveChecklistLog(user.email, log)
+      const email = user.email
+      const ok = await sbSaveChecklistLog(email, log)
       if (!ok) {
+        // 本次 attempt 上傳成功的 Storage objects（stable logId 前綴的遠端照片）
+        const attemptTargets = collectStorageTargets(email, checklistPhotoEntries(log))
+        if (attemptTargets.length === 0) {
+          showToast('儲存失敗，請檢查網路連線')
+          return false
+        }
+        // DB 狀態可能不確定（例如實際已寫入但回應逾時）→ 先 read-only 確認，再決定是否清理
+        const confirmation = await sbConfirmChecklistLog(email, log.id)
+        if (confirmation.status === 'present') {
+          const dbPaths = referencedStoragePaths([
+            ...(confirmation.log.beforePhotos ?? []),
+            ...(confirmation.log.afterPhotos ?? []),
+          ])
+          if (attemptTargets.every(t => dbPaths.has(t.path))) {
+            // server-side save succeeded / client response uncertain → 視為成功，不刪 Storage
+            console.warn('[checklist save] server-side save succeeded / client response uncertain', log.id)
+            if (activeEmailRef.current !== email) return true
+            setChecklistLogs(prev => [log, ...prev.filter(l => l.id !== log.id)])
+            return true
+          }
+          // 紀錄存在但 references 不符 → 不刪（可能仍被引用），維持儲存失敗；retry 會以同一 ID upsert
+          showToast('儲存失敗，請檢查網路連線')
+          return false
+        }
+        if (confirmation.status === 'absent') {
+          // 確認 DB 沒有這筆紀錄 → best-effort 清理本次上傳；清理失敗不覆蓋原本的儲存失敗
+          await cleanupStorageObjects(email, attemptTargets, `checklist save failed (${log.id})`)
+        } else {
+          // 確認失敗 / 逾時 → 狀態不確定，不刪 Storage（寧可保留 orphan）
+          console.warn('[checklist save] DB confirmation unknown; storage cleanup skipped', log.id)
+        }
         showToast('儲存失敗，請檢查網路連線')
         return false
       }
       // 儲存期間已登出或換帳號 → 不寫進目前畫面（避免原帳號紀錄混入 Guest / 新帳號 state）；雲端已存好，仍回傳 true
-      if (activeEmailRef.current !== user.email) return true
+      if (activeEmailRef.current !== email) return true
       setChecklistLogs(prev => [log, ...prev])
       return true
     }
@@ -575,10 +645,19 @@ export default function Home() {
 
   const handleDeleteDeclutterRecord = async (savedAt: string) => {
     if (user) {
-      // 登入：維持原本行為（本輪不修改）
+      // 登入：畫面行為維持原樣；DB 刪除成功後才清理該紀錄的 Storage 照片
+      const email = user.email
+      const targetsRecords = declutterRecords.filter(r => r.savedAt === savedAt)
+      const otherRecords = declutterRecords.filter(r => r.savedAt !== savedAt)
       setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
-      const ok = await sbDeleteDeclutterRecord(user.email, savedAt)
-      if (!ok) showToast('刪除失敗，請檢查網路連線')
+      const ok = await sbDeleteDeclutterRecord(email, savedAt)
+      if (!ok) { showToast('刪除失敗，請檢查網路連線'); return }
+      const stillReferenced = referencedStoragePaths(otherRecords.flatMap(r => (r.tossEntries ?? []).map(e => e.photo)))
+      const targets = collectStorageTargets(
+        email,
+        targetsRecords.flatMap(r => (r.tossEntries ?? []).map(e => ({ ref: e.photo, prefix: `toss_photo_${e.id}`, exact: true })))
+      ).filter(t => !stillReferenced.has(t.path))
+      await cleanupStorageObjects(email, targets, `declutter delete (${savedAt})`)
       return
     }
     // Guest：以 LocalStorage「實際保存的資料」為準（state 可能含 LocalStorage 已移除的照片，資料量較大）
@@ -634,10 +713,17 @@ export default function Home() {
 
   const handleDeleteChecklistLog = async (id: string): Promise<boolean> => {
     if (user) {
-      // 登入：維持原本行為（本輪不修改）
+      // 登入：畫面行為維持原樣；DB 刪除成功後才清理該紀錄的 Storage 照片
+      const email = user.email
+      const targetLogs = checklistLogs.filter(l => l.id === id)
+      const otherLogs = checklistLogs.filter(l => l.id !== id)
       setChecklistLogs(prev => prev.filter(l => l.id !== id))
-      const ok = await sbDeleteChecklistLog(user.email, id)
-      if (!ok) showToast('刪除失敗，請檢查網路連線')
+      const ok = await sbDeleteChecklistLog(email, id)
+      if (!ok) { showToast('刪除失敗，請檢查網路連線'); return ok }
+      const stillReferenced = referencedStoragePaths(otherLogs.flatMap(l => [...(l.beforePhotos ?? []), ...(l.afterPhotos ?? [])]))
+      const targets = collectStorageTargets(email, targetLogs.flatMap(checklistPhotoEntries))
+        .filter(t => !stillReferenced.has(t.path))
+      await cleanupStorageObjects(email, targets, `checklist delete (${id})`)
       return ok
     }
     // Guest：寫入成功後才更新畫面；失敗時 LocalStorage 與畫面都維持原樣（刪到 0 筆時寫入 []）

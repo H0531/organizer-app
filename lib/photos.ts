@@ -3,6 +3,7 @@
 // 每次請求都帶 Supabase Auth access_token（Authorization: Bearer），server 以 JWT 決定照片資料夾
 
 import { supabase } from './supabase'
+import { parsePhotoRef } from './photoRef'
 
 // 取得目前 Supabase session 的 access_token；沒有 session → null
 async function getAccessToken(): Promise<string | null> {
@@ -39,12 +40,12 @@ export async function uploadPhoto(
   }
 }
 
-// 刪除雲端照片（靜默失敗）
-export async function deleteRemotePhoto(email: string, key: string): Promise<void> {
+// 刪除雲端照片（不 throw）：成功 → true；失敗 → false（呼叫端可忽略回傳值）
+export async function deleteRemotePhoto(email: string, key: string): Promise<boolean> {
   try {
     const token = await getAccessToken()
-    if (!token) return
-    await fetch('/api/photos', {
+    if (!token) return false
+    const res = await fetch('/api/photos', {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -52,9 +53,37 @@ export async function deleteRemotePhoto(email: string, key: string): Promise<voi
       },
       body: JSON.stringify({ email, key }),
     })
+    return res.ok
   } catch {
-    // 靜默失敗
+    return false
   }
+}
+
+// 照片 reference → DELETE /api/photos 用的 Storage key（不含副檔名）
+// 只有全部條件符合才回傳 key；null 代表「不要刪」：
+// - parsePhotoRef 結果為 storage
+// - folder === email（小寫）
+// - 副檔名為 .jpg / .png
+// - key 以 prefix 開頭（Checklist：checklist_${id}_）；exact = true 時 key 必須剛好等於 prefix（Declutter：toss_photo_${entry.id}）
+export function storageKeyFromPhotoRef(
+  ref: unknown,
+  email: string,
+  prefix: string,
+  exact = false
+): string | null {
+  const parsed = parsePhotoRef(ref)
+  if (parsed.type !== 'storage') return null
+  const slash = parsed.path.indexOf('/')
+  if (slash <= 0) return null
+  const folder = parsed.path.slice(0, slash)
+  const filename = parsed.path.slice(slash + 1)
+  if (folder !== email.trim().toLowerCase()) return null
+  const m = filename.match(/^(.+)\.(jpg|png)$/)
+  if (!m) return null
+  const key = m[1]
+  if (!prefix) return null
+  if (exact ? key !== prefix : !key.startsWith(prefix)) return null
+  return key
 }
 
 // 取得雲端照片 public URL

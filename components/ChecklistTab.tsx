@@ -248,7 +248,10 @@ type ChecklistDraft = {
   targetMins: number
   useCustom: boolean
   customMins: string
+  logId?: string            // 本次整理紀錄的 stable ID（Storage key 與 DB record 共用；retry 不變）
 }
+// stable logId 必須符合 /api/photos KEY_PATTERN 的 checklist_${logId}_… 數字格式
+const isValidLogId = (v: unknown): v is string => typeof v === 'string' && /^\d{1,20}$/.test(v)
 type Props = { onSaveLog: (log: ChecklistLog) => Promise<boolean>; onDeleteLog?: (id: string) => Promise<boolean>; onEditLog?: (id: string, note: string) => Promise<boolean>; initialLogs?: ChecklistLog[]; userId?: string }
 
 export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initialLogs, userId }: Props) {
@@ -278,6 +281,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isSavingRef = useRef(false)
+  // 目前這次整理的 stable logId（startTimer 產生／從草稿恢復；只有儲存成功清草稿後才清掉）
+  const draftLogIdRef = useRef<string | null>(null)
   const timerSectionRef = useRef<HTMLDivElement>(null)
   // elapsedSecs：即時計算，供顯示和儲存用
   const elapsedSecs = timerRunning && startedAt !== null
@@ -329,6 +334,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       // 恢復整理中草稿
       const draft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null, userId)
       if (draft) {
+        draftLogIdRef.current = isValidLogId(draft.logId) ? draft.logId : null
         setSpace(SP[draft.space] ? draft.space : 'living')
         setChecked(draft.checked)
         setBeforePhotos(draft.beforePhotos ?? [])
@@ -413,6 +419,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
             skipBefore, skipAfter, note,
             accumulatedSecs, startedAt,
             targetMins, useCustom, customMins,
+            logId: draftLogIdRef.current ?? undefined,
           } as ChecklistDraft, userId)
         }
       }, 1000)
@@ -438,6 +445,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         skipBefore, skipAfter, note,
         accumulatedSecs: elapsedSecs, startedAt: null,
         targetMins, useCustom, customMins,
+        logId: draftLogIdRef.current ?? undefined,
       } as ChecklistDraft, userId)
     })
   }
@@ -478,6 +486,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       accumulatedSecs: elapsedSecs,  // 存入即時 elapsed（含目前計時段）
       startedAt: null,               // 重整後一律暫停
       targetMins, useCustom, customMins,
+      logId: draftLogIdRef.current ?? undefined,
       ...overrides,
     }
     saveLS(CL_DRAFT_KEY, draft, userId)
@@ -486,6 +495,9 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
 
   const startTimer = () => {
     const now = Date.now()
+    // 新的一次整理 → 新的 stable logId
+    const newLogId = now.toString()
+    draftLogIdRef.current = newLogId
     setTimeLeft(totalSecs)
     setAccumulatedSecs(0)
     setStartedAt(now)
@@ -505,6 +517,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
       skipBefore, skipAfter: false, note: '',
       accumulatedSecs: 0, startedAt: now,
       targetMins: effectiveMins, useCustom, customMins,
+      logId: newLogId,
     } as ChecklistDraft, userId)
   }
 
@@ -527,7 +540,13 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     })
 
     // 上傳至 Supabase Storage（有 userId 時），回傳 URL 或 fallback dataUrl
-    const logId = Date.now().toString()
+    // stable logId：retry / 儲存失敗 / rerender 都沿用同一個；舊草稿沒有 logId → 第一次 Save 時產生並寫回草稿
+    if (!isValidLogId(draftLogIdRef.current)) {
+      draftLogIdRef.current = Date.now().toString()
+      const existingDraft = loadLS<ChecklistDraft | null>(CL_DRAFT_KEY, null, userId)
+      if (existingDraft) saveLS(CL_DRAFT_KEY, { ...existingDraft, logId: draftLogIdRef.current }, userId)
+    }
+    const logId: string = draftLogIdRef.current
     const uploadOrCompress = async (src: string, idx: number, prefix: 'before' | 'after'): Promise<string> => {
       const compressed = await compressPhoto(src)
       if (userId) {
@@ -570,6 +589,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setChecked({ ...checked, [space]: allItems.map(() => false) })
     setTimerDone(false); setAccumulatedSecs(0); setStartedAt(null); setTimeLeft(0)
     clearDraft()  // 儲存成功後清除草稿
+    draftLogIdRef.current = null  // 只有儲存成功清草稿後才清掉 stable logId
     setSaveFlash(true)
     isSavingRef.current = false
     setIsSavingUI(false)
@@ -661,6 +681,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                 const acc = draft.accumulatedSecs ?? (draft as unknown as {elapsedSecs?: number}).elapsedSecs ?? 0
                 const sAt = draft.startedAt ?? null
                 const restored = sAt !== null ? acc + Math.floor((Date.now() - sAt) / 1000) : acc
+                draftLogIdRef.current = isValidLogId(draft.logId) ? draft.logId : null
                 setSpace(draft.space)
                 setChecked(draft.checked)
                 setBeforePhotos(draft.beforePhotos ?? [])
@@ -835,6 +856,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
             skipBefore, skipAfter, note,
             accumulatedSecs: newAcc, startedAt: null,
             targetMins, useCustom, customMins,
+            logId: draftLogIdRef.current ?? undefined,
           } as ChecklistDraft, userId)
           setPage(1)
         }} style={{ fontSize: 13, color: ml, background: 'none', border: 'none', cursor: 'pointer' }}>← 返回</button>
@@ -881,6 +903,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
                 skipBefore, skipAfter, note,
                 accumulatedSecs: newAcc, startedAt: null,
                 targetMins, useCustom, customMins,
+                logId: draftLogIdRef.current ?? undefined,
               } as ChecklistDraft, userId)
             } else {
               // 繼續：記錄新的 startedAt

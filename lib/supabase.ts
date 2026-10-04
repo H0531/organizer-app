@@ -108,6 +108,49 @@ export async function sbDeleteChecklistLog(email: string, id: string): Promise<b
   return true
 }
 
+// Read-only：確認某筆 checklist log 是否已實際寫入（儲存回應失敗後判斷能否清理 Storage）
+// - present：確定存在（id 與 user_email 皆相符），回傳 DB 中的 log
+// - absent：查詢成功且確定不存在
+// - unknown：無 session、帳號不符、查詢錯誤、例外或逾時（8 秒）→ 狀態不確定
+export async function sbConfirmChecklistLog(
+  email: string,
+  id: string
+): Promise<{ status: 'present'; log: ChecklistLog } | { status: 'absent' } | { status: 'unknown' }> {
+  const UNKNOWN = { status: 'unknown' } as const
+  const confirm = async (): Promise<
+    { status: 'present'; log: ChecklistLog } | { status: 'absent' } | { status: 'unknown' }
+  > => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const sessionEmail = sessionData.session?.user?.email?.trim().toLowerCase()
+      if (!sessionEmail || sessionEmail !== email.trim().toLowerCase()) return UNKNOWN
+      const { data, error } = await supabase
+        .from('checklist_logs')
+        .select('id, user_email, data')
+        .eq('user_email', email)
+        .eq('id', id)
+        .maybeSingle()
+      if (error) { console.error('sbConfirmChecklistLog', error); return UNKNOWN }
+      if (data === null) return { status: 'absent' }
+      const row = data as { id: unknown; user_email: unknown; data: unknown }
+      if (row.id !== id || row.user_email !== email || !row.data) return UNKNOWN
+      return { status: 'present', log: row.data as ChecklistLog }
+    } catch (err) {
+      console.error('sbConfirmChecklistLog', err)
+      return UNKNOWN
+    }
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<{ status: 'unknown' }>(resolve => {
+    timer = setTimeout(() => resolve(UNKNOWN), 8000)
+  })
+  try {
+    return await Promise.race([confirm(), timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 // ── Declutter Records ─────────────────────────────────────────
 
 export async function sbLoadDeclutterRecords(email: string): Promise<DeclutterRecord[] | null> {
