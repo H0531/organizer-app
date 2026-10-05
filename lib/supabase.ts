@@ -199,6 +199,86 @@ export async function sbDeleteDeclutterRecord(email: string, savedAt: string): P
   return true
 }
 
+// Read-only：確認某筆 declutter record 是否存在（Guest → 登入 migration 專用，比照 sbConfirmChecklistLog）
+// - present：確定存在（saved_at 與 user_email 皆相符），回傳 DB 中的 record
+// - absent：查詢成功且確定不存在
+// - unknown：無 session、帳號不符、查詢錯誤、例外或逾時（8 秒）→ 狀態不確定
+export async function sbConfirmDeclutterRecord(
+  email: string,
+  savedAt: string
+): Promise<{ status: 'present'; record: DeclutterRecord } | { status: 'absent' } | { status: 'unknown' }> {
+  const UNKNOWN = { status: 'unknown' } as const
+  const confirm = async (): Promise<
+    { status: 'present'; record: DeclutterRecord } | { status: 'absent' } | { status: 'unknown' }
+  > => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const sessionEmail = sessionData.session?.user?.email?.trim().toLowerCase()
+      if (!sessionEmail || sessionEmail !== email.trim().toLowerCase()) return UNKNOWN
+      const { data, error } = await supabase
+        .from('declutter_records')
+        .select('saved_at, user_email, data')
+        .eq('user_email', email)
+        .eq('saved_at', savedAt)
+        .maybeSingle()
+      if (error) { console.error('sbConfirmDeclutterRecord', error); return UNKNOWN }
+      if (data === null) return { status: 'absent' }
+      const row = data as { saved_at: unknown; user_email: unknown; data: unknown }
+      if (row.saved_at !== savedAt || row.user_email !== email || !row.data) return UNKNOWN
+      return { status: 'present', record: row.data as DeclutterRecord }
+    } catch (err) {
+      console.error('sbConfirmDeclutterRecord', err)
+      return UNKNOWN
+    }
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<{ status: 'unknown' }>(resolve => {
+    timer = setTimeout(() => resolve(UNKNOWN), 8000)
+  })
+  try {
+    return await Promise.race([confirm(), timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+// ── Guest → 登入 migration 專用寫入（純 INSERT，不 upsert / 不 update）────
+// 一般使用者的 save / update 仍使用 sbSaveChecklistLog / sbSaveDeclutterRecord，行為不變。
+// - inserted：寫入成功
+// - duplicate：主鍵已存在（Postgres unique_violation 23505），雲端資料完全未被修改
+// - error：其他錯誤（含 RLS 拒絕、網路錯誤）
+export type MigrationInsertResult = 'inserted' | 'duplicate' | 'error'
+
+export async function sbInsertChecklistLogForMigration(email: string, log: ChecklistLog): Promise<MigrationInsertResult> {
+  try {
+    const { error } = await supabase
+      .from('checklist_logs')
+      .insert({ id: log.id, user_email: email, data: log, updated_at: new Date().toISOString() })
+    if (!error) return 'inserted'
+    if (error.code === '23505') return 'duplicate'
+    console.error('sbInsertChecklistLogForMigration', error)
+    return 'error'
+  } catch (err) {
+    console.error('sbInsertChecklistLogForMigration', err)
+    return 'error'
+  }
+}
+
+export async function sbInsertDeclutterRecordForMigration(email: string, record: DeclutterRecord): Promise<MigrationInsertResult> {
+  try {
+    const { error } = await supabase
+      .from('declutter_records')
+      .insert({ saved_at: record.savedAt, user_email: email, data: record, updated_at: new Date().toISOString() })
+    if (!error) return 'inserted'
+    if (error.code === '23505') return 'duplicate'
+    console.error('sbInsertDeclutterRecordForMigration', error)
+    return 'error'
+  } catch (err) {
+    console.error('sbInsertDeclutterRecordForMigration', err)
+    return 'error'
+  }
+}
+
 // ── Challenge Data ────────────────────────────────────────────
 
 export async function sbLoadChallengeData(email: string): Promise<{ mode: number | null; entries: unknown[] } | null> {

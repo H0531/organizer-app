@@ -12,6 +12,7 @@ import type { OAuthUser } from '@/lib/auth'
 import {
   sbLoadChecklistLogs, sbSaveChecklistLog, sbDeleteChecklistLog, sbConfirmChecklistLog,
   sbLoadDeclutterRecords, sbSaveDeclutterRecord, sbDeleteDeclutterRecord,
+  sbConfirmDeclutterRecord, sbInsertChecklistLogForMigration, sbInsertDeclutterRecordForMigration,
   supabase, getAuthUser, toAppUser,
 } from '@/lib/supabase'
 import { uploadPhoto, deleteRemotePhoto, storageKeyFromPhotoRef } from '@/lib/photos'
@@ -222,6 +223,241 @@ function compressPhotoForUpload(src: string): Promise<string> {
   })
 }
 
+// ── Guest → 登入 migration（per-record）──────────────────────
+// 規則：
+// - 一律先 confirm 雲端（唯讀），確定 absent 才上傳照片、才 INSERT（照片 key 固定且 upsert，先上傳會覆蓋雲端照片）
+// - 雲端已存在：內容相同 → alreadySynced（清除 Guest 該筆）；內容不同 → conflict（不覆蓋、不清除）
+// - 每筆成功後只從「最新」LocalStorage 移除該筆 snapshot，不整批 removeItem
+// - 單筆失敗 / conflict 繼續下一筆；confirm = unknown（session / 網路 / 帳號不符）才停止整批
+type MigrationCounts = { migrated: number; alreadySynced: number; conflicts: number; failed: number; pending: number }
+type MigrationResult = { checklist: MigrationCounts; declutter: MigrationCounts }
+type RecordOutcome = 'migrated' | 'alreadySynced' | 'conflict' | 'failed' | 'stop'
+const emptyMigrationCounts = (): MigrationCounts => ({ migrated: 0, alreadySynced: 0, conflicts: 0, failed: 0, pending: 0 })
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+// 嚴格 JSON 內容比對：
+// - object：不看 key 順序，比較所有 key 的聯集；undefined 與缺少該 key 視為相同（JSON 序列化後相同）
+// - array：順序有意義，逐項比對
+// - primitive：=== 嚴格比較，不做型別轉換
+function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((v, i) => sameJson(v, b[i]))
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+    for (const k of keys) {
+      if (!sameJson(a[k], b[k])) return false
+    }
+    return true
+  }
+  return false
+}
+
+// 照片陣列比對：長度必須相同；
+// Guest 為 data URL → 雲端同位置必須是本帳號 folder 下、key 完全等於預期 key 的 Storage reference；
+// Guest 不是 data URL → 嚴格字串比較
+function samePhotoList(guest: unknown, cloud: unknown, email: string, keyFor: (i: number) => string): boolean {
+  const g = guest ?? []
+  const c = cloud ?? []
+  if (!Array.isArray(g) || !Array.isArray(c) || g.length !== c.length) return false
+  return g.every((src, i) =>
+    typeof src === 'string' && src.startsWith('data:')
+      ? storageKeyFromPhotoRef(c[i], email, keyFor(i), true) !== null
+      : src === c[i])
+}
+
+function sameChecklistForMigration(guest: Record<string, unknown>, cloud: unknown, email: string): boolean {
+  if (!isPlainObject(cloud)) return false
+  const id = String(guest.id)
+  return sameJson({ ...guest, beforePhotos: undefined, afterPhotos: undefined }, { ...cloud, beforePhotos: undefined, afterPhotos: undefined })
+    && samePhotoList(guest.beforePhotos, cloud.beforePhotos, email, i => `checklist_${id}_before_${i}`)
+    && samePhotoList(guest.afterPhotos, cloud.afterPhotos, email, i => `checklist_${id}_after_${i}`)
+}
+
+// guestPhotoSrcs[i]：第 i 筆告別文實際要遷移的照片（entry.photo，沒有時為 IndexedDB toss_photo_${id}）
+function sameDeclutterForMigration(
+  guest: Record<string, unknown>,
+  guestPhotoSrcs: (string | undefined)[],
+  cloud: unknown,
+  email: string
+): boolean {
+  if (!isPlainObject(cloud)) return false
+  if (!sameJson({ ...guest, tossEntries: undefined }, { ...cloud, tossEntries: undefined })) return false
+  const g = (guest.tossEntries ?? []) as unknown
+  const c = (cloud.tossEntries ?? []) as unknown
+  if (!Array.isArray(g) || !Array.isArray(c) || g.length !== c.length) return false
+  return g.every((ge, i) => {
+    const ce = c[i]
+    if (!isPlainObject(ge) || !isPlainObject(ce)) return false
+    if (!sameJson({ ...ge, photo: undefined }, { ...ce, photo: undefined })) return false
+    const src = guestPhotoSrcs[i]
+    if (src && src.startsWith('data:')) return storageKeyFromPhotoRef(ce.photo, email, `toss_photo_${String(ge.id)}`, true) !== null
+    // 非 data URL：與 migration 寫入的值相同（有 src 寫 src；沒有則維持 entry 原本的 photo 值）
+    return src ? ce.photo === src : ce.photo === ge.photo
+  })
+}
+
+// 讀取 Guest 陣列：key 不存在 → []；無法解析或不是陣列 → null（不可清除、不可遷移）
+function readGuestArray(key: string): unknown[] | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return []
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+// 只從「當下最新」的 Guest 陣列移除與 snapshot 嚴格相同的第一筆；其餘（含 migration 期間其他 tab 新增的）原樣保留
+// read → compare → write 全程同步（無 await）；parse 失敗或不是陣列 → 不刪除任何資料
+function removeMigratedGuestRecord(key: string, snapshot: unknown): boolean {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return false
+    const list: unknown = JSON.parse(raw)
+    if (!Array.isArray(list)) return false
+    const idx = list.findIndex(r => sameJson(r, snapshot))
+    if (idx < 0) return false
+    const next = list.filter((_, i) => i !== idx)
+    if (next.length === 0) localStorage.removeItem(key)
+    else localStorage.setItem(key, JSON.stringify(next))
+    return true
+  } catch (err) {
+    console.warn('removeMigratedGuestRecord failed', key, err)
+    return false
+  }
+}
+
+function cleanupAfterMigration(key: string, snapshot: unknown, outcome: 'migrated' | 'alreadySynced'): RecordOutcome {
+  // 清除失敗不影響雲端結果：下次 migration 會判定為 alreadySynced 再清除
+  if (!removeMigratedGuestRecord(key, snapshot)) console.warn('migration: guest record not removed (will retry next time)', key)
+  return outcome
+}
+
+async function migrateChecklistLog(email: string, raw: unknown): Promise<RecordOutcome> {
+  // malformed：不是物件、沒有 id、照片欄位不是字串陣列（舊資料缺欄位視為 []）
+  if (!isPlainObject(raw) || typeof raw.id !== 'string' || raw.id === '') return 'failed'
+  const before = raw.beforePhotos ?? []
+  const after = raw.afterPhotos ?? []
+  if (!Array.isArray(before) || !Array.isArray(after)) return 'failed'
+  if (![...before, ...after].every(p => typeof p === 'string')) return 'failed'
+  const id = raw.id
+
+  // 1. 先確認雲端（上傳照片之前）
+  const confirmation = await sbConfirmChecklistLog(email, id)
+  if (confirmation.status === 'unknown') return 'stop'
+  if (confirmation.status === 'present') {
+    if (!sameChecklistForMigration(raw, confirmation.log, email)) return 'conflict'
+    return cleanupAfterMigration(LS_CHECKLIST_LOGS, raw, 'alreadySynced')
+  }
+
+  // 2. absent → 上傳照片
+  const uploadList = async (list: string[], slot: 'before' | 'after'): Promise<string[] | null> => {
+    const out: string[] = []
+    for (let i = 0; i < list.length; i++) {
+      const src = list[i]
+      if (src.startsWith('data:')) {
+        const url = await uploadPhoto(email, `checklist_${id}_${slot}_${i}`, src)
+        if (!url) return null
+        out.push(url)
+      } else {
+        out.push(src)
+      }
+    }
+    return out
+  }
+  const migratedBefore = await uploadList(before as string[], 'before')
+  if (!migratedBefore) return 'failed'
+  const migratedAfter = await uploadList(after as string[], 'after')
+  if (!migratedAfter) return 'failed'
+
+  // 3. 純 INSERT（不覆蓋）
+  const migratedLog = { ...raw, beforePhotos: migratedBefore, afterPhotos: migratedAfter } as ChecklistLog
+  const inserted = await sbInsertChecklistLogForMigration(email, migratedLog)
+  if (inserted === 'inserted') return cleanupAfterMigration(LS_CHECKLIST_LOGS, raw, 'migrated')
+  if (inserted === 'duplicate') {
+    // 期間已被寫入（例如另一個 tab 的 migration）→ 重新確認內容
+    const again = await sbConfirmChecklistLog(email, id)
+    if (again.status === 'unknown') return 'stop'
+    if (again.status === 'present') {
+      if (!sameChecklistForMigration(raw, again.log, email)) return 'conflict'
+      return cleanupAfterMigration(LS_CHECKLIST_LOGS, raw, 'alreadySynced')
+    }
+    return 'failed'
+  }
+  return 'failed'
+}
+
+async function migrateDeclutterRecord(email: string, raw: unknown): Promise<RecordOutcome> {
+  // malformed：不是物件、沒有 savedAt、items 不是陣列、告別文不是含 id 的物件陣列（舊資料缺欄位視為 []）
+  if (!isPlainObject(raw) || typeof raw.savedAt !== 'string' || raw.savedAt === '') return 'failed'
+  if (!Array.isArray(raw.items)) return 'failed'
+  const entriesRaw = raw.tossEntries ?? []
+  if (!Array.isArray(entriesRaw)) return 'failed'
+  if (!entriesRaw.every(e => isPlainObject(e) && typeof e.id === 'string')) return 'failed'
+  const entries = entriesRaw as TossEntry[]
+  const savedAt = raw.savedAt
+
+  // 0. 決定每筆告別文要遷移的照片（唯讀）：entry.photo，沒有時讀 IndexedDB toss_photo_${id}
+  const photoSrcs: (string | undefined)[] = []
+  const fromIdb: boolean[] = []
+  for (const e of entries) {
+    let src = e.photo
+    let idb = false
+    if (!src) {
+      try { src = await loadPhoto(`toss_photo_${e.id}`) } catch { src = undefined }
+      idb = !!src
+    }
+    photoSrcs.push(src)
+    fromIdb.push(idb)
+  }
+
+  // 1. 先確認雲端（上傳照片之前）
+  const confirmation = await sbConfirmDeclutterRecord(email, savedAt)
+  if (confirmation.status === 'unknown') return 'stop'
+  if (confirmation.status === 'present') {
+    if (!sameDeclutterForMigration(raw, photoSrcs, confirmation.record, email)) return 'conflict'
+    return cleanupAfterMigration(LS_DECLUTTER_RECORDS, raw, 'alreadySynced')
+  }
+
+  // 2. absent → 上傳照片
+  const migratedEntries: TossEntry[] = []
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i]
+    const src = photoSrcs[i]
+    if (src && src.startsWith('data:')) {
+      // 舊 IDB 照片可能是未壓縮原圖，先壓縮避免超過上傳大小限制
+      const payload = fromIdb[i] ? await compressPhotoForUpload(src) : src
+      const url = await uploadPhoto(email, `toss_photo_${e.id}`, payload)
+      if (!url) return 'failed'
+      migratedEntries.push({ ...e, photo: url })
+    } else {
+      migratedEntries.push(src ? { ...e, photo: src } : e)
+    }
+  }
+
+  // 3. 純 INSERT（不覆蓋）
+  const migratedRecord = { ...raw, tossEntries: migratedEntries } as DeclutterRecord
+  const inserted = await sbInsertDeclutterRecordForMigration(email, migratedRecord)
+  if (inserted === 'inserted') return cleanupAfterMigration(LS_DECLUTTER_RECORDS, raw, 'migrated')
+  if (inserted === 'duplicate') {
+    const again = await sbConfirmDeclutterRecord(email, savedAt)
+    if (again.status === 'unknown') return 'stop'
+    if (again.status === 'present') {
+      if (!sameDeclutterForMigration(raw, photoSrcs, again.record, email)) return 'conflict'
+      return cleanupAfterMigration(LS_DECLUTTER_RECORDS, raw, 'alreadySynced')
+    }
+    return 'failed'
+  }
+  return 'failed'
+}
+
 export default function Home() {
   const [tab, setTab]                           = useState<AppTab>('home')
   const [user, setUser]                         = useState<OAuthUser | null>(null)
@@ -235,7 +471,7 @@ export default function Home() {
   // 記錄每個 email 的 migration Promise（進行中或已完成都保留）：
   // 之後同一 email 的 loadUserData 不重跑 migration，而是 await 同一個 Promise，
   // 確保 migration 完成前不會讀雲端、也不會提前結束 loading
-  const migrationPromisesRef = useRef<Map<string, Promise<void>>>(new Map())
+  const migrationPromisesRef = useRef<Map<string, Promise<MigrationResult>>>(new Map())
   // 目前畫面所屬的登入帳號（null = Guest）。非同步載入完成時用來確認使用者沒有在途中登出／切換，
   // 避免已登出後，晚回來的 Supabase 私人資料被寫進畫面（進而被 Guest 儲存寫入 LocalStorage）
   const activeEmailRef = useRef<string | null>(null)
@@ -259,117 +495,63 @@ export default function Home() {
     setToast({ message, type })
   }, [])
 
-  // Guest LocalStorage 資料 → 登入後 migration 至該 email 的 Supabase
+  // Guest LocalStorage 資料 → 登入後 migration 至該 email 的 Supabase（per-record，見上方 migrateChecklistLog / migrateDeclutterRecord）
   // 只處理 checklist_logs 與 declutter_records（不處理 challenge_data）
-  const migrateGuestData = useCallback(async (u: OAuthUser) => {
-    // ── checklist_logs ──
-    const guestLogsRaw = localStorage.getItem(LS_CHECKLIST_LOGS)
-    if (guestLogsRaw) {
-      try {
-        const guestLogs = JSON.parse(guestLogsRaw) as ChecklistLog[]
-        if (Array.isArray(guestLogs) && guestLogs.length > 0) {
-          let allOk = true
-          for (const log of guestLogs) {
-            try {
-              const migratedBefore: string[] = []
-              for (let i = 0; i < log.beforePhotos.length; i++) {
-                const src = log.beforePhotos[i]
-                if (src && src.startsWith('data:')) {
-                  const url = await uploadPhoto(u.email, `checklist_${log.id}_before_${i}`, src)
-                  if (!url) { allOk = false; break }
-                  migratedBefore.push(url)
-                } else {
-                  migratedBefore.push(src)
-                }
-              }
-              if (!allOk) break
+  const migrateGuestData = useCallback(async (u: OAuthUser): Promise<MigrationResult> => {
+    const email = u.email
+    const result: MigrationResult = { checklist: emptyMigrationCounts(), declutter: emptyMigrationCounts() }
+    // 整批停止：confirm = unknown（session / 帳號 / 網路無法確認）或畫面帳號已改變 → 後續 records 一律不寫
+    let stopped = false
 
-              const migratedAfter: string[] = []
-              for (let i = 0; i < log.afterPhotos.length; i++) {
-                const src = log.afterPhotos[i]
-                if (src && src.startsWith('data:')) {
-                  const url = await uploadPhoto(u.email, `checklist_${log.id}_after_${i}`, src)
-                  if (!url) { allOk = false; break }
-                  migratedAfter.push(url)
-                } else {
-                  migratedAfter.push(src)
-                }
-              }
-              if (!allOk) break
-
-              const migratedLog: ChecklistLog = { ...log, beforePhotos: migratedBefore, afterPhotos: migratedAfter }
-              const saved = await sbSaveChecklistLog(u.email, migratedLog)
-              if (!saved) { allOk = false; break }
-            } catch (err) {
-              console.error('migrateGuestData: checklist log migration failed', err)
-              allOk = false
-              break
-            }
-          }
-          if (allOk) {
-            localStorage.removeItem(LS_CHECKLIST_LOGS)
-          } else {
-            showToast('部分整理紀錄同步失敗，資料仍保留在本機，之後可以再次同步。')
-          }
+    const runBatch = async (
+      key: string,
+      counts: MigrationCounts,
+      migrateOne: (email: string, raw: unknown) => Promise<RecordOutcome>
+    ) => {
+      const list = readGuestArray(key)
+      if (list === null) {
+        // 整個 key 無法解析：不遷移、不清除，以 1 筆 failed 計（保留給使用者／之後處理）
+        console.error('migrateGuestData: guest data unreadable', key)
+        counts.failed += 1
+        return
+      }
+      for (let i = 0; i < list.length; i++) {
+        if (stopped || activeEmailRef.current !== email) {
+          stopped = true
+          counts.pending += list.length - i
+          return
         }
-      } catch (err) {
-        console.error('migrateGuestData: checklist_logs parse failed', err)
+        let outcome: RecordOutcome
+        try {
+          outcome = await migrateOne(email, list[i])
+        } catch (err) {
+          console.error('migrateGuestData: record migration failed', key, err)
+          outcome = 'failed'
+        }
+        if (outcome === 'stop') {
+          stopped = true
+          counts.pending += list.length - i
+          return
+        }
+        if (outcome === 'migrated') counts.migrated += 1
+        else if (outcome === 'alreadySynced') counts.alreadySynced += 1
+        else if (outcome === 'conflict') counts.conflicts += 1
+        else counts.failed += 1
       }
     }
 
-    // ── declutter_records ──
-    const guestRecordsRaw = localStorage.getItem(LS_DECLUTTER_RECORDS)
-    if (guestRecordsRaw) {
-      try {
-        const guestRecords = JSON.parse(guestRecordsRaw) as DeclutterRecord[]
-        if (Array.isArray(guestRecords) && guestRecords.length > 0) {
-          let allOk = true
-          for (const record of guestRecords) {
-            try {
-              // 告別文照片 migration（比照整理日記）：
-              // - photo 為 data: → 上傳 Storage，換成遠端 URL
-              // - 舊 Guest 紀錄沒有 photo → 嘗試從 IndexedDB 讀 toss_photo_${id}，讀得到再壓縮上傳
-              // - IDB 也沒有 → 維持無照片
-              // - 上傳失敗 → 與整理日記相同：中止、保留本機資料、稍後可再同步
-              const migratedEntries: TossEntry[] = []
-              for (const e of record.tossEntries ?? []) {
-                let src = e.photo
-                let fromIdb = false
-                if (!src) {
-                  try { src = await loadPhoto(`toss_photo_${e.id}`) } catch { src = undefined }
-                  fromIdb = !!src
-                }
-                if (src && src.startsWith('data:')) {
-                  // 舊 IDB 照片可能是未壓縮原圖，先壓縮避免超過上傳大小限制
-                  const payload = fromIdb ? await compressPhotoForUpload(src) : src
-                  const url = await uploadPhoto(u.email, `toss_photo_${e.id}`, payload)
-                  if (!url) { allOk = false; break }
-                  migratedEntries.push({ ...e, photo: url })
-                } else {
-                  migratedEntries.push(src ? { ...e, photo: src } : e)
-                }
-              }
-              if (!allOk) break
+    await runBatch(LS_CHECKLIST_LOGS, result.checklist, migrateChecklistLog)
+    await runBatch(LS_DECLUTTER_RECORDS, result.declutter, migrateDeclutterRecord)
 
-              const migratedRecord: DeclutterRecord = { ...record, tossEntries: migratedEntries }
-              const saved = await sbSaveDeclutterRecord(u.email, migratedRecord)
-              if (!saved) { allOk = false; break }
-            } catch (err) {
-              console.error('migrateGuestData: declutter record migration failed', err)
-              allOk = false
-              break
-            }
-          }
-          if (allOk) {
-            localStorage.removeItem(LS_DECLUTTER_RECORDS)
-          } else {
-            showToast('部分斷捨離紀錄同步失敗，資料仍保留在本機，之後可以再次同步。')
-          }
-        }
-      } catch (err) {
-        console.error('migrateGuestData: declutter_records parse failed', err)
-      }
+    const unsynced = result.checklist.failed + result.checklist.pending + result.declutter.failed + result.declutter.pending
+    const conflicts = result.checklist.conflicts + result.declutter.conflicts
+    if (unsynced > 0 || conflicts > 0) console.warn('migrateGuestData result', result)
+    // 只在畫面仍屬於這個帳號時提示；未同步（可重試）優先於 conflict
+    if (activeEmailRef.current === email) {
+      if (unsynced > 0) showToast('部分資料尚未同步，稍後會再試。')
+      else if (conflicts > 0) showToast(`有 ${conflicts} 筆資料與雲端版本不同，暫時未同步。`)
     }
+    return result
   }, [showToast])
 
   const loadUserData = useCallback(async (u: OAuthUser) => {
