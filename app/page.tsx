@@ -483,6 +483,10 @@ export default function Home() {
   const [authError, setAuthError] = useState(false)
   // 是否已套用過第一次身分（之後的 auth 事件只在「身分真的改變」時才切換資料）
   const authResolvedRef = useRef(false)
+  // 登入使用者 edit / delete 進行中的鎖（同一筆在第一次請求完成前不送第二次）
+  // key：`checklist:${id}` / `declutter:${savedAt}`
+  const pendingEditRef = useRef<Set<string>>(new Set())
+  const pendingDeleteRef = useRef<Set<string>>(new Set())
 
   // Guest 資料：一律從 LocalStorage 讀取（只讀不寫，不會把 Supabase 資料複製回來）
   const loadGuestData = useCallback(() => {
@@ -825,31 +829,46 @@ export default function Home() {
     return true
   }
 
-  const handleDeleteDeclutterRecord = async (savedAt: string) => {
+  const handleDeleteDeclutterRecord = async (savedAt: string): Promise<boolean> => {
     if (user) {
-      // 登入：畫面行為維持原樣；DB 刪除成功後才清理該紀錄的 Storage 照片
+      // 登入：DB 刪除成功後才更新畫面，再清理該紀錄的 Storage 照片；失敗時畫面維持原樣（紀錄仍顯示）
       const email = user.email
-      const targetsRecords = declutterRecords.filter(r => r.savedAt === savedAt)
-      const otherRecords = declutterRecords.filter(r => r.savedAt !== savedAt)
-      setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
-      const ok = await sbDeleteDeclutterRecord(email, savedAt)
-      if (!ok) { showToast('刪除失敗，請檢查網路連線'); return }
-      const stillReferenced = referencedStoragePaths(otherRecords.flatMap(r => (r.tossEntries ?? []).map(e => e.photo)))
-      const targets = collectStorageTargets(
-        email,
-        targetsRecords.flatMap(r => (r.tossEntries ?? []).map(e => ({ ref: e.photo, prefix: `toss_photo_${e.id}`, exact: true })))
-      ).filter(t => !stillReferenced.has(t.path))
-      await cleanupStorageObjects(email, targets, `declutter delete (${savedAt})`)
-      return
+      const lockKey = `declutter:${savedAt}`
+      if (pendingDeleteRef.current.has(lockKey)) return false
+      pendingDeleteRef.current.add(lockKey)
+      try {
+        const targetsRecords = declutterRecords.filter(r => r.savedAt === savedAt)
+        const otherRecords = declutterRecords.filter(r => r.savedAt !== savedAt)
+        const ok = await sbDeleteDeclutterRecord(email, savedAt)
+        if (!ok) {
+          if (activeEmailRef.current === email) showToast('刪除失敗，請檢查網路連線')
+          return false
+        }
+        // 刪除期間已登出或換帳號 → 不改目前畫面（Storage 清理仍以原帳號進行，server 端以 JWT 驗證）
+        if (activeEmailRef.current === email) {
+          setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
+        }
+        const stillReferenced = referencedStoragePaths(otherRecords.flatMap(r => (r.tossEntries ?? []).map(e => e.photo)))
+        const targets = collectStorageTargets(
+          email,
+          targetsRecords.flatMap(r => (r.tossEntries ?? []).map(e => ({ ref: e.photo, prefix: `toss_photo_${e.id}`, exact: true })))
+        ).filter(t => !stillReferenced.has(t.path))
+        await cleanupStorageObjects(email, targets, `declutter delete (${savedAt})`)
+        return true
+      } finally {
+        pendingDeleteRef.current.delete(lockKey)
+      }
     }
     // Guest：以 LocalStorage「實際保存的資料」為準（state 可能含 LocalStorage 已移除的照片，資料量較大）
     const persisted = loadLS<DeclutterRecord[]>(LS_DECLUTTER_RECORDS, [])
     if (saveLS(LS_DECLUTTER_RECORDS, persisted.filter(r => r.savedAt !== savedAt))) {
       // 寫入成功後才更新畫面
       setDeclutterRecords(prev => prev.filter(r => r.savedAt !== savedAt))
+      return true
     } else {
       // 寫入失敗：saveLS 可能已先移除 key，把原資料寫回；畫面 state 保持不變
       saveLS(LS_DECLUTTER_RECORDS, persisted)
+      return false
     }
   }
 
@@ -895,18 +914,31 @@ export default function Home() {
 
   const handleDeleteChecklistLog = async (id: string): Promise<boolean> => {
     if (user) {
-      // 登入：畫面行為維持原樣；DB 刪除成功後才清理該紀錄的 Storage 照片
+      // 登入：DB 刪除成功後才更新畫面，再清理該紀錄的 Storage 照片；失敗時畫面維持原樣（紀錄仍顯示）
       const email = user.email
-      const targetLogs = checklistLogs.filter(l => l.id === id)
-      const otherLogs = checklistLogs.filter(l => l.id !== id)
-      setChecklistLogs(prev => prev.filter(l => l.id !== id))
-      const ok = await sbDeleteChecklistLog(email, id)
-      if (!ok) { showToast('刪除失敗，請檢查網路連線'); return ok }
-      const stillReferenced = referencedStoragePaths(otherLogs.flatMap(l => [...(l.beforePhotos ?? []), ...(l.afterPhotos ?? [])]))
-      const targets = collectStorageTargets(email, targetLogs.flatMap(checklistPhotoEntries))
-        .filter(t => !stillReferenced.has(t.path))
-      await cleanupStorageObjects(email, targets, `checklist delete (${id})`)
-      return ok
+      const lockKey = `checklist:${id}`
+      if (pendingDeleteRef.current.has(lockKey)) return false
+      pendingDeleteRef.current.add(lockKey)
+      try {
+        const targetLogs = checklistLogs.filter(l => l.id === id)
+        const otherLogs = checklistLogs.filter(l => l.id !== id)
+        const ok = await sbDeleteChecklistLog(email, id)
+        if (!ok) {
+          if (activeEmailRef.current === email) showToast('刪除失敗，請檢查網路連線')
+          return false
+        }
+        // 刪除期間已登出或換帳號 → 不改目前畫面（Storage 清理仍以原帳號進行，server 端以 JWT 驗證）
+        if (activeEmailRef.current === email) {
+          setChecklistLogs(prev => prev.filter(l => l.id !== id))
+        }
+        const stillReferenced = referencedStoragePaths(otherLogs.flatMap(l => [...(l.beforePhotos ?? []), ...(l.afterPhotos ?? [])]))
+        const targets = collectStorageTargets(email, targetLogs.flatMap(checklistPhotoEntries))
+          .filter(t => !stillReferenced.has(t.path))
+        await cleanupStorageObjects(email, targets, `checklist delete (${id})`)
+        return true
+      } finally {
+        pendingDeleteRef.current.delete(lockKey)
+      }
     }
     // Guest：寫入成功後才更新畫面；失敗時 LocalStorage 與畫面都維持原樣（刪到 0 筆時寫入 []）
     if (!safeSaveChecklistLogs(loadPersistedChecklistLogs().filter(l => l.id !== id))) {
@@ -919,16 +951,27 @@ export default function Home() {
 
   const handleEditChecklistLog = async (id: string, note: string): Promise<boolean> => {
     if (user) {
-      // 登入：維持原本行為（本輪不修改）
-      const updated = checklistLogs.map(l => l.id === id ? { ...l, note } : l)
-      setChecklistLogs(updated)
-      const log = updated.find(l => l.id === id)
-      if (log) {
-        const ok = await sbSaveChecklistLog(user.email, log)
-        if (!ok) showToast('編輯儲存失敗')
-        return ok
+      // 登入：Supabase 寫入成功後才更新畫面；失敗時畫面維持舊心得（編輯框由 ChecklistTab 保留）
+      const email = user.email
+      const lockKey = `checklist:${id}`
+      if (pendingEditRef.current.has(lockKey)) return false
+      pendingEditRef.current.add(lockKey)
+      try {
+        const original = checklistLogs.find(l => l.id === id)
+        if (!original) return true
+        const log: ChecklistLog = { ...original, note }
+        const ok = await sbSaveChecklistLog(email, log)
+        if (!ok) {
+          if (activeEmailRef.current === email) showToast('編輯儲存失敗')
+          return false
+        }
+        // 儲存期間已登出或換帳號 → 不寫進目前畫面；雲端已存好，仍回傳 true
+        if (activeEmailRef.current !== email) return true
+        setChecklistLogs(prev => prev.map(l => l.id === id ? { ...l, note } : l))
+        return true
+      } finally {
+        pendingEditRef.current.delete(lockKey)
       }
-      return true
     }
     // Guest：寫入成功後才更新畫面；失敗時 LocalStorage 與畫面都維持原樣
     if (!safeSaveChecklistLogs(loadPersistedChecklistLogs().map(l => l.id === id ? { ...l, note } : l))) {

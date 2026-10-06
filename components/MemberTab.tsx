@@ -337,6 +337,8 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onDel
   const [tossPhotos, setTossPhotos] = useState<Record<string, string>>({})
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'diary'; id: string } | { type: 'declutter'; savedAt: string } | null>(null)
   const [editingCategory, setEditingCategory] = useState<{ savedAt: string; itemIdx: number } | null>(null)
+  // 補填分類儲存中：第一次儲存完成前 disable 分類按鈕（避免快速點第二個分類）
+  const [savingCategory, setSavingCategory] = useState(false)
 
   // ── 統計資料 ──────────────────────────────────────────────
   const allItems = declutterRecords.flatMap(r => r.items)
@@ -748,16 +750,19 @@ export default function MemberTab({ declutterRecords, checklistLogs, user, onDel
                         {editingCategory?.savedAt === record.savedAt && editingCategory?.itemIdx === j && (
                           <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                             {KEEP_CATS.map(cat => (
-                              <button key={cat} onClick={async () => {
+                              <button key={cat} disabled={savingCategory} onClick={async () => {
+                                if (savingCategory) return
                                 // 只修改這筆紀錄第 j 件物品的 category（建立新物件，不 mutate 原紀錄），交給 page.tsx 持久化
                                 const updated: DeclutterRecord = {
                                   ...record,
                                   items: record.items.map((it, idx) => (idx === j ? { ...it, category: cat } : it)),
                                 }
-                                const ok = await onUpdateDeclutter(record, updated)
+                                setSavingCategory(true)
+                                let ok = false
+                                try { ok = await onUpdateDeclutter(record, updated) } finally { setSavingCategory(false) }
                                 // 成功才關閉選單（畫面隨 parent state 更新）；失敗保留選單，可再選一次
                                 if (ok) setEditingCategory(null)
-                              }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${sg}`, background: '#EAF2EE', color: '#2E6B50', cursor: 'pointer' }}>{cat}</button>
+                              }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${sg}`, background: '#EAF2EE', color: '#2E6B50', cursor: savingCategory ? 'default' : 'pointer', opacity: savingCategory ? 0.6 : 1 }}>{cat}</button>
                             ))}
                             <button onClick={() => setEditingCategory(null)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, border: `1px solid ${bd}`, background: 'white', color: mf, cursor: 'pointer' }}>取消</button>
                           </div>

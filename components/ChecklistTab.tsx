@@ -305,6 +305,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editNote, setEditNote] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  // 刪除請求進行中：只用來 disable「確定刪除」（重複請求由 page.tsx 的 pending lock 阻擋）
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [savedPopupEntry, setSavedPopupEntry] = useState<ChecklistLog | null>(null)
   // 剛完成的這一次整理（只存在記憶體，離開成果頁或重整後即消失）
   const [justCompletedId, setJustCompletedId] = useState<string | null>(null)
@@ -618,7 +620,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     const next = scheduledItems.filter(s => s.id !== id); setScheduledItems(next); saveLS('checklist_scheduled', next, userId)
   }
   // 有 onEditLog / onDeleteLog 時：畫面以 page.tsx 的 state 為準（經 initialLogs 同步回來），
-  // 不在這裡先改 logs；寫入失敗時 page.tsx 不更新 state，畫面就維持原樣
+  // 不在這裡先改 logs；page.tsx 在持久化（Supabase 或 LocalStorage）成功後才更新 state，
+  // 寫入失敗時 state 不變，畫面就維持原樣（Guest 與登入皆同）
   const saveEdit = async () => {
     if (!editingId) return
     const id = editingId
@@ -634,9 +637,11 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
   }
   const deleteLog = async (id: string) => {
     if (onDeleteLog) {
-      const ok = await onDeleteLog(id)
+      setDeletingId(id)
+      let ok = false
+      try { ok = await onDeleteLog(id) } finally { setDeletingId(null) }
       setConfirmDeleteId(null)
-      if (!ok) return   // 失敗：紀錄仍顯示
+      if (!ok) return   // 失敗：page.tsx 未移除紀錄，紀錄仍顯示
     } else {
       const next = logs.filter(l => l.id !== id)
       setLogs(next)
@@ -1163,7 +1168,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
             <div style={{ fontFamily: "'Noto Serif TC', serif", fontSize: 17, color: ink, marginBottom: 8 }}>確定刪除這筆紀錄？</div>
             <div style={{ fontSize: 13, color: ml, marginBottom: 24 }}>刪除後無法復原</div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => deleteLog(confirmDeleteId)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#C47B5A', color: 'white', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>確定刪除</button>
+              <button onClick={() => deleteLog(confirmDeleteId)} disabled={deletingId === confirmDeleteId} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#C47B5A', color: 'white', fontSize: 14, cursor: deletingId === confirmDeleteId ? 'default' : 'pointer', fontWeight: 500, opacity: deletingId === confirmDeleteId ? 0.6 : 1 }}>確定刪除</button>
               <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${bd}`, background: 'white', color: ml, fontSize: 14, cursor: 'pointer' }}>取消</button>
             </div>
           </div>
