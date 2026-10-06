@@ -21,14 +21,17 @@ function ContactModal({ onClose, feedbackSent, setFeedbackSent }: {
     const email = emailRef.current?.value.trim()
     if (!text) return
     setSending(true)
+    let ok = false
     try {
-      await fetch('/api/feedback', {
+      const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, contact_email: email || null, submitted_at: new Date().toISOString() }),
+        body: JSON.stringify({ message: text, contact_email: email || null }),
       })
-    } catch { /* 靜默失敗 */ }
+      ok = res.ok
+    } catch { /* 網路錯誤 → 視為失敗 */ }
     setSending(false)
+    if (!ok) { alert('送出失敗，請稍後再試'); return }
     setFeedbackSent(true)
   }
 

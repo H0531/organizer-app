@@ -190,20 +190,27 @@ function MemberFooter() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const emailRef = useRef<HTMLInputElement>(null)
   const [sending, setSending] = useState(false)
+  // Modal 每次 render 會重新 mount，失敗時用 draft 保留表單內容
+  const [draft, setDraft] = useState({ message: '', email: '' })
 
   const handleSubmit = async () => {
     const text = textareaRef.current?.value.trim()
     const email = emailRef.current?.value.trim()
     if (!text) return
+    setDraft({ message: textareaRef.current?.value ?? '', email: emailRef.current?.value ?? '' })
     setSending(true)
+    let ok = false
     try {
-      await fetch('/api/feedback', {
+      const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, contact_email: email || null, submitted_at: new Date().toISOString() }),
+        body: JSON.stringify({ message: text, contact_email: email || null }),
       })
-    } catch { /* 靜默失敗 */ }
+      ok = res.ok
+    } catch { /* 網路錯誤 → 視為失敗 */ }
     setSending(false)
+    if (!ok) { alert('送出失敗，請稍後再試'); return }
+    setDraft({ message: '', email: '' })
     setFeedbackSent(true)
   }
 
@@ -290,9 +297,9 @@ function MemberFooter() {
             <div style={{ background: '#EAF2EE', borderRadius: 12, padding: '24px 16px', fontSize: 14, color: '#2E6B50', textAlign: 'center', fontWeight: 500 }}>✅ 已發送，感謝您的回饋 :)</div>
           ) : (
             <>
-              <textarea ref={textareaRef} defaultValue="" placeholder="描述問題或建議⋯例如：某個按鈕點不到、希望新增某功能"
+              <textarea ref={textareaRef} defaultValue={draft.message} placeholder="描述問題或建議⋯例如：某個按鈕點不到、希望新增某功能"
                 style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, minHeight: 130, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 10 }} />
-              <input ref={emailRef} type="email" defaultValue="" placeholder="聯絡 Email（選填，方便我們回覆你）"
+              <input ref={emailRef} type="email" defaultValue={draft.email} placeholder="聯絡 Email（選填，方便我們回覆你）"
                 style={{ width: '100%', border: `1px solid ${bd}`, borderRadius: 8, padding: '10px 12px', fontSize: 16, color: ink, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 }} />
               <button onClick={handleSubmit} disabled={sending}
                 style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: sending ? '#9BC4AE' : ink, color: 'white', fontSize: 14, cursor: sending ? 'not-allowed' : 'pointer', fontWeight: 500 }}>
