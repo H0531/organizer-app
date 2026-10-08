@@ -32,6 +32,10 @@ function ContactModal({ onClose, feedbackSent, setFeedbackSent }: {
     } catch { /* 網路錯誤 → 視為失敗 */ }
     setSending(false)
     if (!ok) { alert('送出失敗，請稍後再試'); return }
+    // GA: 回饋送出（只在 API 成功後送；不送 message / email 等使用者輸入內容）
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'feedback_submitted', { source: 'home' })
+    }
     setFeedbackSent(true)
   }
 
@@ -154,7 +158,7 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>收集的資料</strong><br />本服務在您登入時會取得 Google 帳號的名稱、Email 及大頭照，僅用於識別您的帳號並顯示於介面。</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>資料儲存</strong><br />整理紀錄、照片、挑戰進度等資料儲存於 Supabase 雲端資料庫。未登入時，資料僅儲存於您的瀏覽器本機。</p>
             <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>照片</strong><br />上傳的照片儲存於 Supabase Storage，僅您本人可透過帳號存取。我們不會將您的照片用於任何其他用途。</p>
-            <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>第三方服務</strong><br />本服務使用 Google OAuth 登入、Supabase 資料庫及 Vercel 部署，請參閱各服務的隱私權政策。</p>
+            <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>第三方服務</strong><br />本服務使用 Google OAuth 登入、Supabase 資料庫及 Vercel 部署，請參閱各服務的隱私權政策。<br />本網站使用 Google Analytics 4（GA4）分析網站使用情形與功能使用狀況。</p>
             <p style={{ marginBottom: 0 }}><strong style={{ color: ink }}>刪除資料</strong><br />如需刪除您的所有資料，請透過聯絡方式與我們聯繫，我們將在 7 個工作天內處理。</p>
           </div>
         </Modal>

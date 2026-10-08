@@ -508,7 +508,7 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
     setPage(2)
     // GA: 開始整理
     if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'checklist_started', { space: SN[space], target_mins: effectiveMins })
+      window.gtag('event', 'checklist_started', { space: SN[space], target_mins: effectiveMins, login_state: userId ? 'member' : 'guest' })
     }
     // 進入整理中頁面後，捲動到計時器位置
     setTimeout(() => {
@@ -585,6 +585,8 @@ export default function ChecklistTab({ onSaveLog, onDeleteLog, onEditLog, initia
         has_after_photo: ap.length > 0,
         has_ba_pair: bp.length > 0 && ap.length > 0,
         duration_mins: Math.round(elapsedSecs / 60),
+        target_mins: effectiveMins,
+        login_state: userId ? 'member' : 'guest',
       })
     }
     setNote(''); setBeforePhotos([]); setAfterPhotos([]); setSkipBefore(false); setSkipAfter(false)

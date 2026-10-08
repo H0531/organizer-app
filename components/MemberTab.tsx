@@ -210,6 +210,10 @@ function MemberFooter() {
     } catch { /* 網路錯誤 → 視為失敗 */ }
     setSending(false)
     if (!ok) { alert('送出失敗，請稍後再試'); return }
+    // GA: 回饋送出（只在 API 成功後送；不送 message / email 等使用者輸入內容）
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'feedback_submitted', { source: 'member' })
+    }
     setDraft({ message: '', email: '' })
     setFeedbackSent(true)
   }

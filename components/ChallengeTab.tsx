@@ -410,7 +410,7 @@ export default function ChallengeTab({ userId }: { userId?: string }) {
     persistData(mode, newEntries)   // ← 直接 save，不依賴 effect
     // GA: 每日打卡
     if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'challenge_entry_submitted', { day: currentDay, challenge_days: mode })
+      window.gtag('event', 'challenge_entry_submitted', { day: currentDay, challenge_days: mode, login_state: userId ? 'member' : 'guest' })
     }
     setShowForm(false)
     setFItem(''); setFOrigin(''); setFReason(''); setFFeeling('')

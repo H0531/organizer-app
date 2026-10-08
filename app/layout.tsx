@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
-import GoogleAnalytics from "./GoogleAnalytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -145,8 +144,8 @@ export default function RootLayout({
             </Script>
           </>
         )}
-        {/* SPA 路由追蹤 */}
-        {GA_ID && <GoogleAnalytics />}
+        {/* SPA 切換 tab 的 page_view：唯一來源為 app/page.tsx handleTabChange 手動送出
+            （GA4「頁面根據瀏覽器記錄事件而變更」維持關閉，避免重複） */}
         {children}
       </body>
     </html>

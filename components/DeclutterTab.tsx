@@ -371,6 +371,7 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
           keep_count: keepItems.length,
           donate_count: donateItems.length,
           toss_count: tossItems.length,
+          login_state: userEmail ? 'member' : 'guest',
         })
       }
       return true
