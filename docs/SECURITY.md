@@ -89,6 +89,7 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 ### 現行與舊版流程
 - 現行登入使用 Supabase Auth（Google OAuth + PKCE）。
 - `app/api/auth/callback/route.ts` 仍存在；它會交換 Google token 並寫入非 httpOnly 的 `organizer_user` cookie，但現行 App 不再以此 cookie 作為身份來源。
+- 舊 cookie 的安全問題（程式碼可證實）：`organizer_user` 是未簽章的 JSON，`lib/auth.ts` 的 `getUserFromCookie` 直接 `JSON.parse` 讀取，沒有任何簽章或伺服器端驗證；用戶端可以自行修改內容，因此不能作為可信任的身份依據。現行身份改由 Supabase Auth 的 session 決定，照片 API 也以伺服器驗證過的 JWT 為準（目標架構見 `docs/DECISIONS.md` D-014）。
 - 是否仍有外部 OAuth redirect 設定指向舊 route 尚未確認。不得只因為 repo 內看似無呼叫者就直接刪除；應先確認外部設定與歷史用途。
 
 ### Codespaces redirect allowlist（歷史檢查事項）
@@ -127,6 +128,7 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 - 先唯讀盤點，再提出計畫，得到明確授權後才進行任何有副作用的變更。
 - 沒有備份、明確範圍與授權，不刪除 DB records 或 Storage objects。
 - 不修改 `.env*` 或其他 secrets 檔案，不把秘密值加入 Git。
+- 連接或查詢 Supabase 等外部服務前，須先取得使用者同意，包括唯讀查詢。
 
 ## 12. 待確認清單
 

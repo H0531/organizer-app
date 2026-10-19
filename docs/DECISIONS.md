@@ -58,6 +58,8 @@ Challenge 不走 Checklist／Declutter 的同一套 migration；它會比較本�
 
 舊 route 目前不是主要身份來源，但仍存在。需先確認 Google Console redirect 設定與是否有其他外部依賴，再決定停用或刪除。
 
+使用者已表達移除舊 OAuth callback 的意圖（2026-10-16 的說明）；但執行前仍須確認 Google Console 與其他外部依賴（例如 Vercel 上是否仍保留相關設定），並另行取得授權。
+
 ## D-011：Storage bucket 與 RLS 狀態
 **狀態：待驗證。**
 
@@ -72,3 +74,13 @@ Challenge 不走 Checklist／Declutter 的同一套 migration；它會比較本�
 **狀態：歷史明確。**
 
 不要自行改變產品定位、新增或刪除主要功能、重做整體 UX；不要把歷史討論中的 UX 想法（例如九宮格調整）當成已批准需求。可疑或誤提交的檔案（例如 `tate"`、`.env.loecho`）先回報，不自行清除。
+
+## D-014：目標身份與資料保護架構
+**狀態：歷史明確（使用者決定）；部分現行實作可見；其餘待驗證。**
+
+目標架構為 Supabase Auth（Google）＋ JWT ＋ RLS ＋ Private Storage，用來取代舊版自製 Google OAuth 與用戶端可修改的 `organizer_user` cookie（cookie 的問題見 `docs/SECURITY.md` §7）。
+
+- 現行實作可見：前端登入已改為 Supabase Auth（PKCE）；照片 API 以伺服器驗證過的 JWT 決定身份。
+- 待驗證：各資料表 RLS、`photos` bucket 是否為 Private。
+- 這是架構目標，**不代表所有安全機制已經完成或通過驗證**；在 RLS 與 Private Storage 確認前，不可宣稱此架構已全部完成。
+- 細節分別見：照片讀取 D-006、舊 OAuth 移除 D-010、Storage 與 RLS 狀態 D-011。
