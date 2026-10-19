@@ -2,15 +2,25 @@
 
 ## 1. 證據範圍
 
-本文件依 2026-10-19 現行 Repo 唯讀核對報告整理，並補入原交接稿中的歷史背景。2026-10-19 匯入前，已在 HEAD `1043e24` 核對文件中的檔案路徑、函式名稱與流程描述。後續若程式碼變更，應重新核對相關描述。本文件沒有連線 Supabase、Vercel 或 GA4，不代表外部服務的現況已確認。
+本文件依 2026-10-19 現行 Repo 唯讀核對報告整理，並補入原交接稿中的歷史背景。2026-10-19 匯入前，已在當時的 HEAD `1043e24` 核對文件中的檔案路徑、函式名稱與流程描述。同日補充 §4 的 LINE 導向與 §9 的 GA4 事件清單時，在當時的 HEAD `a077d57` 以唯讀方式再次核對；該版本相對 `1043e24` 只多了文件 commit，網站程式碼相同。以上 HEAD 都只代表核對當時，後續若程式碼變更，應重新核對相關描述。本文件沒有連線 Supabase、Vercel 或 GA4，不代表外部服務的現況已確認。
 
 ## 2. 技術與頁面結構
 
 - Next.js 16.2.3、React 19.2.4、Supabase JS、Tailwind CSS 4。
-- App 主要由 `app/page.tsx` 控制，以 tab 切換主要畫面（首頁、整理清單、斷捨離、每日丟一物、收納推薦、我的整理）。
+- App 主要由 `app/page.tsx` 控制，以 tab 切換主要畫面。分頁 ID 定義於 `app/page.tsx` 的 `AppTab` 型別與 `TABS` 陣列：
+
+  | 分頁 ID | 中文名稱 |
+  |---|---|
+  | `home` | 首頁 |
+  | `checklist` | 整理清單 |
+  | `declutter` | 斷捨離 |
+  | `challenge` | 每日丟一物 |
+  | `recommend` | 收納推薦 |
+  | `member` | 我的整理 |
+
 - `app/layout.tsx` 負責 metadata、SEO 與 GA4 `next/script` 初始化。
 - `app/page.tsx` 負責身份初始化、Guest → 登入資料遷移，以及多種紀錄的讀寫／刪除 handler。
-- 部署：歷史紀錄為 GitHub → Vercel；目前部署設定與 Production 版本未確認。
+- 部署：歷史紀錄為 GitHub → Vercel。依使用者說明，推送 `main` 後由 Vercel 自動部署到正式環境；Vercel 設定尚未實際確認，Production 目前執行的版本也未確認。推送前的規則見 `CLAUDE.md` §3。
 
 ## 3. 主要檔案責任
 
@@ -51,6 +61,12 @@
 - 由 Supabase JS 處理 callback URL 與 PKCE session，再由 `getAuthUser()`／`toAppUser()` 轉成 App user。
 - email 會 trim 並轉小寫；沒有 email 的 session 視為未登入。
 - 登入者的 LocalStorage key 使用 `${key}__${email}`。
+- LINE 內建瀏覽器：
+  - 程式碼可證實：`app/page.tsx` 初始化的 `useEffect` 中，若 user agent 符合 LINE（`/Line\//`），會在目前網址加上 `openExternalBrowser=1`，以 `location.replace` 重新導向，隨後 `return`（該次執行不進行後續的身份初始化）。
+  - 未驗證：LINE App 如何處理此參數、是否因此開啟外部瀏覽器、Google 登入是否因此成功。依使用者說明，Google 登入在 App 內建瀏覽器中可能無法完成（未驗證）。
+  - 未確認：以關鍵字搜尋未找到明確的畫面提示文字，但這不代表已完整搜尋所有可能文案；LINE 以外的 App 內建瀏覽器處理方式也未確認。
+  - 待評估：程式碼目前沒有明確檢查網址是否已包含 `openExternalBrowser=1`；若參數未被 LINE 處理，是否會重複導向需要另行評估，不可直接斷定一定會發生。
+  - 修改登入或初始化流程時，先保留目前行為；若要調整或移除，必須先評估其影響。
 
 ## 5. Guest → 登入資料流程
 
@@ -106,9 +122,25 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 `app/api/photos/route.ts` 的 POST：
 - 驗證 Bearer token，透過 `supabaseAdmin.auth.getUser` 取得 email。
 - body email 只用於比對，不一致則拒絕。
-- key 使用白名單格式。
+- key 使用白名單格式（見下方「照片 key 格式」）。
 - 只接受 JPEG／PNG data URL，限制 2 MB，檢查 magic bytes。
 - Storage 路徑為 `${JWT email}/${key}.${ext}`，使用 upsert。
+
+#### 照片 key 格式（程式碼可見）
+
+**Storage object key**（上傳、刪除、簽名 API 共用）
+- 驗證規則：`app/api/photos/route.ts` 與 `app/api/photos/sign/route.ts` 的 `KEY_PATTERN` 相同，為 `^(checklist_\d{1,20}_(before|after)_[0-4]|toss_photo_\d{1,20})$`。
+  - Checklist：`checklist_<logId>_before_<n>` 或 `checklist_<logId>_after_<n>`；`<logId>` 為 1–20 位數字，`<n>` 為 0–4（與整理清單每組最多 5 張照片的上限一致）。
+  - Declutter：`toss_photo_<id>`；`<id>` 為 1–20 位數字。
+- 產生位置：`components/ChecklistTab.tsx` 的 `saveLog`（`logId` 需通過 `isValidLogId` 的 1–20 位數字檢查）、`components/DeclutterTab.tsx` 的 `persistRecord`，以及 `app/page.tsx` 的 Guest → 登入遷移。
+- 遷移時 Guest 紀錄的 id 只檢查為非空字串；若不符合上述數字格式，上傳 API 會拒絕，該筆遷移視為失敗，不會略過驗證。
+- Storage 中的完整路徑為 `<JWT email>/<key>.<jpg|png>`；副檔名由上傳內容的 MIME 類型決定。簽名 API 另以 `PATH_PATTERN` 限制只接受「資料夾／檔名.jpg|png」兩層路徑。
+
+**IndexedDB key**（本機快取，與 Storage 無關）
+- 資料庫 `organizer_photos`、store `photos`（`lib/types.ts`）。
+- 目前程式只以 `toss_photo_<id>` 為 key 存取：Guest 儲存斷捨離紀錄時寫入告別文照片（`app/page.tsx` 的 `handleDeclutterSave`），會員頁讀取舊紀錄、Guest → 登入遷移時讀取。
+- Checklist 照片不寫入 IndexedDB；Guest 的 Checklist 照片以 data URL 保存在 LocalStorage 的紀錄中。
+- IndexedDB key 與 Storage object key 的字串部分相同（都是 `toss_photo_<id>`），但 IndexedDB key 不含帳號資料夾與副檔名，兩者是不同的儲存位置。
 - 回傳 public URL；資料庫中的照片參照可能仍是 public URL 格式。
 
 ### 8.3 參照值解析與讀取
@@ -130,11 +162,54 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 
 - `app/layout.tsx` 使用 `next/script` 在 `afterInteractive` 載入 gtag。
 - GA ID 透過環境變數設定，沒有硬編碼在程式碼中；本文件不記錄實際 ID。
-- tab 切換由 `app/page.tsx` 的 `handleTabChange` 手動送 `page_view`。
-- 自訂事件包括 checklist、照片、declutter、challenge 與 feedback 相關事件。
 - 歷史決策是將 GA4「依瀏覽器記錄變更網頁」設定維持 OFF；目前後台設定未重新確認。
-- 首次載入的預設 page_view、點擊目前 tab 的事件、照片事件觸發時機與 `page_path` 參數都應另行驗證。
-- 未查 GA4 後台，也未重新驗證 production 是否收到事件。
+
+### 事件清單（程式碼可見）
+
+以下依程式碼中的 `window.gtag('event', …)` 呼叫整理。這只代表程式會送出這些事件，**不代表正式環境已確認收到**。
+
+| 事件 | 位置 | 觸發時機 | 主要參數 |
+|---|---|---|---|
+| `page_view` | `app/page.tsx` `handleTabChange` | 每次切換 tab（含點擊目前所在的 tab） | `page_path`、`page_title` |
+| `checklist_started` | `components/ChecklistTab.tsx` `startTimer` | 開始整理計時（不代表紀錄已保存） | `space`、`target_mins`、`login_state` |
+| `checklist_saved` | `components/ChecklistTab.tsx` `saveLog` | 儲存回呼 `onSaveLog` 回傳成功後（語意限制見下方） | `space`、照片有無、`duration_mins`、`target_mins`、`login_state` |
+| `before_photo_uploaded` | `components/ChecklistTab.tsx` `addPhotos` | 選擇「整理前」照片時（在讀檔之前送出） | `space` |
+| `after_photo_uploaded` | `components/ChecklistTab.tsx` `addPhotos` | 選擇「整理後」照片時（在讀檔之前送出） | `space` |
+| `declutter_flow_entered` | `components/DeclutterTab.tsx` | 進入分流（review）階段 | 物品數量統計 |
+| `declutter_saved` | `components/DeclutterTab.tsx` `persistRecord` | 儲存回呼 `onSaveToMember` 回傳成功後（語意限制見下方） | 物品數量統計、`login_state` |
+| `challenge_started` | `components/ChallengeTab.tsx` | 按下確認開始挑戰的按鈕時，在呼叫 `persistData` 後送出 | `days` |
+| `challenge_entry_submitted` | `components/ChallengeTab.tsx` `submitEntry` | 送出每日打卡（品項欄位非空白）時，在呼叫 `persistData` 後送出 | `day`、`challenge_days`、`login_state` |
+| `feedback_submitted` | `components/HomeTab.tsx`、`components/MemberTab.tsx` | 意見回饋 API 回應成功後 | `source`（`home`／`member`） |
+
+- `before_photo_uploaded`／`after_photo_uploaded`：
+  - 名稱是「uploaded」，但實際是在檔案選擇框的 change 事件呼叫 `addPhotos` 時送出，送出時間在讀取檔案之前。
+  - 正常介面在照片數量達上限（5 張）時，不再顯示檔案選擇框。
+  - 若一次選擇的照片數量超過剩餘名額，事件仍在 `addPhotos` 中送出一次，但實際加入的照片只取剩餘名額內的數量。
+  - 取消選檔是否會觸發此事件，取決於瀏覽器行為，**尚未確認**。
+  - 事件送出不代表照片已完成讀取或已上傳到 Storage（照片要到儲存整理日記時才上傳），也不代表 GA4 正式環境已收到。
+- `challenge_started`／`challenge_entry_submitted`：程式碼在呼叫 `persistData` 後送出事件，但 `persistData` 沒有回傳明確的儲存成功／失敗狀態，因此事件本身不代表資料已成功儲存。
+- `checklist_started`：在 `startTimer` 中送出，代表開始整理計時流程；不代表整理已完成，也不代表整理紀錄已保存。
+- `checklist_saved`：代表前端儲存函式（`app/page.tsx` 的 `handleChecklistSave`）回傳成功，**不等於所有資料都已成功寫入 Supabase**。依程式碼，回傳成功的情況包括：
+  - Guest：紀錄寫入本機 LocalStorage 成功；照片以 data URL 保存在本機，不寫雲端。
+  - 登入：Supabase 寫入回報成功。
+  - 登入：Supabase 寫入回報失敗，但隨後的唯讀確認發現該筆紀錄已存在，且本次上傳的照片都已被該紀錄引用，程式視為成功（實際伺服器狀態是在用戶端回應不確定的情況下推定）。
+  - 登入：以原始帳號 email 送出的 Supabase 寫入回報成功，但檢查時帳號已切換。程式仍回傳成功，`page.tsx` 不更新共用 state。此時事件代表「原始儲存流程回報成功」，不代表目前登入帳號的資料已保存；`login_state` 仍反映原始帳號。若帳號在寫入請求送出前即已切換，寫入結果取決於尚未驗證的 RLS。`ChecklistTab` 若仍掛載，仍會以原始資料更新本元件的清單。
+  - 登入時若照片上傳失敗，`saveLog` 會改用壓縮後的 data URL 作為照片參照，紀錄仍可能儲存成功；因此事件參數中的照片有無，不代表照片已上傳到 Storage。
+  - 雲端最終狀態未由此事件確認。
+- `declutter_saved`：代表前端儲存函式（`app/page.tsx` 的 `handleDeclutterSave`）回傳成功，**不等於所有照片與資料都已成功寫入雲端**。依程式碼，回傳成功的情況包括：
+  - Guest：紀錄寫入本機 LocalStorage 成功。若本機空間不足，會改存不含 data URL 照片的版本，照片只另外寫入 IndexedDB 快取（寫入失敗時不會回報）。
+  - 登入：Supabase 寫入回報成功；若儲存期間帳號已切換，仍回傳成功，只是不更新目前畫面。
+  - 登入時若照片上傳失敗，`persistRecord` 會保留壓縮後的 data URL 作為照片參照。
+  - 雲端最終狀態未由此事件確認。
+- 表中「回傳成功後」只代表程式在儲存函式回傳成功後才送出事件；只有實際檢查到的觸發條件才寫成事實。
+- 新增追蹤點沿用 snake_case 命名；不要在事件參數中送出使用者輸入的文字或 email。
+
+### 待驗證
+- 首次載入時 gtag `config` 是否送出預設 `page_view`，以及與手動 `page_view` 是否重複。
+- 點擊目前所在 tab 會重送 `page_view`。
+- `page_path` 參數在 GA4 報表中的呈現方式。
+- 取消選擇照片時，各瀏覽器是否會觸發照片事件。
+- 程式碼呼叫事件不等於正式環境已收到；未查 GA4 後台，也未重新驗證 production 是否收到事件。
 
 ## 10. 現況風險與注意事項
 
@@ -151,6 +226,7 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 - feedback API 沒有 rate limit。
 - 舊 OAuth callback route 仍存在。
 - Storage bucket 的 Public／Private 狀態與 RLS 未確認。
+- LINE 導向沒有明確檢查網址是否已帶參數；是否會重複導向待評估（見 §4）。
 
 ## 11. 開始修改前的必查項目
 
