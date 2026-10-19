@@ -12,7 +12,8 @@
 - [ ] **確認實際 DB schema 與唯一約束。** Checklist、Declutter、Challenge 及 feedback 表的約束尚未核對。
 - [ ] **確認 Supabase Auth redirect allowlist。** 歷史紀錄：曾為 Codespaces 測試加入開發用轉發網址；目前設定未確認。確認是否仍保留，並由使用者決定是否移除。
 - [ ] **確認舊 Google OAuth callback 是否仍登記於 Google Console。** 在確認外部依賴前，不移除舊 route。
-- [ ] **確認遠端 GitHub 最新狀態。** 檢查基線見 `docs/WORKLOG.md`；當時沒有 fetch。
+- [x] **確認遠端 GitHub 最新狀態。** 2026-10-19 已執行 `git fetch origin`：`origin/main` 為 `0df9f1a`，與本地 `main` 分歧；已以 merge commit `cfaab0f` 整合進本地 `main`，保留本地 `CLAUDE.md`（詳見 `docs/WORKLOG.md` §5）。範圍只限 `main` 的 Git 歷史；遠端狀態會隨時間改變，推送前須再次確認（見下一項）。
+- [ ] **推送本地 `main` 的文件 commit 與 merge commit。** 尚未執行。推送前須：再次 `git fetch origin` 確認可快轉推送；經使用者同意後執行 `npm run build` 並如實回報；再取得使用者對推送與可能觸發的正式部署的明確同意（見 `CLAUDE.md` §3）。部署結果的確認見下一項。
 - [ ] **確認 Vercel 是否在推送 `main` 時自動部署，以及目前 Production 部署的 commit。** 依使用者說明推送 `main` 會自動部署，歷史也曾回報部署 Ready，但 Vercel 設定與目前版本都未重新查驗。
 - [ ] **確認 Vercel 是否仍保留舊 OAuth 使用的 Google 環境變數。** 只確認是否存在，不讀取值；在決定移除舊 OAuth 前處理（見 P2 舊 OAuth 項目、`docs/DECISIONS.md` D-010）。
 - [ ] **確認 GitHub repo 是否公開。** 結果會影響文件中可否出現 repo 名稱與正式網域；目前未確認。

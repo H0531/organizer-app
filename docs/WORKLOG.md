@@ -59,7 +59,15 @@
 | `8aa499f` | 2026-10-05 | `fix: harden guest migration safety` | Guest migration 防護。 |
 | `45ee890` | 2026-10-06 | `fix: prevent authenticated UI write desync` | 登入狀態下 UI 寫入同步相關修正。 |
 | `bf0025d` | 2026-10-06 | `fix: harden feedback submission` | Feedback 提交防護；rate limit 仍需評估。 |
-| `1043e24` | 2026-10-08 | `feat: improve GA4 event tracking` | 歷史紀錄曾回報 production smoke test；目前正式環境未重新驗證。 |
+| `1043e24` | 2026-10-08 | `feat: improve GA4 event tracking` | 歷史紀錄曾回報 production smoke test；目前正式環境未重新驗證。本地 `main` 與 `origin/main` 的共同祖先。 |
+| `0df9f1a` | 2026-10-16 | `Update CLAUDE.md` | 遠端 `origin/main` 上的 commit（依 metadata，作者為使用者、經 GitHub 網頁提交）；只修改 `CLAUDE.md`。 |
+| `02bfbe9` | 2026-10-19 | `docs: add project handoff documentation` | 匯入 8 份交接文件。 |
+| `a077d57` | 2026-10-19 | `docs: update handoff commit record` | 修正 WORKLOG 中的提交狀態描述。 |
+| `aff621e` | 2026-10-19 | `docs: refine Claude collaboration rules` | 文件分組提交第 1 組：`CLAUDE.md`。 |
+| `a6cbd1c` | 2026-10-19 | `docs: clarify architecture and tracking behavior` | 文件分組提交第 2 組：`docs/ARCHITECTURE.md`。 |
+| `b6537fd` | 2026-10-19 | `docs: update product security and decision records` | 文件分組提交第 3 組：`docs/PRODUCT.md`、`docs/SECURITY.md`、`docs/DECISIONS.md`、`docs/TODO.md`。 |
+| `b1854e8` | 2026-10-19 | `docs: clarify deployment precautions` | 文件分組提交第 4 組：`README.md`。 |
+| `cfaab0f` | 2026-10-19 | `Merge origin/main, preserving local CLAUDE.md` | 將 `0df9f1a` 合併進本地 `main`；詳見 §5。尚未推送。 |
 
 ### 原交接稿的修正紀錄
 - 原交接稿將 `2b02576`、`a947ed3` 標為 2026-10-02；依本地 Git 紀錄，兩者日期皆為 **2026-10-03**。
@@ -117,6 +125,22 @@
 - 確認未 commit、push、部署或連線外部服務。
 - 未驗證：這些是文件匯入檢查結果，不代表外部服務設定已驗證。
 
+### 文件分組提交與遠端整合（已完成；尚未推送）
+- **發現分歧**：推送前檢查時執行 `git fetch origin`，發現本地 `main` 與 `origin/main` 分歧——共同祖先 `1043e24`，本地獨有 6 個 commit（`02bfbe9`、`a077d57`，以及下方 4 組），遠端獨有 1 個 commit（`0df9f1a`，只修改 `CLAUDE.md`）。
+- **文件分組提交**：先將工作目錄中的 7 份文件修改分 4 組提交，每組只以明確路徑加入暫存區：
+  1. `aff621e`：`CLAUDE.md`（整合遠端 `0df9f1a` 的規則與本地協作規範）。
+  2. `a6cbd1c`：`docs/ARCHITECTURE.md`。
+  3. `b6537fd`：`docs/PRODUCT.md`、`docs/SECURITY.md`、`docs/DECISIONS.md`、`docs/TODO.md`。
+  4. `b1854e8`：`README.md`。
+- **整合前再次確認遠端**：2026-10-19 再次執行 `git fetch origin`，`origin/main` 仍為 `0df9f1a`，沒有新的遠端 commit。
+- **遠端整合**：以 `git merge --no-ff origin/main` 建立 merge commit `cfaab0f`（`Merge origin/main, preserving local CLAUDE.md`）；第一個父 commit 為 `b1854e8`，第二個父 commit 為 `0df9f1a`。
+  - 只有 `CLAUDE.md` 發生衝突。以 `git checkout --ours CLAUDE.md` 保留本地版本，並確認第一行為 `@AGENTS.md`，內容與 merge 前的本地版本完全相同。保留本地版本的依據：合併前已逐項確認本地 `CLAUDE.md` 已承接遠端 `0df9f1a` 應保留的內容（技術與產品細節移至 README 與 `docs/`，部分內容依決策刻意排除）。
+  - merge commit 的 tree 與第一個父 commit `b1854e8` 完全相同（`git diff HEAD^1 HEAD` 無差異）。
+  - 本地原有 6 個 commit 的 SHA 均保留，沒有 rebase 或改寫歷史。
+- **未納入本次整合**：遠端分支 `origin/claude/new-session-4u0zpo`（`52128c0`，內容為 `docs/HANDOFF.md`）沒有合併。理由：內容多與現有文件重複或已過時，並建議將原始對話匯入 repo，與 `docs/SECURITY.md` §10 的決定衝突；有價值的部分已摘要吸收至現有文件。兩個交接 ZIP 仍未追蹤、未提交。
+- **尚未執行**：`npm run build`、推送（`git push`）、部署。推送 `main` 可能觸發正式環境部署（見 `CLAUDE.md` §3），須另行取得同意。
+- 未驗證：本節只記錄 Git 操作與文件檢查結果，不代表 Vercel、Supabase、GA4 等外部服務的狀態已驗證。
+
 ## 6. 執行任務時建議留下的紀錄格式
 
 每個實際執行的任務，補記：
@@ -129,6 +153,6 @@
 ## 7. 本文件的限制
 
 - 不含秘密值、帳號 email、專案識別碼、GA Measurement ID、DNS 設定值或環境變數內容。
-- 沒有重新連線遠端 Git、Supabase、Vercel 或 GA4。
+- 2026-10-19 曾數次執行 `git fetch origin`，僅更新本地的遠端追蹤資訊；除此之外沒有其他遠端 Git 操作，也沒有連線 Supabase、Vercel 或 GA4。
 - 沒有重新跑功能測試。
 - 歷史測試與部署紀錄只保留為歷史紀錄，不作為目前 Production 的保證。
