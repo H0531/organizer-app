@@ -33,6 +33,7 @@ npm run lint     # ESLint 檢查
 - `.env.local` 已被 `.gitignore` 排除。**密鑰與環境設定值不得提交到 Git，也不得寫入文件或在對話中輸出。**
 - service role key 只能在 server-side route 使用，不得出現在 client 程式碼。
 - Google 登入在本機或開發環境測試時，涉及 Supabase Auth 的 redirect allowlist 設定；修改外部設定前須取得明確授權（見 `docs/SECURITY.md`）。
+- 推送 `main` 可能觸發正式環境部署；依使用者說明，Vercel 設定尚未實際確認。推送前規則見 `CLAUDE.md` §3。
 
 ## 文件導覽
 
