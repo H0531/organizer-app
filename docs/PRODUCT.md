@@ -70,7 +70,7 @@
 - Guest：`user === null`，資料主要保存在不帶帳號後綴的 LocalStorage key，照片另有 IndexedDB 快取。
 - 登入使用者：LocalStorage key 以 email 後綴區分，部分資料同步到 Supabase。
 
-實際資料隔離仍涉及資料表 RLS 與 Storage 設定；這些後台設定尚未確認。
+實際資料隔離依賴資料表 RLS 與 Private Storage；這些設定已於 2026-10-20 由使用者在 Dashboard 人工確認，但跨帳號安全測試尚無實測證據（見 `docs/SECURITY.md` §6）。
 
 ## 5. UX 原則
 

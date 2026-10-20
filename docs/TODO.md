@@ -4,17 +4,20 @@
 
 本清單依 2026-10-19 唯讀報告、兩版交接文件比對與歷史紀錄整理。所有項目目前都只是待確認／待評估；除非後續取得新證據並記錄，不可標成已修復或已驗證。
 
+2026-10-20 更新：依使用者的 Supabase Dashboard 人工確認與當日唯讀核對（見 `docs/WORKLOG.md` §6），勾選已取得證據的項目，並註明證據類型。勾選的設定確認項目**不代表安全測試已通過**。
+
 ## P0｜外部設定與安全邊界待確認
 
-- [ ] **確認 Supabase `photos` bucket 目前的 Public／Private 狀態。** 歷史紀錄曾於 2026-10-02 改為 Private，目前未確認。
-- [ ] **確認舊 public URL 是否仍可經 CDN 快取讀取。** 歷史上列為待驗證，結果未知。
-- [ ] **唯讀檢查 Storage policies 與三張資料表 RLS。** 特別確認 `user_email` 與 JWT claim 的隔離方式。
-- [ ] **確認實際 DB schema 與唯一約束。** Checklist、Declutter、Challenge 及 feedback 表的約束尚未核對。
+- [x] **確認 Supabase `photos` bucket 目前的 Public／Private 狀態。** 歷史紀錄曾於 2026-10-02 改為 Private。2026-10-20 使用者在 Dashboard 人工確認為 Private（設定確認，見 `docs/SECURITY.md` §6.1）。
+- [ ] **確認舊 public URL 是否仍可經 CDN 快取讀取。** 歷史上列為待驗證，結果未知；Dashboard 無法看出，需實際請求測試。bucket 已是 Private，優先順序低於下方跨帳號實測。
+- [x] **唯讀檢查 Storage policies 與三張資料表 RLS。** 2026-10-20 使用者在 Dashboard 人工確認：沒有 `photos` 相關 Storage policies；三張表已啟用 RLS，各有四條以 JWT email 比對 `user_email` 的政策；`feedback` 已啟用 RLS、沒有政策（設定確認，見 `docs/SECURITY.md` §6.1）。各表 UPDATE／INSERT 政策的 WITH CHECK 內容沒有個別記錄，改由下一項實測涵蓋。
+- [ ] **跨帳號資料隔離實測（尚無實測證據）。** 三張主要資料表的跨帳號 SELECT／INSERT／UPDATE／DELETE，以 INSERT（偽造 `user_email`）與 UPDATE（把 `user_email` 改成他人）優先，因為取決於 WITH CHECK。照片 API 的跨帳號簽名網址、未登入請求簽名網址、跨帳號刪除目前只有程式碼靜態證據，可一併實測，不需單獨安排。執行方式（例如 SQL Editor 在交易中模擬並 rollback，或使用測試帳號）與是否在正式資料庫執行，須由使用者決定並另行授權；只使用測試資料，不使用真實使用者 email（見 `docs/SECURITY.md` §6.3）。
+- [ ] **確認實際 DB schema 與唯一約束。** Checklist、Declutter、Challenge 及 feedback 表的約束尚未核對（RLS 設定確認不能取代約束核對）。
 - [ ] **確認 Supabase Auth redirect allowlist。** 歷史紀錄：曾為 Codespaces 測試加入開發用轉發網址；目前設定未確認。確認是否仍保留，並由使用者決定是否移除。
 - [ ] **確認舊 Google OAuth callback 是否仍登記於 Google Console。** 在確認外部依賴前，不移除舊 route。
 - [x] **確認遠端 GitHub 最新狀態。** 2026-10-19 已執行 `git fetch origin`：`origin/main` 為 `0df9f1a`，與本地 `main` 分歧；已以 merge commit `cfaab0f` 整合進本地 `main`，保留本地 `CLAUDE.md`（詳見 `docs/WORKLOG.md` §5）。範圍只限 `main` 的 Git 歷史；遠端狀態會隨時間改變，推送前須再次確認（見下一項）。
-- [ ] **推送本地 `main` 的文件 commit 與 merge commit。** 尚未執行。推送前須：再次 `git fetch origin` 確認可快轉推送；經使用者同意後執行 `npm run build` 並如實回報；再取得使用者對推送與可能觸發的正式部署的明確同意（見 `CLAUDE.md` §3）。部署結果的確認見下一項。
-- [ ] **確認 Vercel 是否在推送 `main` 時自動部署，以及目前 Production 部署的 commit。** 依使用者說明推送 `main` 會自動部署，歷史也曾回報部署 Ready，但 Vercel 設定與目前版本都未重新查驗。
+- [x] **推送本地 `main` 的文件 commit 與 merge commit。** 2026-10-20 觀察：本地 `origin/main` ref 與 HEAD `8d2d436` 相同，已包含 `cfaab0f`（Git 本地紀錄；當日未執行 fetch，GitHub 實際狀態未另行查驗）。推送由使用者執行。
+- [ ] **確認 Vercel 是否在推送 `main` 時自動部署，以及目前 Production 部署的 commit。** 依使用者說明推送 `main` 會自動部署；使用者於 2026-10-20 回報 Vercel 最新部署 commit 為 `8d2d436`、狀態 Ready（使用者回報，未由 Claude 查驗 Vercel）。自動部署的設定本身仍未查驗。
 - [ ] **確認 Vercel 是否仍保留舊 OAuth 使用的 Google 環境變數。** 只確認是否存在，不讀取值；在決定移除舊 OAuth 前處理（見 P2 舊 OAuth 項目、`docs/DECISIONS.md` D-010）。
 - [ ] **確認 GitHub repo 是否公開。** 結果會影響文件中可否出現 repo 名稱與正式網域；目前未確認。
 - [ ] **確認 GA4 Enhanced Measurement 與正式事件收取。** 歷史方案是設定 OFF，但目前後台狀態未確認。
@@ -58,8 +61,10 @@
 
 - [ ] 核對 `app/api/auth/callback/route.ts`、`lib/auth.ts` 舊 OAuth 程式的外部依賴，再決定是否移除。
 - [ ] 修正過時程式註解：service role 使用範圍、public URL 舊流程等；需另行授權修改程式碼。
-- [ ] **評估移除舊 public URL 相關程式邏輯。** 可能涉及 `lib/photos.ts` 的 `getRemotePhotoUrl`，以及照片上傳 API 回傳 public URL 的舊流程。前置條件：先完成 P0 的 `photos` bucket Public／Private 狀態與 Storage policies／RLS 確認，並評估資料庫與本機中既有照片參照（可能仍是 public URL 格式）的相容性。完成前不得直接移除或改寫程式碼；此項與上方「修正過時註解」、待使用者決策中的「照片失敗上傳時的資料格式」是不同事項，也不代表已確認目前存在漏洞。
-- [ ] 評估誤提交的 `tate"` 檔案是否可移除；目前仍為 tracked，未經授權不刪除。
+- [ ] **評估移除舊 public URL 相關程式邏輯。** 可能涉及 `lib/photos.ts` 的 `getRemotePhotoUrl`，以及照片上傳 API 回傳 public URL 的舊流程。前置條件：先完成 P0 的 `photos` bucket Public／Private 狀態與 Storage policies／RLS 確認（2026-10-20 已由 Dashboard 人工確認設定），並評估資料庫與本機中既有照片參照（可能仍是 public URL 格式）的相容性（尚未評估）。完成前不得直接移除或改寫程式碼；此項與上方「修正過時註解」、待使用者決策中的「照片失敗上傳時的資料格式」是不同事項，也不代表已確認目前存在漏洞。
+- [x] 評估誤提交的 `tate"` 檔案是否可移除。已於 `8d2d436`（2026-10-20，`chore: remove accidental git log file`）移除（Git 紀錄可證實）。
+- [ ] **網站安全標頭（`NEEDS REVIEW`，低優先順序）。** 2026-10-20 唯讀檢查正式網站首頁回應：有 HSTS 與 `X-Content-Type-Options`，沒有 `Content-Security-Policy` 與 `X-Frame-Options`。目前沒有證據顯示造成實際問題；是否補上由使用者決定，修改前需評估對 GA4、Google 登入與外部字型的影響。
+- [ ] **`components/ChecklistTab.tsx` 的 `APP_URL` 備用網址指向非本專案的 vercel.app 網域**（2026-10-20 檢查該網址回傳其他網站）。實際使用處在瀏覽器中執行、會改用目前網站網址，正常情況下不會用到；屬低優先順序維護，修改程式需另行授權。
 - [ ] 重新審查 `HomeTab`、`RecommendTab`、`StatsCharts` 與 `lib/types.ts` 尚未深入檢查的部分。
 - [ ] 對重要歷史 commit 做逐行 diff 審查；目前只有 commit metadata／stat 摘要。
 - [ ] 確認取消選擇照片時，`before_photo_uploaded`／`after_photo_uploaded` 是否會被觸發。取決於瀏覽器行為，目前**未確認**，不可自行推定結果（見 `docs/ARCHITECTURE.md` §9；與「待使用者決策」中的 GA4 事件語意調整相關）。

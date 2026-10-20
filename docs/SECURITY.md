@@ -4,12 +4,16 @@
 
 本文件依 2026-10-19 現行 Repo 唯讀核對報告、原交接稿的歷史紀錄與本地 Git 紀錄整理。這不是滲透測試或正式環境安全認證。未確認的外部設定會明確標示，不可把推論或歷史紀錄當成已驗證事實。
 
+2026-10-20 補充：加入使用者在 Supabase Dashboard 人工確認的設定（§6），以及當日在 HEAD `8d2d436` 的唯讀核對結果（測試證據搜尋、照片 API 與資料存取程式碼核對、正式網站公開頁面檢查）。紀錄見 `docs/WORKLOG.md` §6。
+
 ## 2. 證據與結果標記
 
 ### 證據來源
 - **程式碼可見**：2026-10-19 唯讀報告在 repo 中看到的實作。
 - **Git 紀錄可證實**：commit SHA、日期、標題（只有 metadata／stat，未逐行審查 diff）。
 - **歷史紀錄提及**：過去對話摘要記載的結果或後台操作；未在現況重新驗證。
+- **Dashboard 人工確認**：使用者在 Supabase Dashboard 畫面上觀察並回報的設定。只證明「設定目前如此」，**不等於實際安全測試已通過**。
+- **實測證據**：實際執行過、且有可核實紀錄（步驟、帳號情境、結果、日期或 commit）的測試。
 - **未確認**：沒有足夠證據。
 
 ### 結果標記
@@ -32,6 +36,9 @@
 
 Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做足身份／輸入／授權檢查。不得把 service role key 放到 client bundle、回應或文件中。本文件不包含任何金鑰值。
 
+- 程式碼可見（2026-10-20，HEAD `8d2d436`）：上述三個 route 使用的 service role 環境變數不是 `NEXT_PUBLIC_` 開頭；前端程式沒有直接存取 Storage 或 `feedback` 表。
+- 2026-10-20 正式網站唯讀檢查：首頁初始載入的 10 個 JS 檔中，沒有找到 JWT 格式金鑰、`sb_secret_` 金鑰或 `service_role` 字串，只有 1 個 publishable（公開）金鑰。範圍限制：只涵蓋首頁初始載入的 JS，未涵蓋之後才載入的 chunk。
+
 ## 4. 照片 API 的程式碼防護（程式碼可見）
 
 - Bearer token 交給 Supabase Auth 驗證。
@@ -43,7 +50,7 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 - 簽名 URL API 限制 path 數量，並要求傳入 path 與 server 依 JWT email 重建的 canonical path 完全一致。
 - 簽名 URL TTL 為 900 秒，回應 `Cache-Control: no-store`。
 
-這些是靜態程式碼盤點結果，不代表執行過動態攻擊測試。
+這些是靜態程式碼盤點結果，不代表執行過動態攻擊測試。2026-10-20 在 HEAD `8d2d436` 重新核對，程式碼與上述描述一致（`app/api/photos/route.ts`、`app/api/photos/sign/route.ts` 的最後一次修改分別為 `cd7c970`、`fb99d46`）。
 
 ## 5. 歷史資安驗證紀錄
 
@@ -53,30 +60,56 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 
 | 日期 | 主題 | 歷史紀錄記載 | 標題相符的 Git commit（關聯為推定，未經逐項驗證） | 目前狀態 |
 |---|---|---|---|---|
-| 2026-10-02 | 照片上傳 API 安全修正（P0-3B） | 曾回報加入 JWT 驗證、由登入身分推導 Storage 路徑、檔案類型／大小／magic-byte 檢查，並做過 regression test | `cd7c970` fix: secure photo upload API | 需以現行 route、呼叫端與測試重新驗證 |
+| 2026-10-02 | 照片上傳 API 安全修正（P0-3B） | 曾回報加入 JWT 驗證、由登入身分推導 Storage 路徑、檔案類型／大小／magic-byte 檢查，並做過 regression test | `cd7c970` fix: secure photo upload API | 程式碼防護已於 2026-10-20 靜態核對（見 §4）。regression test 只有歷史紀錄提及：原始測試紀錄不在 repo，repo 也沒有測試檔，**測試內容與範圍無法核實**，不可視為跨帳號或動態 API 測試已通過 |
 | 2026-10-02～03 | 照片讀取改用 signed URL（P1-B／P1-C） | 曾設計並分階段將已儲存照片的讀取改為 signed URL | `fb99d46`、`f44e851`、`0008b83`、`2b02576`、`a947ed3` | 需檢查所有照片讀取路徑 |
 | 2026-10-02～03 | 分享照片讀取 production QA（P1-C4） | 曾記載 11 個情境，部分情境通過；另有部分測項需以原始紀錄確認 | 測試對象涉及 `2b02576`、`a947ed3` | 不可概括為整體通過 |
-| 2026-10-02 | `photos` bucket 改為 Private（P1-D，**Supabase 後台操作**） | 曾記載將 bucket 從 public 改為 private；當時記載的物件數為 51，限制 2 MB 與 JPEG／PNG；storage policy 的當時狀態有記錄，但需重新確認；**已被讀取過的舊 public URL 是否仍被 CDN 快取，當時列為待驗證** | 無（後台設定，非 Git commit） | **未確認**；不得據此宣稱目前 bucket 為 Private 或快取已失效 |
+| 2026-10-02 | `photos` bucket 改為 Private（P1-D，**Supabase 後台操作**） | 曾記載將 bucket 從 public 改為 private；當時記載的物件數為 51，限制 2 MB 與 JPEG／PNG；storage policy 的當時狀態有記錄，但需重新確認；**已被讀取過的舊 public URL 是否仍被 CDN 快取，當時列為待驗證** | 無（後台設定，非 Git commit） | 2026-10-20 使用者在 Dashboard 人工確認目前為 Private（見 §6）；舊 public URL 的 CDN 快取**仍未確認** |
 | 2026-10-03 | 照片生命週期盤點（P2-1A／P2-1B） | 當時 51 個物件中，34 個可在 DB 找到引用，17 個屬「可能孤兒」而非已證實孤兒；曾進一步檢查瀏覽器端儲存 | 無 | 不可將歷史數量當成目前數量，也不可直接刪除 |
 | 2026-10-03～04 | 分享預覽與照片生命週期（P2-1C） | 曾發現 Checklist 分享預覽直接讀 public Storage URL 的問題，之後有修正與驗證工作 | `eb6f741` fix: harden photo lifecycle cleanup：生命週期清理部分已由 diff 確認；**分享預覽的修正對應哪個 commit 無法確認** | 需確認所有分享預覽仍走安全讀取流程 |
 | 2026-10-04 | Declutter 照片顯示（P2-2） | 曾將 4 個 `<img>` 改為 `PhotoImg`，並回報 `git diff --check`、TypeScript 與 lint 結果 | `ff0e6f2` fix: secure declutter photo reads | 不代表現行程式碼仍相同 |
 | 2026-10-04 | Challenge 同步（P2-3-A） | 曾設計並實作 `updatedAt`、`pendingSync` 等同步狀態 | `5dcd339` fix: prevent challenge sync data loss | 需確認舊資料相容、競態與錯誤復原 |
 | 2026-10-05 | Guest → 登入遷移（P2-3-B） | 歷史稽核曾發現部分遷移失敗後資料復活、雲端編輯被覆寫、跨帳號重複等風險，並有多輪修正 | `8aa499f` fix: harden guest migration safety | 需檢查完整流程與失敗／重試情境 |
-| 2026-10-06 | feedback API 加固（P2-3-E） | 曾增加輸入長度限制、request body 限制、Supabase 錯誤處理與伺服器時間 | `bf0025d` fix: harden feedback submission | 需重新檢查 endpoint、前端與資料庫權限；rate limit 仍未處理 |
+| 2026-10-06 | feedback API 加固（P2-3-E） | 曾增加輸入長度限制、request body 限制、Supabase 錯誤處理與伺服器時間 | `bf0025d` fix: harden feedback submission | 2026-10-20：程式碼自 `bf0025d` 後未變更；`feedback` 表 RLS 已由 Dashboard 人工確認（見 §6）；rate limit 仍未處理 |
 | 2026-10-08 | GA4 事件追蹤（P3-A2） | 曾處理重複 page_view、`login_state`、`feedback_submitted` | `1043e24` feat: improve GA4 event tracking | 需重新檢查程式碼、GA4 設定與 production 事件 |
 
-## 6. 優先待確認：Storage 與 RLS
+## 6. Storage、RLS 與 Auth：現況與待確認
 
-### Supabase Storage
-- 歷史紀錄：2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private。這是歷史設定紀錄，不代表目前狀態。
-- 目前狀態：Public／Private 設定**尚未重新驗證**。
-- 程式碼仍可能將 public URL 寫入資料庫，而讀取端改為解析 path 並使用簽名 URL。如果 bucket 目前是 Public，持有物件 URL 的人可能不需要簽名就能讀取，因此不能僅憑程式碼有 signed URL 就宣稱照片受到私有 bucket 保護。
-- 舊 public URL 的 CDN 快取：假設 bucket 確實已是 Private，過去被讀取過的 public URL 是否仍可從快取取得，歷史上列為待驗證，目前未確認。
+### 6.1 Dashboard 人工確認（使用者於 2026-10-20 回報）
+> 以下只代表 Supabase Dashboard 畫面上的設定，**不代表實際安全測試已通過**。檢查由使用者執行，本 repo 沒有截圖或匯出檔。
 
-### 資料表 RLS
-三張主要資料表使用 `user_email` 關聯，client 查詢會加入 email filter。這不等同資料庫層隔離已成立。實際 RLS policy 與 JWT claim 的對照方式尚未確認。
+- `photos` bucket：Private。
+- Storage policies：Dashboard 沒有列出 `photos` 相關政策。
+- `checklist_logs`、`declutter_records`、`challenge_data`：已啟用 RLS，各有 SELECT、INSERT、UPDATE、DELETE 四條政策，以登入 JWT 的 email 比對 `user_email`。使用者另外逐條查看了 `checklist_logs` 的四條政策。各表 UPDATE／INSERT 政策的 WITH CHECK 內容，沒有個別記錄。
+- `feedback`：已啟用 RLS，沒有政策。
+- Supabase Auth：Google Provider 已啟用；Confirm email 已開啟；Email Provider 與匿名登入為 Disabled；Third-Party Auth 頁面沒有顯示已新增的提供者。
 
-### 資料庫約束
+### 6.2 程式碼靜態核對（2026-10-20，HEAD `8d2d436`）
+- 三張主要資料表的存取都集中在 `lib/supabase.ts`。寫入的 `user_email` 都來自 Supabase Auth session 的 email（trim + 小寫，`toAppUser`）；client 查詢的 `.eq('user_email', …)` 只是應用層篩選，**不能當作資料庫層隔離的證據**。
+- 前端程式沒有直接存取 Storage 或 `feedback` 表。照片只透過 `/api/photos`、`/api/photos/sign`（service role）存取；`feedback` 只透過 `/api/feedback`（service role）寫入。
+- 因此，「bucket Private＋沒有 Storage policies」與「`feedback` RLS 開啟＋沒有政策」都符合程式設計：只有 service role 的 server route 能存取，前端無法直接讀寫。依目前程式碼，**不需要新增 Storage 或 `feedback` 政策**。
+- 照片 API 的所有權檢查見 §4：未登入回 401；簽名網址只簽發 JWT email 資料夾內的路徑；刪除路徑由 server 以 JWT email 組成。
+- 資料庫中仍可能保存 public URL 格式的照片參照；讀取時一律解析成 path 再走簽名網址。bucket 為 Private 時，直接開啟 public URL 不應能讀到照片（依 Supabase 一般行為，未實測）。
+
+### 6.3 實測證據
+**未找到可核實的實測證據**（2026-10-20 搜尋範圍：所有分支、所有歷史版本的檔案與 commit 訊息、`docs/`、未合併分支的 `docs/HANDOFF.md`；repo 沒有測試檔，`package.json` 沒有測試指令或測試框架）。以下項目沒有實測證據；這只代表找不到紀錄，**不代表過去一定沒有測過**：
+
+| 項目 | 目前證據 |
+|---|---|
+| 三張表跨帳號 SELECT | Dashboard 設定（程式碼的 `.eq` 篩選不算隔離證據） |
+| 三張表跨帳號 INSERT（偽造 `user_email`） | Dashboard 設定（WITH CHECK 未個別記錄） |
+| 三張表跨帳號 UPDATE（含把 `user_email` 改成他人） | Dashboard 設定（WITH CHECK 未個別記錄） |
+| 三張表跨帳號 DELETE | Dashboard 設定（程式碼的 `.eq` 篩選不算隔離證據） |
+| 以他人照片路徑請求簽名網址 | 程式碼靜態（`app/api/photos/sign/route.ts`） |
+| 未登入者請求簽名網址 | 程式碼靜態（同上，回 401） |
+| 跨帳號刪除照片 | 程式碼靜態（`app/api/photos/route.ts` DELETE） |
+
+歷史紀錄中的 P0-3B regression test 與 P1-C4 production QA（§5），因原始紀錄不在 repo、看不出是否包含跨帳號情境，不列為實測證據。
+
+### 6.4 仍待確認
+- 舊 public URL 的 CDN 快取：bucket 已是 Private，但過去被讀取過的 public URL 是否仍可從快取取得，歷史上列為待驗證，目前仍未確認（Dashboard 無法看出，需實際請求測試）。
+- 跨帳號實測：見 §6.3；其中 INSERT／UPDATE 取決於 WITH CHECK，優先順序最高（見 `docs/TODO.md` P0）。
+
+### 6.5 資料庫約束
 程式預期使用以下識別方式，但實際 schema／唯一約束未確認：
 - checklist：`id` + `user_email`
 - declutter：`user_email` + `saved_at`
@@ -132,10 +165,12 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 
 ## 12. 待確認清單
 
-1. `photos` bucket 目前的 Public／Private 狀態。
+> 2026-10-20 更新：原第 1 項（bucket 狀態）、原第 3 項（Storage policies 與三張資料表 RLS 設定）、原第 4 項中的 feedback 權限，已由 Dashboard 人工確認（設定層級，見 §6.1），自本清單移除；對應的跨帳號實測改列為第 1 項。
+
+1. 三張資料表的跨帳號 SELECT／INSERT／UPDATE／DELETE 實測；照片 API 跨帳號與未登入情境可一併實測（見 §6.3）。
 2. 舊 public URL 是否仍可經 CDN 快取讀取。
-3. Storage policies 與三張資料表 RLS。
-4. 三張資料表的實際主鍵／唯一約束及 feedback 權限。
+3. 各表 UPDATE／INSERT 政策的 WITH CHECK 內容（若實測已涵蓋，可不另查）。
+4. 三張資料表及 `feedback` 表的實際主鍵／唯一約束。
 5. Supabase Auth redirect allowlist 是否仍保留開發用（Codespaces）網址。
 6. 舊 OAuth callback 是否仍登記在 Google Console。
 7. Vercel Production 部署版本與環境變數設定（只確認存在與否，不讀值）。

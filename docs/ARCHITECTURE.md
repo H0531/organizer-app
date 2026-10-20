@@ -98,11 +98,9 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 
 報告指出 `checklist_logs`、`declutter_records`、`challenge_data` 使用 `user_email` 作為關聯欄位。Client 查詢會加 `.eq('user_email', email)`，但這只是應用層過濾；資料庫層隔離仍取決於 RLS。
 
-以下設定未檢查：
-- 三張資料表的 RLS policy。
-- 各表主鍵／唯一約束。
-- `feedback` 表的權限。
-- Storage bucket 與 Storage RLS。
+設定狀態：
+- Dashboard 人工確認（使用者於 2026-10-20 回報，見 `docs/SECURITY.md` §6.1）：三張資料表已啟用 RLS 並設有政策；`feedback` 表已啟用 RLS、沒有政策；`photos` bucket 為 Private、沒有 Storage policies。這是設定確認，跨帳號安全測試尚無實測證據（見 `docs/SECURITY.md` §6.3）。
+- 仍未確認：各表主鍵／唯一約束。
 
 ## 8. 照片流程
 
@@ -116,7 +114,7 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
   - 不改動資料庫 schema 與既有上傳流程，讓遷移可以分階段進行、必要時回退。
   - 不改動 canvas 分享圖的其他流程，除非另有明確任務。
 - 本地 Git 紀錄中標題與此遷移相符的 commit：`fb99d46`（sign endpoint）、`f44e851`（PhotoImg／photoRef／photoSigner）、`0008b83`（Checklist）、`2b02576`（Member）、`a947ed3`（分享照片讀取）、`ff0e6f2`（Declutter）。**關聯為推定，未經逐項驗證**：只依 commit metadata 的日期與標題，未逐行審查 diff。
-- Storage bucket 的 Public／Private 設定屬於 Supabase 後台設定，**不是由上述 commit 變更**。2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private；這是歷史設定紀錄，不代表目前狀態，目前設定尚未重新驗證。詳見 `docs/SECURITY.md`。
+- Storage bucket 的 Public／Private 設定屬於 Supabase 後台設定，**不是由上述 commit 變更**。2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private；這是歷史設定紀錄，不代表目前狀態。2026-10-20 使用者在 Dashboard 人工確認目前為 Private。詳見 `docs/SECURITY.md`。
 
 ### 8.2 上傳
 `app/api/photos/route.ts` 的 POST：
@@ -225,7 +223,7 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 - 刪除 modal 沒有等待實際刪除結果。
 - feedback API 沒有 rate limit。
 - 舊 OAuth callback route 仍存在。
-- Storage bucket 的 Public／Private 狀態與 RLS 未確認。
+- Storage bucket 與 RLS 設定已由 Dashboard 人工確認（2026-10-20）；跨帳號資料隔離與照片 API 尚無實測證據（見 `docs/SECURITY.md` §6.3）。
 - LINE 導向沒有明確檢查網址是否已帶參數；是否會重複導向待評估（見 §4）。
 
 ## 11. 開始修改前的必查項目
@@ -241,7 +239,7 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 本文件不能證明：
 - GitHub 遠端最新 commit 與文件撰寫時的本地 HEAD 相同。
 - Vercel Production 正在執行特定 commit。
-- Storage bucket 的目前設定。2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private；這是歷史設定紀錄，不代表目前狀態，目前 bucket 的 Public／Private 設定尚未重新驗證（詳見 `docs/SECURITY.md`）。
+- Storage bucket 的目前設定。2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private；這是歷史設定紀錄，不代表目前狀態；目前狀態以 `docs/SECURITY.md` §6.1 的 Dashboard 人工確認為準。
 - RLS policy 正確且已生效。
 - 資料庫主鍵／唯一約束符合程式預期。
 - GA4 後台設定與事件收取目前正常。

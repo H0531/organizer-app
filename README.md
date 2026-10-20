@@ -49,6 +49,7 @@ npm run lint     # ESLint 檢查
 
 - 文件中的證據分為：程式碼可見、Git 紀錄可證實、歷史紀錄提及（未現況驗證）、未確認。
 - 歷史紀錄中的測試結果與後台設定，不代表目前正式環境已重新驗證。
-- Supabase Storage bucket 的 Public／Private 狀態、RLS policy、資料庫約束、Vercel 部署版本與 GA4 後台設定，目前都未重新確認。
+- Supabase `photos` bucket 與資料表 RLS 的設定，已於 2026-10-20 由使用者在 Dashboard 人工確認；跨帳號安全測試尚無實測證據（見 `docs/SECURITY.md` §6）。
+- 資料庫約束、Vercel 自動部署設定與 Production 部署版本（使用者回報為 `8d2d436`，未由 Claude 查驗）、GA4 後台設定，目前仍未確認。
 - 最近一次檢查時的 Git 基線記錄在 `docs/WORKLOG.md`，不在本 README 維護。
 - 若本文件描述與目前程式碼不一致，應以實際程式碼為準，並更新文件。

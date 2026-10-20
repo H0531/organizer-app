@@ -41,13 +41,13 @@
 
 ## 3. 重要 Commit 索引（Git 紀錄可證實）
 
-> SHA、日期與標題已於 2026-10-19 依本地 `git log` 核對。除非另有說明，這裡只有 commit metadata／stat，不代表逐行 diff 已完整審查。
+> SHA、日期與標題已於 2026-10-19 依本地 `git log` 核對（`0e3cc34`、`8d2d436` 兩列於 2026-10-20 核對）。除非另有說明，這裡只有 commit metadata／stat，不代表逐行 diff 已完整審查。
 
 | Commit | 日期 | 標題 | 記錄與限制 |
 |---|---|---|---|
 | `9bb5555` | 2026-09-26 | `fix: migrate challenge data on login` | Challenge 登入遷移的早期修正。 |
 | `1ce16a0` | 2026-10-01 | `feat: migrate auth to supabase` | 登入身分改由 Supabase Auth 決定。 |
-| `cd7c970` | 2026-10-02 | `fix: secure photo upload API` | 照片上傳 API 安全修正；未做動態 API 測試。 |
+| `cd7c970` | 2026-10-02 | `fix: secure photo upload API` | 照片上傳 API 安全修正。repo 中沒有動態 API 測試的檔案或紀錄；`docs/SECURITY.md` §5 記載的歷史 regression test 原始紀錄不在 repo，內容與範圍無法核實（2026-10-20 修正：原寫「未做動態 API 測試」，但沒有證據證明「未做」，改為「找不到紀錄」）。 |
 | `fb99d46` | 2026-10-02 | `feat: add signed photo URL endpoint` | 加入 signed URL endpoint；不證明 bucket 為 Private。 |
 | `f44e851` | 2026-10-02 | `feat: add photo read resolver` | 加入 PhotoImg／photoRef／photoSigner 相關架構。 |
 | `0008b83` | 2026-10-02 | `feat: use signed photo URLs in checklist` | Checklist 照片讀取使用 signed URL。 |
@@ -67,7 +67,9 @@
 | `a6cbd1c` | 2026-10-19 | `docs: clarify architecture and tracking behavior` | 文件分組提交第 2 組：`docs/ARCHITECTURE.md`。 |
 | `b6537fd` | 2026-10-19 | `docs: update product security and decision records` | 文件分組提交第 3 組：`docs/PRODUCT.md`、`docs/SECURITY.md`、`docs/DECISIONS.md`、`docs/TODO.md`。 |
 | `b1854e8` | 2026-10-19 | `docs: clarify deployment precautions` | 文件分組提交第 4 組：`README.md`。 |
-| `cfaab0f` | 2026-10-19 | `Merge origin/main, preserving local CLAUDE.md` | 將 `0df9f1a` 合併進本地 `main`；詳見 §5。尚未推送。 |
+| `cfaab0f` | 2026-10-19 | `Merge origin/main, preserving local CLAUDE.md` | 將 `0df9f1a` 合併進本地 `main`；詳見 §5。建立時尚未推送；2026-10-20 觀察本地 `origin/main` 已包含此 commit（見 §6）。 |
+| `0e3cc34` | 2026-10-19 | `docs: record documentation merge and pending release checks` | 更新 `docs/TODO.md`、`docs/WORKLOG.md` 的合併與待推送紀錄。 |
+| `8d2d436` | 2026-10-20 | `chore: remove accidental git log file` | 移除誤提交的 `tate"`。使用者回報 Vercel 最新部署為此 commit、狀態 Ready（未由 Claude 查驗）。 |
 
 ### 原交接稿的修正紀錄
 - 原交接稿將 `2b02576`、`a947ed3` 標為 2026-10-02；依本地 Git 紀錄，兩者日期皆為 **2026-10-03**。
@@ -83,7 +85,7 @@
 ### 照片資安
 - 2026-10-02 至 10-04 曾處理上傳 API 驗證、signed URL、PhotoImg 與照片生命週期清理。
 - 詳細歷史驗證紀錄見 `docs/SECURITY.md` 第 5 節。
-- 靜態盤點不能取代動態測試，也沒有確認 bucket／RLS 後台設定。
+- 靜態盤點不能取代動態測試，也沒有確認 bucket／RLS 後台設定。（2026-10-19 的紀錄；bucket／RLS 設定已於 2026-10-20 由使用者在 Dashboard 人工確認，見 §6。）
 
 ### GA4
 - 2026-10-08 的歷史紀錄曾回報 `1043e24` 部署 Ready 與 Production smoke test。
@@ -138,10 +140,43 @@
   - merge commit 的 tree 與第一個父 commit `b1854e8` 完全相同（`git diff HEAD^1 HEAD` 無差異）。
   - 本地原有 6 個 commit 的 SHA 均保留，沒有 rebase 或改寫歷史。
 - **未納入本次整合**：遠端分支 `origin/claude/new-session-4u0zpo`（`52128c0`，內容為 `docs/HANDOFF.md`）沒有合併。理由：內容多與現有文件重複或已過時，並建議將原始對話匯入 repo，與 `docs/SECURITY.md` §10 的決定衝突；有價值的部分已摘要吸收至現有文件。兩個交接 ZIP 仍未追蹤、未提交。
-- **尚未執行**：`npm run build`、推送（`git push`）、部署。推送 `main` 可能觸發正式環境部署（見 `CLAUDE.md` §3），須另行取得同意。
+- **尚未執行**：`npm run build`、推送（`git push`）、部署。推送 `main` 可能觸發正式環境部署（見 `CLAUDE.md` §3），須另行取得同意。（2026-10-20 補註：之後已由使用者推送，見 §6。）
 - 未驗證：本節只記錄 Git 操作與文件檢查結果，不代表 Vercel、Supabase、GA4 等外部服務的狀態已驗證。
 
-## 6. 執行任務時建議留下的紀錄格式
+## 6. 2026-10-20 開發盤點與資安現況核對紀錄
+
+### 基線（只代表當時）
+- 分支 `main`，HEAD `8d2d436`；本地 `origin/main` ref 與 HEAD 相同（未執行 fetch）；追蹤中的檔案沒有修改，未追蹤檔案為兩個交接 ZIP。
+- 網站程式碼（`app/`、`components/`、`lib/`、`types/`、`package.json`、`next.config.ts`）在 `1043e24..8d2d436` 之間沒有變更。
+- 使用者回報：Vercel 最新部署 commit 為 `8d2d436`、狀態 Ready（未由 Claude 查驗）。
+
+### 授權範圍
+- 盤點與核對全程唯讀。第一輪只授權修改 `docs/` 下四份文件；第二輪經審查後，另外授權修改 `README.md`、`docs/PRODUCT.md`、`docs/ARCHITECTURE.md`，並修正第一輪審查發現的 8 個問題。
+- 未修改程式碼；未執行 SQL；未連線 Supabase、Vercel 後台或 GA4；未使用 Supabase MCP；未讀取 `.env*`；未執行 fetch、build、commit、push 或部署。
+
+### 使用者在 Supabase Dashboard 人工確認的設定
+- 內容見 `docs/SECURITY.md` §6.1。這是使用者執行的設定檢查，不是安全測試；repo 中沒有截圖。
+
+### 當日實際執行的唯讀檢查
+1. 開發現況盤點：Git 狀態、正式文件、GA4 程式碼（初始化、`page_view`、9 個自訂事件）。GA4 的問題只在程式碼層級確認，GA4 後台與正式事件收取 `NOT TESTED`。
+2. 歷史資安工作核對：照片簽名網址、上傳 API、feedback API、舊 OAuth callback 的 commit 與現行程式碼對照；這些檔案在相關 commit 之後沒有被修改。
+3. 資料存取與照片 API 程式碼靜態核對（結果見 `docs/SECURITY.md` §6.2）。
+4. 測試證據搜尋：所有分支、所有歷史版本都沒有測試檔，`package.json` 沒有測試指令；commit 訊息沒有測試紀錄。跨帳號安全測試**未找到可核實證據**（見 `docs/SECURITY.md` §6.3）。
+5. 正式網站唯讀檢查（只送出 GET／HEAD，未登入、未呼叫 API、未寫入）：首頁、`robots.txt`、`sitemap.xml` 回應 200；不含 www 的網域會 307 轉到 www；首頁初始 JS 沒有 service role 金鑰（見 `docs/SECURITY.md` §3）；回應標頭沒有 CSP 與 `X-Frame-Options`（列為 `NEEDS REVIEW`）。無法執行 JavaScript，所以畫面呈現與瀏覽器 console 錯誤 `NOT TESTED`。
+
+### 當日發現的文件問題與處理
+- `docs/SECURITY.md` §5 寫 `cd7c970`「做過 regression test」，本文件 §3 寫「未做動態 API 測試」，兩者矛盾。`docs/SECURITY.md` §5 該列的「目前狀態」欄與本文件 §3 都已改為：歷史紀錄提及 regression test，但原始紀錄不在 repo、內容無法核實。`docs/SECURITY.md` §5「歷史紀錄記載」欄的原文保留不變。
+- bucket／RLS「未確認」的描述（`docs/SECURITY.md`、`docs/DECISIONS.md` D-006／D-011／D-014、`docs/TODO.md` P0）已依 Dashboard 人工確認更新，並標明是設定確認、不是測試通過。2026-10-19 的原文保留。
+- 已過時的 TODO（推送 `main`、移除 `tate"`）已改為勾選並註明證據。
+- `README.md`、`docs/PRODUCT.md`、`docs/ARCHITECTURE.md` 中 6 處 bucket／RLS 過時聲明已更新。
+- 最後審查後，另外授權修正 `docs/WORKLOG.md` 授權範圍紀錄與 `docs/SECURITY.md` §12 第 4 項（加入 `feedback` 表的約束，與 `docs/TODO.md` 一致）。
+
+### 未完成事項
+- 跨帳號資料隔離與照片 API 的實測（`docs/TODO.md` P0）。
+- 舊 public URL 的 CDN 快取、唯一約束、redirect allowlist、Google Console 舊 callback 登記：仍未確認。
+- `docs/TODO.md` P1 的 `compressPhoto` 項目沒有區分是哪一份程式（程式碼可見：只有 `components/ChecklistTab.tsx` `saveLog` 內的版本缺少 `onerror`，`components/DeclutterTab.tsx` 的版本已有），本次沒有修改該項描述。
+
+## 7. 執行任務時建議留下的紀錄格式
 
 每個實際執行的任務，補記：
 1. 任務日期、範圍與授權邊界（唯讀／可修改哪些檔案／是否允許外部寫入）。
@@ -150,9 +185,10 @@
 4. 實際執行的檢查與逐項結果；未跑的測試列為 `NOT TESTED`，受阻列為 `BLOCKED`，只有歷史紀錄的列為 `HISTORICAL PASS`。
 5. 未解風險、後續工作及回滾方式；涉及資料刪除時記錄授權範圍與前後確認，但避免記錄個資或 secrets。
 
-## 7. 本文件的限制
+## 8. 本文件的限制
 
 - 不含秘密值、帳號 email、專案識別碼、GA Measurement ID、DNS 設定值或環境變數內容。
 - 2026-10-19 曾數次執行 `git fetch origin`，僅更新本地的遠端追蹤資訊；除此之外沒有其他遠端 Git 操作，也沒有連線 Supabase、Vercel 或 GA4。
+- 2026-10-20 的遠端請求只有 GET／HEAD：正式網站公開頁面（見 §6），以及對 `components/ChecklistTab.tsx` `APP_URL` 備用網址的一次 GET（該網址回傳其他網站，見 `docs/TODO.md` P2）；沒有其他遠端操作。
 - 沒有重新跑功能測試。
 - 歷史測試與部署紀錄只保留為歷史紀錄，不作為目前 Production 的保證。

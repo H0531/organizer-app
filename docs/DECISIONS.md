@@ -34,9 +34,11 @@ Checklist／Declutter 遷移先確認雲端紀錄，再決定是否 INSERT。雲
 Challenge 不走 Checklist／Declutter 的同一套 migration；它會比較本機 snapshot 與雲端狀態。修改時必須獨立檢查其同步與資料保留行為。
 
 ## D-006：照片讀取使用 resolver／簽名 URL
-**狀態：歷史明確且現行程式可見；Storage 設定待驗證。**
+**狀態：歷史明確且現行程式可見；bucket Private 已由 Dashboard 人工確認（2026-10-20）；跨帳號實測待補。**
 
 歷史上逐步加入 `PhotoImg`、`photoRef`、`photoSigner` 與 sign API，目標是不再從 browser 直接讀 public URL、不保留 public fallback。修改照片資料格式前，必須考慮既有資料可能保存 public URL。程式使用 signed URL 不代表 bucket 已確認為 Private。
+
+2026-10-20：使用者在 Dashboard 確認 `photos` bucket 為 Private、沒有 Storage policies，符合「只由 server route 以 service role 存取」的設計（見 `docs/SECURITY.md` §6）。這是設定確認，照片 API 的跨帳號情境仍沒有實測證據。
 
 ## D-007：照片刪除採保守清理
 **狀態：現行實作可見。**
@@ -61,9 +63,11 @@ Challenge 不走 Checklist／Declutter 的同一套 migration；它會比較本�
 使用者已表達移除舊 OAuth callback 的意圖（2026-10-16 的說明）；但執行前仍須確認 Google Console 與其他外部依賴（例如 Vercel 上是否仍保留相關設定），並另行取得授權。
 
 ## D-011：Storage bucket 與 RLS 狀態
-**狀態：待驗證。**
+**狀態：設定已由 Dashboard 人工確認（2026-10-20）；跨帳號實測待補。**
 
-2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private（後台操作，非 Git commit）。這是歷史設定紀錄，不代表目前狀態；目前 Public／Private 設定尚未重新驗證，詳見 `docs/SECURITY.md`。RLS policy 目前也未確認。不得寫成已確認 Private，也不得在未取得授權前修改設定。
+2026-10-02 的歷史紀錄曾記載在 Supabase 後台將 `photos` bucket 改為 Private（後台操作，非 Git commit）。這是歷史設定紀錄，不代表目前狀態；目前 Public／Private 設定尚未重新驗證，詳見 `docs/SECURITY.md`。RLS policy 目前也未確認。不得寫成已確認 Private，也不得在未取得授權前修改設定。（以上為 2026-10-19 的紀錄，保留作為歷史。）
+
+2026-10-20 更新：使用者在 Supabase Dashboard 人工確認——`photos` bucket 為 Private、沒有 Storage policies；三張主要資料表已啟用 RLS，各有四條以 JWT email 比對 `user_email` 的政策；`feedback` 已啟用 RLS 且沒有政策。這些是**設定確認**，不是安全測試結果；跨帳號實測仍沒有可核實證據（見 `docs/SECURITY.md` §6.3）。修改這些設定仍須另行取得授權。
 
 ## D-012：修正已知程式風險需獨立授權
 **狀態：待處理。**
@@ -81,6 +85,7 @@ Challenge 不走 Checklist／Declutter 的同一套 migration；它會比較本�
 目標架構為 Supabase Auth（Google）＋ JWT ＋ RLS ＋ Private Storage，用來取代舊版自製 Google OAuth 與用戶端可修改的 `organizer_user` cookie（cookie 的問題見 `docs/SECURITY.md` §7）。
 
 - 現行實作可見：前端登入已改為 Supabase Auth（PKCE）；照片 API 以伺服器驗證過的 JWT 決定身份。
-- 待驗證：各資料表 RLS、`photos` bucket 是否為 Private。
-- 這是架構目標，**不代表所有安全機制已經完成或通過驗證**；在 RLS 與 Private Storage 確認前，不可宣稱此架構已全部完成。
+- Dashboard 人工確認（2026-10-20）：三張主要資料表與 `feedback` 已啟用 RLS；`photos` bucket 為 Private；Google Provider 已啟用，Email Provider 與匿名登入為 Disabled，其他 OAuth provider 的狀態未個別記錄。
+- 待驗證：跨帳號資料隔離與照片存取的實測（見 `docs/SECURITY.md` §6.3）。
+- 這是架構目標，**不代表所有安全機制已經完成或通過驗證**；設定已確認，但在跨帳號實測取得證據前，不可宣稱此架構已通過安全驗證。
 - 細節分別見：照片讀取 D-006、舊 OAuth 移除 D-010、Storage 與 RLS 狀態 D-011。
