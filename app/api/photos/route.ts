@@ -24,6 +24,16 @@ function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status })
 }
 
+// log 只記錄不含內容的診斷欄位（比照 sign route）：不輸出錯誤物件、訊息、email、path、token
+// name 只接受識別字格式、status 只接受 100–599，其餘一律不採用，避免任意字串混入 log
+function errorSummary(err: unknown): { name: string; status?: number } {
+  const e = err as { name?: unknown; status?: unknown } | null
+  const name = typeof e?.name === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(e.name) ? e.name : 'unknown'
+  const raw = e?.status
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d{3}$/.test(raw) ? Number(raw) : NaN
+  return Number.isInteger(n) && n >= 100 && n <= 599 ? { name, status: n } : { name }
+}
+
 // 驗證 Authorization: Bearer <access_token>，回傳 JWT 驗證後的 email（小寫）
 async function getAuthenticatedEmail(req: NextRequest): Promise<string | null> {
   const header = req.headers.get('authorization') ?? ''
@@ -105,14 +115,14 @@ export async function POST(req: NextRequest) {
       .upload(path, buffer, { contentType, upsert: true })
 
     if (error) {
-      console.error('Storage upload error:', error)
+      console.error('POST /api/photos: storage upload failed', errorSummary(error))
       return jsonError('upload failed', 500)
     }
 
     const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path)
     return NextResponse.json({ url: data.publicUrl })
   } catch (err) {
-    console.error('POST /api/photos error:', err)
+    console.error('POST /api/photos error:', errorSummary(err))
     return jsonError('server error', 500)
   }
 }
@@ -139,13 +149,13 @@ export async function DELETE(req: NextRequest) {
     ]
     const { error } = await supabaseAdmin.storage.from(BUCKET).remove(paths)
     if (error) {
-      console.error('Storage delete error:', error)
+      console.error('DELETE /api/photos: storage delete failed', errorSummary(error))
       return jsonError('delete failed', 500)
     }
 
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('DELETE /api/photos error:', err)
+    console.error('DELETE /api/photos error:', errorSummary(err))
     return jsonError('server error', 500)
   }
 }
