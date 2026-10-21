@@ -203,3 +203,42 @@ describe('S3-A 伺服器端 Storage 錯誤處理', () => {
     })
   })
 })
+
+describe('S3-A8／A9 簽名 API 的 log 不採用異常的 name／status', () => {
+  it('S3-A8 簽名：Storage 回錯誤且 name／status 夾帶敏感字串 → log 不含原值；name 為 unknown、不輸出 status、保留 count', async () => {
+    fake.createSignedUrls.mockResolvedValueOnce({
+      data: null,
+      error: {
+        name: `${A}/${KEY}.jpg`,
+        status: `${INTERNAL} user=${A} token=${FAKE_TOKEN}`,
+        message: sensitiveError(OWN).message,
+      },
+    } as never)
+    const r = await signRaw([OWN, OWN2])
+    expect(r.status).toBe(500)
+    expect(JSON.parse(r.text)).toEqual({ error: 'internal error' })
+    expect(leaked(r.text)).toEqual([])
+
+    const logs = capturedLogs()
+    expect(leaked(logs)).toEqual([])
+    expect(logs).not.toContain(`${A}/${KEY}.jpg`)
+    expect(logs).toContain("name: 'unknown'")
+    expect(logs).not.toContain('status:')
+    expect(logs).toContain('count: 2')
+  })
+
+  it('S3-A9 簽名：Storage 拋出 Error 且 name 夾帶 email／路徑／token → log 不含原值；name 為 unknown', async () => {
+    const thrown = new Error(sensitiveError(OWN).message)
+    thrown.name = `${A}/${KEY}.jpg token=${FAKE_TOKEN}`
+    fake.createSignedUrls.mockRejectedValueOnce(thrown)
+    const r = await signRaw([OWN])
+    expect(r.status).toBe(500)
+    expect(JSON.parse(r.text)).toEqual({ error: 'internal error' })
+    expect(leaked(r.text)).toEqual([])
+
+    const logs = capturedLogs()
+    expect(leaked(logs)).toEqual([])
+    expect(logs).not.toContain(thrown.name)
+    expect(logs).toContain("name: 'unknown'")
+  })
+})

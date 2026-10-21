@@ -38,6 +38,16 @@ function jsonError(error: string, status: number) {
   return json({ error }, status)
 }
 
+// log 只記錄不含內容的診斷欄位（與 app/api/photos/route.ts 規則相同；route 檔不匯出共用函式）
+// name 只接受識別字格式、status 只接受 100–599，其餘一律不採用，避免任意字串混入 log
+function errorSummary(err: unknown): { name: string; status?: number } {
+  const e = err as { name?: unknown; status?: unknown } | null
+  const name = typeof e?.name === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(e.name) ? e.name : 'unknown'
+  const raw = e?.status
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d{3}$/.test(raw) ? Number(raw) : NaN
+  return Number.isInteger(n) && n >= 100 && n <= 599 ? { name, status: n } : { name }
+}
+
 // 驗證 Authorization: Bearer <access_token>，回傳 JWT 驗證後的 email（trim + 小寫）
 async function getAuthenticatedEmail(req: NextRequest): Promise<string | null> {
   const header = req.headers.get('authorization') ?? ''
@@ -120,8 +130,7 @@ export async function POST(req: NextRequest) {
       if (error || !data) {
         // 不記錄 token / email / path，也不把內部錯誤回傳給 client
         console.error('POST /api/photos/sign: storage sign failed', {
-          name: error?.name,
-          status: (error as { status?: unknown } | null)?.status,
+          ...errorSummary(error),
           count: validPaths.length,
         })
         return jsonError('internal error', 500)
@@ -145,7 +154,7 @@ export async function POST(req: NextRequest) {
     // 依 request 中（去重後）的原始順序回傳
     return json({ results: uniquePaths.map(p => results.get(p)!) })
   } catch (err) {
-    console.error('POST /api/photos/sign error:', err instanceof Error ? err.name : 'unknown')
+    console.error('POST /api/photos/sign error:', errorSummary(err))
     return jsonError('internal error', 500)
   }
 }
