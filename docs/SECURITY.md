@@ -6,6 +6,8 @@
 
 2026-10-20 補充：加入使用者在 Supabase Dashboard 人工確認的設定（§6），以及當日在 HEAD `8d2d436` 的唯讀核對結果（測試證據搜尋、照片 API 與資料存取程式碼核對、正式網站公開頁面檢查）。紀錄見 `docs/WORKLOG.md` §6。
 
+2026-10-21 補充：照片 API 錯誤日誌修正（PR #1，merge commit `508fa92`）已合併並由 GitHub 確認 Production 部署成功；新增照片 API 的 mock 測試（§4、§6.3）。紀錄見 `docs/WORKLOG.md` §7。
+
 ## 2. 證據與結果標記
 
 ### 證據來源
@@ -52,6 +54,13 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 
 這些是靜態程式碼盤點結果，不代表執行過動態攻擊測試。2026-10-20 在 HEAD `8d2d436` 重新核對，程式碼與上述描述一致（`app/api/photos/route.ts`、`app/api/photos/sign/route.ts` 的最後一次修改分別為 `cd7c970`、`fb99d46`）。
 
+錯誤日誌（2026-10-21，PR #1；`fe029e4`、`6b912a0`，merge commit `508fa92`）：
+- 修正前，上傳／刪除 API 會把 Storage 錯誤物件原樣寫入伺服器 log；mock 測試以假的 email、路徑、token、內部訊息證實這些內容會出現在 log（S3-A7 FAIL）。簽名 API 的 log 則未檢查錯誤的 name／status 格式。
+- 修正後，兩個 route 的錯誤 log 只輸出 `errorSummary()` 的 `{ name, status }`（簽名失敗另含 `count`）：`name` 只接受英文字母開頭、英數與底線、最長 64 字元，否則記為 `unknown`；`status` 只接受 100–599 的整數或 3 位數字字串，否則不輸出。不輸出錯誤物件、訊息、email、token 或路徑。
+- HTTP 狀態碼、回應內容、授權與 Storage 流程沒有改變。
+- `errorSummary()` 在兩個 route 檔各有一份相同規則的副本（route 檔不匯出共用函式），修改時需同步。
+- 正式環境 log 的實際錯誤格式尚未觀察（見 §6.4）。
+
 ## 5. 歷史資安驗證紀錄
 
 > 本節只整理歷史紀錄中記載的結果，**全部屬於 `HISTORICAL PASS` 或歷史事件**，不代表目前 repo、Supabase 或 production 狀態。
@@ -60,7 +69,7 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 
 | 日期 | 主題 | 歷史紀錄記載 | 標題相符的 Git commit（關聯為推定，未經逐項驗證） | 目前狀態 |
 |---|---|---|---|---|
-| 2026-10-02 | 照片上傳 API 安全修正（P0-3B） | 曾回報加入 JWT 驗證、由登入身分推導 Storage 路徑、檔案類型／大小／magic-byte 檢查，並做過 regression test | `cd7c970` fix: secure photo upload API | 程式碼防護已於 2026-10-20 靜態核對（見 §4）。regression test 只有歷史紀錄提及：原始測試紀錄不在 repo，repo 也沒有測試檔，**測試內容與範圍無法核實**，不可視為跨帳號或動態 API 測試已通過 |
+| 2026-10-02 | 照片上傳 API 安全修正（P0-3B） | 曾回報加入 JWT 驗證、由登入身分推導 Storage 路徑、檔案類型／大小／magic-byte 檢查，並做過 regression test | `cd7c970` fix: secure photo upload API | 程式碼防護已於 2026-10-20 靜態核對（見 §4）。regression test 只有歷史紀錄提及：原始測試紀錄不在 repo，2026-10-20 當時 repo 也沒有相關測試檔（2026-10-21 起新增的 `tests/s2`、`tests/s3` 是另外建立的 mock 測試，不是 P0-3B 的原始測試），**測試內容與範圍無法核實**，不可視為跨帳號或動態 API 測試已通過 |
 | 2026-10-02～03 | 照片讀取改用 signed URL（P1-B／P1-C） | 曾設計並分階段將已儲存照片的讀取改為 signed URL | `fb99d46`、`f44e851`、`0008b83`、`2b02576`、`a947ed3` | 需檢查所有照片讀取路徑 |
 | 2026-10-02～03 | 分享照片讀取 production QA（P1-C4） | 曾記載 11 個情境，部分情境通過；另有部分測項需以原始紀錄確認 | 測試對象涉及 `2b02576`、`a947ed3` | 不可概括為整體通過 |
 | 2026-10-02 | `photos` bucket 改為 Private（P1-D，**Supabase 後台操作**） | 曾記載將 bucket 從 public 改為 private；當時記載的物件數為 51，限制 2 MB 與 JPEG／PNG；storage policy 的當時狀態有記錄，但需重新確認；**已被讀取過的舊 public URL 是否仍被 CDN 快取，當時列為待驗證** | 無（後台設定，非 Git commit） | 2026-10-20 使用者在 Dashboard 人工確認目前為 Private（見 §6）；舊 public URL 的 CDN 快取**仍未確認** |
@@ -91,7 +100,7 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 - 資料庫中仍可能保存 public URL 格式的照片參照；讀取時一律解析成 path 再走簽名網址。bucket 為 Private 時，直接開啟 public URL 不應能讀到照片（依 Supabase 一般行為，未實測）。
 
 ### 6.3 實測證據
-**未找到可核實的實測證據**（2026-10-20 搜尋範圍：所有分支、所有歷史版本的檔案與 commit 訊息、`docs/`、未合併分支的 `docs/HANDOFF.md`；repo 沒有測試檔，`package.json` 沒有測試指令或測試框架）。以下項目沒有實測證據；這只代表找不到紀錄，**不代表過去一定沒有測過**：
+**未找到可核實的真實環境實測證據**（2026-10-20 搜尋範圍：所有分支、所有歷史版本的檔案與 commit 訊息、`docs/`、未合併分支的 `docs/HANDOFF.md`；當時 repo 沒有測試檔，`package.json` 沒有測試指令或測試框架）。2026-10-21 起 repo 有照片 API 的 mock 測試檔（`tests/s2/`、`tests/s3/`，見下方），`package.json` 仍沒有 `test` 指令；mock 測試不屬於真實環境實測。以下項目沒有真實環境實測證據；這只代表找不到紀錄，**不代表過去一定沒有測過**：
 
 | 項目 | 目前證據 |
 |---|---|
@@ -99,15 +108,35 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 | 三張表跨帳號 INSERT（偽造 `user_email`） | Dashboard 設定（WITH CHECK 未個別記錄） |
 | 三張表跨帳號 UPDATE（含把 `user_email` 改成他人） | Dashboard 設定（WITH CHECK 未個別記錄） |
 | 三張表跨帳號 DELETE | Dashboard 設定（程式碼的 `.eq` 篩選不算隔離證據） |
-| 以他人照片路徑請求簽名網址 | 程式碼靜態（`app/api/photos/sign/route.ts`） |
-| 未登入者請求簽名網址 | 程式碼靜態（同上，回 401） |
-| 跨帳號刪除照片 | 程式碼靜態（`app/api/photos/route.ts` DELETE） |
+| 以他人照片路徑請求簽名網址 | 程式碼靜態（`app/api/photos/sign/route.ts`）；2026-10-21 起另有 mock 測試（見下方） |
+| 未登入者請求簽名網址 | 程式碼靜態（同上，回 401）；2026-10-21 起另有 mock 測試 |
+| 跨帳號刪除照片 | 程式碼靜態（`app/api/photos/route.ts` DELETE）；2026-10-21 起另有 mock 測試 |
 
 歷史紀錄中的 P0-3B regression test 與 P1-C4 production QA（§5），因原始紀錄不在 repo、看不出是否包含跨帳號情境，不列為實測證據。
+
+#### 照片 API mock 測試（2026-10-21 加入 repo，`fb1bd46`、`6b912a0`）
+- 位置：`tests/s2/`、`tests/s3/`，以 Vitest（開發依賴 `vitest@3.2.4`）執行：`npx --no-install vitest run`（`package.json` 沒有 `test` 指令）。
+- 範圍：照片 API 的身分驗證、所有權與路徑授權（跨帳號路徑、異常路徑、編碼字元、body 夾帶身分欄位），Storage 錯誤處理與 log 內容，前端 `photoSigner` 帳號隔離。
+- 結果（歷史執行紀錄）：在合併前 HEAD `6b912a0` 執行，54／54 通過（S2 29、S3 25），同一版本 `npm run build` 成功；未在 merge commit `508fa92` 上重新執行（兩者檔案內容相同）。另以刻意弄壞授權邏輯的暫時複本確認測試能偵測錯誤（S2 8 個、S3 5 個變異版本）。
+- 限制：全部使用假的 Supabase client 與假的 fetch，**不能證明真實 Supabase Auth／Storage 的行為，也不是跨帳號實測**；上表三張資料表的跨帳號項目不在範圍內。
+- S2-03 補充：路徑結尾有空白時，請求同樣被拒絕、不呼叫 Storage，但結果是 `invalid`，不是原規劃描述的 `forbidden`；應以 `invalid` 為預期結果（測試檔中的案例描述已是 `invalid`）。
+- S2-21～S2-24（需要真實 Supabase 與測試帳號）沒有執行：因為無法排除本機連到正式專案，S2-21、S2-23、S2-24 為 `BLOCKED`；S2-22（真實刪檔）依規劃不執行。
+
+#### 照片 API 未登入請求（S1，`HISTORICAL PASS`）
+- 2026-10-20 08:59 UTC，在 HEAD `4639880` 的本機伺服器，對 `POST /api/photos/sign`、`POST /api/photos`、`DELETE /api/photos` 各送出「沒有 Authorization」與「`Basic` 格式」兩種請求，共 6 項，歷史紀錄顯示都回傳預期的 401 `unauthorized`。
+- 證據來源是當時的對話紀錄；原始伺服器 log 已不存在。本次沒有重新執行，不代表目前環境已重新通過。
+- 這是本機 API 行為測試，沒有使用真實 token，不涵蓋真實 Supabase Auth 對異常 token 的回應。
+
+#### 代號說明
+- 實際執行的 **S3-A／S3-B** 是 Storage 錯誤處理、錯誤 log 修正與 `photoSigner` 帳號隔離的 mock 測試；真實 Private bucket、signed URL 與相關快取行為**尚未驗證**。由於原始路線圖未能取得，目前無法確認真實環境驗證在原路線圖中的代號。
+- 照片 API 測試報告（repo 外）中的 R1～R7 是照片 API 的殘餘風險編號（例如以 email 為身分、Storage 路徑解讀），與路線圖的 R1～R7 是不同項目。路線圖 R1～R7 的原始定義目前找不到，因此 `docs/TODO.md` P1 的技術風險項目不標示路線圖 R 代號（項目本身保留）。
 
 ### 6.4 仍待確認
 - 舊 public URL 的 CDN 快取：bucket 已是 Private，但過去被讀取過的 public URL 是否仍可從快取取得，歷史上列為待驗證，目前仍未確認（Dashboard 無法看出，需實際請求測試）。
 - 跨帳號實測：見 §6.3；其中 INSERT／UPDATE 取決於 WITH CHECK，優先順序最高（見 `docs/TODO.md` P0）。
+- 真實 Supabase Auth 對異常 token（過期、已登出、以 anon key 冒充）的回應，以及真實 Storage／signed URL 的行為：只有 mock 測試，尚未在真實環境驗證。
+- 正式環境照片 API 錯誤 log 的實際格式：修正已部署（`508fa92`），但尚未觀察到自然發生的錯誤事件，實際格式待驗證。
+- 正式網站照片顯示驗收：使用者已手動刪除測試照片，目前沒有可供驗收的既有照片，因此本次未執行照片顯示驗收（`NOT TESTED`）。不得為了驗收而重新建立正式測試資料。照片 API 的既有 mock 測試及合併前測試結果依歷史證據保留；真實 Storage 與 signed URL 行為仍列為未驗證項目。
 
 ### 6.5 資料庫約束
 程式預期使用以下識別方式，但實際 schema／唯一約束未確認：
@@ -173,7 +202,7 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 4. 三張資料表及 `feedback` 表的實際主鍵／唯一約束。
 5. Supabase Auth redirect allowlist 是否仍保留開發用（Codespaces）網址。
 6. 舊 OAuth callback 是否仍登記在 Google Console。
-7. Vercel Production 部署版本與環境變數設定（只確認存在與否，不讀值）。
+7. Vercel 環境變數設定（只確認存在與否，不讀值）。Production 部署版本：2026-10-21 由 GitHub 部署紀錄確認 `508fa92` 的 Production 部署成功（未查看 Vercel 後台）。
 8. GA4 Enhanced Measurement 與正式事件收取。
-9. Storage 中目前是否有孤兒照片。
-10. 歷史上的測試資料目前是否仍存在。
+9. Storage 中目前是否有孤兒照片。（2026-10-21：測試照片已由使用者手動刪除，該次追查結案；不代表所有孤兒照片已盤點完成。）
+10. 歷史上的測試資料目前是否仍存在。（測試照片部分已結案，見上一項；其他測試資料的現況未確認。）

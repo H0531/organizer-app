@@ -41,7 +41,7 @@
 
 ## 3. 重要 Commit 索引（Git 紀錄可證實）
 
-> SHA、日期與標題已於 2026-10-19 依本地 `git log` 核對（`0e3cc34`、`8d2d436` 兩列於 2026-10-20 核對）。除非另有說明，這裡只有 commit metadata／stat，不代表逐行 diff 已完整審查。
+> SHA、日期與標題已於 2026-10-19 依本地 `git log` 核對（`0e3cc34`、`8d2d436` 兩列於 2026-10-20 核對；`4639880`、`fe029e4`、`fb1bd46`、`6b912a0` 四列於 2026-10-21 依本地 `git log` 核對）。`508fa92` 一列原依 GitHub 紀錄建立（當時本機 Git 尚未同步該 commit）；2026-10-21 之後執行 `git fetch origin`，已依本地 `git log` 核對其 SHA、日期、標題與父 commit（`4639880`、`6b912a0`），與本表一致。除非另有說明，這裡只有 commit metadata／stat，不代表逐行 diff 已完整審查。
 
 | Commit | 日期 | 標題 | 記錄與限制 |
 |---|---|---|---|
@@ -70,6 +70,11 @@
 | `cfaab0f` | 2026-10-19 | `Merge origin/main, preserving local CLAUDE.md` | 將 `0df9f1a` 合併進本地 `main`；詳見 §5。建立時尚未推送；2026-10-20 觀察本地 `origin/main` 已包含此 commit（見 §6）。 |
 | `0e3cc34` | 2026-10-19 | `docs: record documentation merge and pending release checks` | 更新 `docs/TODO.md`、`docs/WORKLOG.md` 的合併與待推送紀錄。 |
 | `8d2d436` | 2026-10-20 | `chore: remove accidental git log file` | 移除誤提交的 `tate"`。使用者回報 Vercel 最新部署為此 commit、狀態 Ready（未由 Claude 查驗）。 |
+| `4639880` | 2026-10-20 | `docs: reconcile security audit findings` | 文件更新；PR #1 的基準 commit。 |
+| `fe029e4` | 2026-10-21 | `fix(security): sanitize photo storage error logs` | 上傳／刪除 API 的錯誤 log 改用 `errorSummary()`；見 §7。 |
+| `fb1bd46` | 2026-10-21 | `test(security): preserve photo security regression tests` | 新增 Vitest 開發依賴、`vitest.config.mts`、`tests/s2/`、`tests/s3/`；見 §7。 |
+| `6b912a0` | 2026-10-21 | `fix(security): sanitize photo signing error logs` | 簽名 API 的錯誤 log 改用 `errorSummary()`，新增 S3-A8／A9 測試；見 §7。 |
+| `508fa92` | 2026-10-21 | `Merge pull request #1 from H0531/security/s3-photo-log-fix` | 一般 merge commit（父 commit `4639880`、`6b912a0`）；GitHub 紀錄顯示 Production 部署成功；見 §7。 |
 
 ### 原交接稿的修正紀錄
 - 原交接稿將 `2b02576`、`a947ed3` 標為 2026-10-02；依本地 Git 紀錄，兩者日期皆為 **2026-10-03**。
@@ -176,7 +181,68 @@
 - 舊 public URL 的 CDN 快取、唯一約束、redirect allowlist、Google Console 舊 callback 登記：仍未確認。
 - `docs/TODO.md` P1 的 `compressPhoto` 項目沒有區分是哪一份程式（程式碼可見：只有 `components/ChecklistTab.tsx` `saveLog` 內的版本缺少 `onerror`，`components/DeclutterTab.tsx` 的版本已有），本次沒有修改該項描述。
 
-## 7. 執行任務時建議留下的紀錄格式
+## 7. 2026-10-21 照片 API 錯誤日誌修正（PR #1）與部署紀錄
+
+### 範圍與授權
+- 使用者分階段授權：建立照片 API 的 mock 測試（新增開發依賴 Vitest）、修正錯誤日誌、建立本機 commit、推送 `security/s3-photo-log-fix` 分支、建立 PR #1、合併 PR #1（觸發正式部署）。
+- 未修改 Supabase、Vercel、GA4 設定；未讀取 `.env*`；測試未使用真實帳號、token 或正式資料；未把 Preview 當成測試環境使用。
+
+### 發現與修正
+- 上傳／刪除 API 會把 Storage 錯誤物件原樣寫入伺服器 log（mock 測試以假的敏感字串證實，S3-A7 FAIL）。以 `errorSummary()` 只輸出驗證過的錯誤名稱與狀態碼（`fe029e4`）。
+- 整合前審查發現簽名 API 的 log 未檢查 name／status 格式；先以新增的 S3-A8／A9 確認在未修正程式上失敗，再套用相同規則修正（`6b912a0`）。
+- 規則與限制見 `docs/SECURITY.md` §4。
+
+### 測試與建置（歷史執行紀錄，於合併前 HEAD `6b912a0` 執行）
+- `npx --no-install vitest run`：5 個測試檔、54／54 通過（S2 29、S3 25）。
+- `npm run build`：成功（編譯與型別檢查通過）。
+- 測試靈敏度：以刻意弄壞授權邏輯的暫時複本確認測試能偵測錯誤（S2 8 個、S3 5 個變異版本）；複本放在被 Git 忽略的位置，執行後已刪除。
+- 以上**未在 merge commit `508fa92` 上重新執行**；`6b912a0` 與 `508fa92` 的檔案內容相同（GitHub 比較結果沒有檔案差異）。
+- 全部為 mock 測試，不代表真實 Supabase Auth／Storage 的行為。
+
+### 推送、合併與部署（GitHub 紀錄可證實）
+- 推送分支後，GitHub 上的 Vercel 檢查對 `6b912a0` 顯示 success（Preview 建置）。
+- PR #1 於 2026-10-21 09:49:47 UTC 以一般 merge commit 合併：`508fa9249b714005b2ddb6909383c0c597a6cf03`。來源分支未刪除。
+- GitHub 上 `508fa92` 的 Vercel 狀態為 success，並有一筆 Production 部署紀錄（09:50:27 UTC）。未由 Claude 查看 Vercel 後台。
+- 本機查核限制（2026-10-21 唯讀稽核時觀察）：本機 Git 尚未同步到 `508fa92`（合併後未執行 fetch；本機 `main` 與 `origin/main` ref 仍為 `4639880`）。這只代表本機紀錄未更新，**不代表 PR 未合併**；合併與部署的證據來源是上述 GitHub 紀錄。之後（同日）執行 `git fetch origin`：`origin/main` 指向 `508fa92`，本機已可找到該 commit，父 commit 為 `4639880`、`6b912a0`，且 `6b912a0` 與 `508fa92` 的檔案內容沒有差異。這只代表 fetch 當時 GitHub `main` 的狀態；部署狀態仍依上述 GitHub 紀錄。
+
+### 部署後驗收
+- 正式網站首頁：一次 GET 回應 200（2026-10-21）。
+- 照片顯示：當時沒有可用的瀏覽器工具與登入工作階段。之後使用者說明：已手動刪除測試照片，目前沒有可供驗收的既有照片，因此本次未執行照片顯示驗收（`NOT TESTED`，不是 PASS）。不得為了驗收而重新建立正式測試資料。照片 API 的既有 mock 測試及合併前測試結果依歷史證據保留；真實 Storage 與 signed URL 行為仍列為未驗證項目。
+- 正式環境錯誤 log：**尚待自然錯誤事件驗證**（沒有已授權的唯讀日誌存取方式；未刻意製造錯誤）。
+
+### 證據位置與限制
+- 詳細報告、測試輸出與備份存放在 Codespace 內、repo 外的 `/home/codespace/organizer-reviews/`（使用者另有下載的備份），不在 repo 中，Codespace 刪除時可能遺失。
+- 2026-10-21 曾以 Vercel CLI 嘗試唯讀查詢專案設定，結果失敗或逾時；期間 CLI 更新了本機的認證與使用統計檔（未讀取內容）。之後未再使用 Vercel CLI。
+
+### 未完成事項
+- 正式網站照片顯示確認（目前沒有可驗收的照片，未執行）、正式環境錯誤 log 格式（`docs/TODO.md` P0）。
+- 真實 Supabase Auth 對異常 token 的行為、真實 Storage／signed URL 行為、真實跨帳號資料隔離：仍沒有真實環境實測（`docs/SECURITY.md` §6.3、§6.4）。
+
+### 唯讀稽核後的結案整理（2026-10-21）
+依當日對 Git 歷史、測試檔、repo 外工作紀錄的唯讀稽核補記；本次只整理文件，沒有重新執行稽核或測試。
+
+已完成（不需重做）：
+- **S1**：照片 API 未登入請求 6 項，2026-10-20 08:59 UTC 在本機伺服器（HEAD `4639880`）執行，歷史紀錄顯示都回傳預期的 401。證據來源是歷史對話紀錄，原始伺服器 log 已不存在。標記 `HISTORICAL PASS`，本次沒有重新執行。
+- **S2-01～S2-20**：mock 測試與 8 個變異版本檢查已完成；只代表 mock 範圍，不代表真實 Supabase 行為已通過。S2-03 結尾空白的預期結果為 `invalid`（不是 `forbidden`）。S2-21、S2-23、S2-24 為 `BLOCKED`，S2-22 依規劃不執行。
+- **S3-A／S3-B**：錯誤 log 修正、mock 測試與 5 個變異版本檢查已完成。這**不是**真實 Private bucket／signed URL 驗證，真實環境行為仍未驗證。
+- **合併前測試**：54／54 通過、`npm run build` 成功（見上方「測試與建置」）；屬合併前的歷史證據，不是本次重新執行的結果。
+- **PR #1**：依 GitHub 紀錄已合併並成功部署 Production；稽核時本機 Git 尚未同步，之後已 fetch，本機 `origin/main` 指向 `508fa92`（見上方「推送、合併與部署」）。
+- **測試照片追查**：使用者確認已手動刪除測試照片，此次追查結案；不重新盤查、刪除或要求再次證明。這**不代表**所有 Storage 孤兒照片已盤點完成。
+
+代號說明：
+- 實際執行的 S3-A／S3-B 是 mock 測試；真實 Storage、signed URL 等行為尚未驗證。原始路線圖未能取得，無法確認真實環境驗證在原路線圖中的代號（見 `docs/SECURITY.md` §6.3「代號說明」）。
+- 照片 API 測試報告（repo 外）的 R1～R7 是照片 API 殘餘風險，與路線圖的 R1～R7 不同。路線圖 R1～R7 的原始定義目前找不到，`docs/TODO.md` P1 的技術風險項目不標示 R 代號。
+
+仍未驗證（沒有經使用者決定延後，不標為完成或延後）：
+- 真實 Private bucket、signed URL 及相關快取行為。
+- 資料庫主鍵與唯一約束。
+- 跨帳號 RLS 行為。
+- 舊 Google OAuth callback 外部設定。
+- GA4 後台與正式事件。
+- 資料可靠性與照片流程相關技術風險（`docs/TODO.md` P1）。路線圖代號（R1～R7、PHOTO-1～3、S3～S8）的原始定義找不到，以上項目都不標示對應關係；項目本身保留，未改為完成或延後。網站程式碼在 `1043e24` 之後只有照片 API 錯誤 log 的修改，這些項目的程式沒有變更。
+- 孤兒照片盤點與 CDN 快取驗證。
+
+## 8. 執行任務時建議留下的紀錄格式
 
 每個實際執行的任務，補記：
 1. 任務日期、範圍與授權邊界（唯讀／可修改哪些檔案／是否允許外部寫入）。
@@ -185,10 +251,11 @@
 4. 實際執行的檢查與逐項結果；未跑的測試列為 `NOT TESTED`，受阻列為 `BLOCKED`，只有歷史紀錄的列為 `HISTORICAL PASS`。
 5. 未解風險、後續工作及回滾方式；涉及資料刪除時記錄授權範圍與前後確認，但避免記錄個資或 secrets。
 
-## 8. 本文件的限制
+## 9. 本文件的限制
 
 - 不含秘密值、帳號 email、專案識別碼、GA Measurement ID、DNS 設定值或環境變數內容。
 - 2026-10-19 曾數次執行 `git fetch origin`，僅更新本地的遠端追蹤資訊；除此之外沒有其他遠端 Git 操作，也沒有連線 Supabase、Vercel 或 GA4。
 - 2026-10-20 的遠端請求只有 GET／HEAD：正式網站公開頁面（見 §6），以及對 `components/ChecklistTab.tsx` `APP_URL` 備用網址的一次 GET（該網址回傳其他網站，見 `docs/TODO.md` P2）；沒有其他遠端操作。
-- 沒有重新跑功能測試。
+- 2026-10-21 的遠端操作：GitHub API 唯讀查詢、推送 `security/s3-photo-log-fix` 分支、建立並合併 PR #1、正式網站首頁一次 GET，以及兩次失敗的 Vercel CLI 唯讀查詢（見 §7）；之後在唯讀稽核與結案整理後執行一次 `git fetch origin`（稽核當時本機尚未同步）：只更新本機遠端追蹤紀錄，確認 `origin/main` 指向 `508fa92`（父 commit `4639880`、`6b912a0`，與 `6b912a0` 的檔案內容沒有差異），沒有 merge、commit 或 push，也沒有重新查驗 Vercel 後台。沒有連線 Supabase 或 GA4。
+- 沒有重新跑功能測試（2026-10-21 的照片 API mock 測試見 §7）。
 - 歷史測試與部署紀錄只保留為歷史紀錄，不作為目前 Production 的保證。
