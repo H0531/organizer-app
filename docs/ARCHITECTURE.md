@@ -160,7 +160,8 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 
 - `app/layout.tsx` 使用 `next/script` 在 `afterInteractive` 載入 gtag。
 - GA ID 透過環境變數設定，沒有硬編碼在程式碼中；本文件不記錄實際 ID。
-- 歷史決策是將 GA4「依瀏覽器記錄變更網頁」設定維持 OFF；目前後台設定未重新確認。
+- 歷史決策是將 GA4「依瀏覽器記錄變更網頁」設定維持 OFF。
+- GA4 後台設定已確認（使用者於 2026-10-21 在後台確認，未由 Claude 查驗）：強化評估開啟、網頁瀏覽追蹤開啟、「載入網頁時記錄 page_view」勾選、「頁面根據瀏覽器記錄事件而變更」（即「依瀏覽器記錄變更網頁」）未勾選。這只是設定確認，事件實際收件未驗證。
 
 ### 事件清單（程式碼可見）
 
@@ -168,11 +169,13 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 
 | 事件 | 位置 | 觸發時機 | 主要參數 |
 |---|---|---|---|
-| `page_view` | `app/page.tsx` `handleTabChange` | 每次切換 tab（含點擊目前所在的 tab） | `page_path`、`page_title` |
+| `page_view` | `app/page.tsx` `handleTabChange` | 切換到與目前不同的 tab 時（點擊目前所在的 tab 不送；2026-10-21 調整） | `page_path`、`page_title` |
+| `home_entry_click` | `components/HomeTab.tsx`（判斷與允許清單在 `lib/analytics.ts`） | 點擊首頁會導向功能分頁的入口時，在導頁之前送出（2026-10-21 新增） | `placement`（`quiz`／`feature_card`／`text_link`／`stats_card`／`login_banner`）、`target_tab` |
 | `checklist_started` | `components/ChecklistTab.tsx` `startTimer` | 開始整理計時（不代表紀錄已保存） | `space`、`target_mins`、`login_state` |
 | `checklist_saved` | `components/ChecklistTab.tsx` `saveLog` | 儲存回呼 `onSaveLog` 回傳成功後（語意限制見下方） | `space`、照片有無、`duration_mins`、`target_mins`、`login_state` |
 | `before_photo_uploaded` | `components/ChecklistTab.tsx` `addPhotos` | 選擇「整理前」照片時（在讀檔之前送出） | `space` |
 | `after_photo_uploaded` | `components/ChecklistTab.tsx` `addPhotos` | 選擇「整理後」照片時（在讀檔之前送出） | `space` |
+| `declutter_started` | `components/DeclutterTab.tsx` `addItem` | 清單為空時加入第一件物品（2026-10-21 新增；細節見下方） | `login_state` |
 | `declutter_flow_entered` | `components/DeclutterTab.tsx` | 進入分流（review）階段 | 物品數量統計 |
 | `declutter_saved` | `components/DeclutterTab.tsx` `persistRecord` | 儲存回呼 `onSaveToMember` 回傳成功後（語意限制見下方） | 物品數量統計、`login_state` |
 | `challenge_started` | `components/ChallengeTab.tsx` | 按下確認開始挑戰的按鈕時，在呼叫 `persistData` 後送出 | `days` |
@@ -186,6 +189,18 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
   - 取消選檔是否會觸發此事件，取決於瀏覽器行為，**尚未確認**。
   - 事件送出不代表照片已完成讀取或已上傳到 Storage（照片要到儲存整理日記時才上傳），也不代表 GA4 正式環境已收到。
 - `challenge_started`／`challenge_entry_submitted`：程式碼在呼叫 `persistData` 後送出事件，但 `persistData` 沒有回傳明確的儲存成功／失敗狀態，因此事件本身不代表資料已成功儲存。
+- `page_view`：
+  - 手動送出只有 `handleTabChange` 一處。以 `tabRef` 記錄目前分頁（初始化時以 `?tab=` 或 sessionStorage 恢復分頁，會由 effect 同步），新舊分頁相同時不送；網址、sessionStorage、捲動行為不受影響。
+  - 首次載入沒有手動 `page_view`；`app/layout.tsx` 的 `gtag('config')` 沒有設定 `send_page_view`，後台「載入網頁時記錄 page_view」已確認勾選，依設定與 gtag 預設推論，每次載入應自動送出一次；實際收件數量**未經 DebugView 確認**。
+  - 網址沒有 `?tab=` 但由 sessionStorage 恢復到其他分頁時（例如 Google 登入回到 `/`），不送 `page_view`，首次載入的自動 `page_view` 會記為首頁。
+  - 程式不依賴 GA4「依瀏覽器記錄變更網頁」。後台已確認此設定未勾選，依設定推論 `replaceState`（切換分頁、清除 OAuth 參數）不會另外觸發自動 `page_view`；這是推論，**未經 DebugView 確認**，不代表已排除所有重複計數。若日後開啟此設定，可能與手動 `page_view` 重複。
+- `home_entry_click`：程式中共 9 處呼叫，涵蓋問卷 3 個選項（`quiz`）、功能卡片按鈕與標題連結各 4 個（`feature_card`／`text_link`）、登入後統計卡片（`stats_card`，最多 4 張，依資料顯示）、未登入時的「登入」按鈕（`login_banner`，前往 `member`）。頁尾雖接收 `onNavigate` 但沒有使用，沒有入口。參數不在 `lib/analytics.ts` 允許清單內時不送出。問卷選項在 320ms 後才導頁，連點時事件與導頁都會各執行多次（導頁行為維持原樣）。
+- `declutter_started`：
+  - 只在 `addItem` 中、加入前清單為 0 件且這一輪尚未送出時送出；以 `startTrackedRef` 防止同一次 render 內重複呼叫。
+  - `items.length` 變成 0 時（「再來一輪」`resetAll`、刪光所有物品、unmount 後重新 mount）重置，下一次加入第一件會再送。
+  - 恢復草稿是由 effect 直接 `setItems`，不經過 `addItem`，不會送出。
+  - 儲存後如果沒有按「再來一輪」、直接在同一畫面加入物品，清單不是空的，不會送出（程式仍視為同一輪）。
+  - 不送物品名稱或其他使用者輸入。
 - `checklist_started`：在 `startTimer` 中送出，代表開始整理計時流程；不代表整理已完成，也不代表整理紀錄已保存。
 - `checklist_saved`：代表前端儲存函式（`app/page.tsx` 的 `handleChecklistSave`）回傳成功，**不等於所有資料都已成功寫入 Supabase**。依程式碼，回傳成功的情況包括：
   - Guest：紀錄寫入本機 LocalStorage 成功；照片以 data URL 保存在本機，不寫雲端。
@@ -203,11 +218,12 @@ Challenge 不走上述共用 migration。`ChallengeTab` 會比較本機 snapshot
 - 新增追蹤點沿用 snake_case 命名；不要在事件參數中送出使用者輸入的文字或 email。
 
 ### 待驗證
-- 首次載入時 gtag `config` 是否送出預設 `page_view`，以及與手動 `page_view` 是否重複。
-- 點擊目前所在 tab 會重送 `page_view`。
+- 首次載入的自動 `page_view` 實際收件數量（依設定應為 1 次，且首次載入沒有手動 `page_view`；未經真實瀏覽器或 DebugView 確認）。
+- 新增的 `home_entry_click`、`declutter_started` 與調整後的 `page_view` 是否實際被 GA4 收到（只有單元測試與型別檢查，沒有瀏覽器或 DebugView 驗證）。
+- 切換分頁、點選目前分頁時，實際環境中的 `page_view` 收件數量。
 - `page_path` 參數在 GA4 報表中的呈現方式。
 - 取消選擇照片時，各瀏覽器是否會觸發照片事件。
-- 程式碼呼叫事件不等於正式環境已收到；未查 GA4 後台，也未重新驗證 production 是否收到事件。
+- 程式碼呼叫事件不等於正式環境已收到；GA4 後台只確認了設定，沒有確認事件收件，也未重新驗證 production 是否收到事件。
 
 ## 10. 現況風險與注意事項
 

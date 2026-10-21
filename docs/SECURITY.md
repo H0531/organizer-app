@@ -203,6 +203,6 @@ Service role 會繞過一般 RLS 保護，因此每個 route 都必須自行做�
 5. Supabase Auth redirect allowlist 是否仍保留開發用（Codespaces）網址。
 6. 舊 OAuth callback 是否仍登記在 Google Console。
 7. Vercel 環境變數設定（只確認存在與否，不讀值）。Production 部署版本：2026-10-21 由 GitHub 部署紀錄確認 `508fa92` 的 Production 部署成功（未查看 Vercel 後台）。
-8. GA4 Enhanced Measurement 與正式事件收取。
+8. GA4 Enhanced Measurement 與正式事件收取。（2026-10-21：新增 `home_entry_click`、`declutter_started`，並讓點選目前分頁時不再送 `page_view`；新事件參數只用 `lib/analytics.ts` 允許清單內的固定值與 `login_state`，不含使用者輸入、物品名稱或 email。GA4 後台設定已由使用者確認（見 `docs/ARCHITECTURE.md` §9）；正式環境事件收件仍未確認，見 `docs/WORKLOG.md` §8。）
 9. Storage 中目前是否有孤兒照片。（2026-10-21：測試照片已由使用者手動刪除，該次追查結案；不代表所有孤兒照片已盤點完成。）
 10. 歷史上的測試資料目前是否仍存在。（測試照片部分已結案，見上一項；其他測試資料的現況未確認。）

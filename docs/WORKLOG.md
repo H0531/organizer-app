@@ -95,7 +95,7 @@
 ### GA4
 - 2026-10-08 的歷史紀錄曾回報 `1043e24` 部署 Ready 與 Production smoke test。
 - 歷史方案是維持 GA4「依瀏覽器記錄變更網頁」設定 OFF，使用 tab change 手動 page_view。
-- 目前 GA4 後台設定與事件收取未確認。
+- 目前 GA4 後台設定與事件收取未確認。（2026-10-21：後台設定已由使用者確認，見 §8；事件收取仍未確認。）
 
 ### 測試資料
 - 歷史紀錄提到曾在 production 建立測試資料；目前是否仍存在未確認。
@@ -242,7 +242,38 @@
 - 資料可靠性與照片流程相關技術風險（`docs/TODO.md` P1）。路線圖代號（R1～R7、PHOTO-1～3、S3～S8）的原始定義找不到，以上項目都不標示對應關係；項目本身保留，未改為完成或延後。網站程式碼在 `1043e24` 之後只有照片 API 錯誤 log 的修改，這些項目的程式沒有變更。
 - 孤兒照片盤點與 CDN 快取驗證。
 
-## 8. 執行任務時建議留下的紀錄格式
+## 8. 2026-10-21 GA4 追蹤補強
+
+### 範圍與基線
+- 修改前：branch `main`、HEAD `326c4ec`、工作目錄乾淨。
+- 只修改 GA4 追蹤程式與測試；沒有修改登入、OAuth、LINE 導向、網址、分頁恢復或其他功能。沒有修改 GA4 後台、Supabase、Vercel。
+
+### 變更
+- `lib/analytics.ts`（新增）：入口位置與目標分頁的允許清單、`home_entry_click` 送出函式、`page_view` 與 `declutter_started` 的判斷函式。
+- `components/HomeTab.tsx`：首頁會導向功能分頁的入口送出 `home_entry_click`（程式中 9 處呼叫，部分由清單產生多個按鈕；`placement`：`quiz`／`feature_card`／`text_link`／`stats_card`／`login_banner`；`target_tab`）。頁尾雖接收 `onNavigate` 但沒有使用，沒有入口。
+- `components/DeclutterTab.tsx`：`addItem` 在清單為空時加入第一件物品送出 `declutter_started`（參數只有 `login_state`）；以 ref 防止同一輪重複送出，清單清空時重置。恢復草稿不經過 `addItem`，不會送出。
+- `app/page.tsx`：`handleTabChange` 以 ref 記錄目前分頁，點選目前已開啟的分頁時不送 `page_view`；網址、sessionStorage、捲動行為不變。
+- `app/layout.tsx` 的 `gtag('config')` 沒有修改（沒有加入 `send_page_view: false`）：修改當時 GA4 後台設定未確認；之後使用者確認的設定（見下方）與這個做法一致。
+- `docs/ARCHITECTURE.md` §9：同步更新事件清單與 `page_view` 說明。
+
+### GA4 後台設定（已確認；使用者於 2026-10-21 在後台確認，未由 Claude 查驗）
+- 強化評估開啟、網頁瀏覽追蹤開啟、「載入網頁時記錄 page_view」勾選、「頁面根據瀏覽器記錄事件而變更」（即「依瀏覽器記錄變更網頁」）未勾選。
+- 依此設定與程式碼推論：首次載入應只有 1 次自動 `page_view`，切換分頁不會另外觸發自動 `page_view`。這是推論，**不是實際收件測試結果**，也不代表已排除所有重複計數。
+
+### 檢查結果（本機，HEAD `326c4ec` + 工作目錄修改）
+- `npx vitest run tests/ga`：15／15 `PASS`（第二階段審查後由 10 項增為 15 項，`declutter_started` 改為逐一對應 7 種輪次情境；只有純函式與模擬流程，沒有 React 元件渲染測試，因為專案沒有安裝瀏覽器測試環境）。
+- `npx tsc --noEmit`：`PASS`。
+- eslint（修改的檔案）：與 HEAD 相同，`HomeTab.tsx` 原有 1 個 `react-hooks/set-state-in-effect` error 與數個 warning，不是本次造成；新檔案沒有問題。
+- 照片 API 測試（`tests/s2`、`tests/s3`）與 build：`NOT TESTED`（與本次變更無關，依指示不重跑）。
+- 實際瀏覽器操作、GA4 DebugView、正式環境收件：`NOT TESTED`。
+
+### 未完成事項
+- 提交、推送、部署由使用者決定。
+- 真實瀏覽器操作：未驗證。
+- GA4 DebugView 的實際事件收件（`home_entry_click`、`declutter_started`、`page_view`）：未驗證。
+- 實際環境中的 `page_view` 收件數量（首次載入、切換分頁、點選目前分頁）：未確認。
+
+## 9. 執行任務時建議留下的紀錄格式
 
 每個實際執行的任務，補記：
 1. 任務日期、範圍與授權邊界（唯讀／可修改哪些檔案／是否允許外部寫入）。
@@ -251,7 +282,7 @@
 4. 實際執行的檢查與逐項結果；未跑的測試列為 `NOT TESTED`，受阻列為 `BLOCKED`，只有歷史紀錄的列為 `HISTORICAL PASS`。
 5. 未解風險、後續工作及回滾方式；涉及資料刪除時記錄授權範圍與前後確認，但避免記錄個資或 secrets。
 
-## 9. 本文件的限制
+## 10. 本文件的限制
 
 - 不含秘密值、帳號 email、專案識別碼、GA Measurement ID、DNS 設定值或環境變數內容。
 - 2026-10-19 曾數次執行 `git fetch origin`，僅更新本地的遠端追蹤資訊；除此之外沒有其他遠端 Git 操作，也沒有連線 Supabase、Vercel 或 GA4。

@@ -17,6 +17,7 @@ import {
 } from '@/lib/supabase'
 import { uploadPhoto, deleteRemotePhoto, storageKeyFromPhotoRef } from '@/lib/photos'
 import { parsePhotoRef } from '@/lib/photoRef'
+import { shouldSendTabPageView } from '@/lib/analytics'
 
 export type AppTab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
 
@@ -460,6 +461,8 @@ async function migrateDeclutterRecord(email: string, raw: unknown): Promise<Reco
 
 export default function Home() {
   const [tab, setTab]                           = useState<AppTab>('home')
+  // 目前所在分頁（handleTabChange 判斷是否真的換頁用；初始化恢復分頁時由下方 effect 同步）
+  const tabRef = useRef<AppTab>('home')
   const [user, setUser]                         = useState<OAuthUser | null>(null)
   const [declutterRecords, setDeclutterRecords] = useState<DeclutterRecord[]>([])
   const [checklistLogs, setChecklistLogs]       = useState<ChecklistLog[]>([])
@@ -673,13 +676,18 @@ export default function Home() {
   }, [applyAuthUser, showToast])
 
   // ── Tab 切換（共用，帶捲到頂）────────────────────────────────
+  useEffect(() => { tabRef.current = tab }, [tab])
+
   const handleTabChange = useCallback((newTab: AppTab) => {
+    const prevTab = tabRef.current
+    tabRef.current = newTab
     setTab(newTab)
     sessionStorage.setItem(TAB_KEY, newTab)
     const url = newTab === 'home' ? '/' : `/?tab=${newTab}`
     window.history.replaceState({}, '', url)
     // 手動觸發 GA page_view，因為 replaceState 不會被 Next.js router 感知
-    if (typeof window !== 'undefined' && window.gtag) {
+    // 點選目前已開啟的分頁不送（網址、捲動等其他行為不變）
+    if (shouldSendTabPageView(prevTab, newTab) && typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', 'page_view', {
         page_path: url,
         page_title: newTab,

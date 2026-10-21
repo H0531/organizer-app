@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { OAuthUser } from '@/lib/auth'
 import { loadLS, LS_CHALLENGE_DATA } from '@/lib/types'
+import { trackHomeEntryClick } from '@/lib/analytics'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 type Tab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
@@ -201,7 +202,7 @@ function OnboardingQuiz({ onNavigate }: { onNavigate: (t: Tab) => void }) {
       <div style={{ fontSize: 12, color: mf, marginBottom: 14 }}>選一個，幫你找到最適合的起點</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {QUIZ_OPTIONS.map(opt => (
-          <button key={opt.tab} onClick={() => { setChosen(opt.tab); setTimeout(() => onNavigate(opt.tab), 320) }} style={{
+          <button key={opt.tab} onClick={() => { trackHomeEntryClick('quiz', opt.tab); setChosen(opt.tab); setTimeout(() => onNavigate(opt.tab), 320) }} style={{
             display: 'flex', alignItems: 'center', gap: 12,
             background: chosen === opt.tab ? '#EAF2EE' : 'white',
             border: `1px solid ${chosen === opt.tab ? sg : bd}`,
@@ -248,7 +249,7 @@ export default function HomeTab({
   }, [user])
 
   const NavLink = ({ target, children }: { target: Tab; children: string }) => (
-    <span onClick={() => onNavigate(target)} style={{ color: sg, textDecoration: 'underline', cursor: 'pointer', fontWeight: 500 }}>{children}</span>
+    <span onClick={() => { trackHomeEntryClick('text_link', target); onNavigate(target) }} style={{ color: sg, textDecoration: 'underline', cursor: 'pointer', fontWeight: 500 }}>{children}</span>
   )
 
   const totalCleanings = checklistLogs.length
@@ -325,7 +326,7 @@ export default function HomeTab({
             <span style={{ fontSize: 11, color: mf, background: cr, padding: '3px 10px', borderRadius: 20, flexShrink: 0 }}>⏱ {f.time}</span>
           </div>
           <p style={{ fontSize: 13, color: ml, lineHeight: 1.8, marginBottom: 12 }}>{f.desc}</p>
-          <button onClick={() => onNavigate(f.tab)} style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${sg}`, background: 'white', color: sg, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+          <button onClick={() => { trackHomeEntryClick('feature_card', f.tab); onNavigate(f.tab) }} style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${sg}`, background: 'white', color: sg, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
             開始 {f.title} →
           </button>
         </div>
@@ -338,7 +339,7 @@ export default function HomeTab({
             <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6B50', marginBottom: 2 }}>跨裝置保存你的整理成果</div>
             <div style={{ fontSize: 12, color: ml, lineHeight: 1.6 }}>登入後，紀錄、照片、挑戰進度在手機和電腦都看得到。</div>
           </div>
-          <button onClick={onLoginClick} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap' }}>登入</button>
+          <button onClick={() => { trackHomeEntryClick('login_banner', 'member'); onLoginClick() }} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 8, border: 'none', background: sg, color: 'white', fontSize: 13, cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap' }}>登入</button>
         </div>
       )}
 
@@ -357,34 +358,34 @@ export default function HomeTab({
           {hasAnyData && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
               {totalCleanings > 0 && (
-                <button onClick={() => onNavigate('checklist')} style={{ background: '#EAF2EE', border: `1px solid ${sg}22`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                <button onClick={() => { trackHomeEntryClick('stats_card', 'checklist'); onNavigate('checklist') }} style={{ background: '#EAF2EE', border: `1px solid ${sg}22`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: sg, fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{totalCleanings}</div>
                   <div style={{ fontSize: 11, color: '#2E6B50', marginTop: 3 }}>次整理完成</div>
                   {totalMins > 0 && <div style={{ fontSize: 10, color: ml, marginTop: 2 }}>共 {totalMins} 分鐘</div>}
                 </button>
               )}
               {totalDeclutter > 0 && (
-                <button onClick={() => onNavigate('declutter')} style={{ background: '#EEF3FE', border: '1px solid #4285F422', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                <button onClick={() => { trackHomeEntryClick('stats_card', 'declutter'); onNavigate('declutter') }} style={{ background: '#EEF3FE', border: '1px solid #4285F422', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#4285F4', fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{totalDeclutter}</div>
                   <div style={{ fontSize: 11, color: '#3067C8', marginTop: 3 }}>件物品放手</div>
                   <div style={{ fontSize: 10, color: ml, marginTop: 2 }}>斷捨離紀錄</div>
                 </button>
               )}
               {challengeDays > 0 ? (
-                <button onClick={() => onNavigate('challenge')} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                <button onClick={() => { trackHomeEntryClick('stats_card', 'challenge'); onNavigate('challenge') }} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#C4953A', fontFamily: "'Noto Serif TC', serif", lineHeight: 1 }}>{challengeDays}</div>
                   <div style={{ fontSize: 11, color: '#7A5E2A', marginTop: 3 }}>天挑戰打卡{challengeMode ? ` / ${challengeMode}` : ''}</div>
                   {streak > 1 && <div style={{ fontSize: 10, color: '#C4953A', marginTop: 2 }}>🔥 連續 {streak} 天</div>}
                 </button>
               ) : (
-                <button onClick={() => onNavigate('challenge')} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                <button onClick={() => { trackHomeEntryClick('stats_card', 'challenge'); onNavigate('challenge') }} style={{ background: '#FDF9F0', border: '1px solid #C4953A22', borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, lineHeight: 1 }}>🎯</div>
                   <div style={{ fontSize: 11, color: '#7A5E2A', marginTop: 3 }}>每日丟一物挑戰</div>
                   <div style={{ fontSize: 10, color: '#C4953A', marginTop: 2 }}>點我開始 →</div>
                 </button>
               )}
               {hasAnyData && (
-                <button onClick={() => onNavigate('member')} style={{ background: cr, border: `1px solid ${bd}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+                <button onClick={() => { trackHomeEntryClick('stats_card', 'member'); onNavigate('member') }} style={{ background: cr, border: `1px solid ${bd}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ fontSize: 22, color: ml, lineHeight: 1 }}>📓</div>
                   <div style={{ fontSize: 11, color: ml, marginTop: 3 }}>查看全部紀錄</div>
                   <div style={{ fontSize: 10, color: mf, marginTop: 2 }}>我的整理</div>

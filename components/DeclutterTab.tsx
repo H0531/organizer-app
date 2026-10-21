@@ -3,6 +3,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { SHARE_BTNS, shareToSocial, loadLS, saveLS, savePhoto, saveOrShareImage, saveShareLabel, isChrome, drawDeclutterCard } from '@/lib/types'
 import type { DeclutterItem, TossEntry, DeclutterRecord, Decision } from '@/lib/types'
 import PhotoImg from '@/components/PhotoImg'
+import { shouldTrackDeclutterStart } from '@/lib/analytics'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 const KEEP_CATS = ['每天會用', '偶爾會用', '捨不得丟', '備用存放', '工作學習', '小孩的']
@@ -220,8 +221,21 @@ export default function DeclutterTab({ onSaveToMember, onGoToMember, userEmail }
     if (items.length > 0) saveLS(DRAFT_KEY, { items, tossEntries }, userEmail)
   }, [items, tossEntries, userEmail])
 
+  // 這一輪是否已送出 declutter_started；清單清空（新的一輪）時重置
+  const startTrackedRef = useRef(false)
+  useEffect(() => {
+    if (items.length === 0) startTrackedRef.current = false
+  }, [items.length])
+
   const addItem = (name?: string) => {
     const v = name || input.trim(); if (!v) return
+    // GA: 開始一輪斷捨離（清單是空的時候加入第一件；恢復草稿不經過這裡）
+    if (shouldTrackDeclutterStart(items.length, startTrackedRef.current)) {
+      startTrackedRef.current = true
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'declutter_started', { login_state: userEmail ? 'member' : 'guest' })
+      }
+    }
     setItems(prev => [...prev, { id: Date.now().toString(), name: v, decision: null }])
     setInput('')
   }
