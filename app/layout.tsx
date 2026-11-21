@@ -97,7 +97,6 @@ export default function RootLayout({
       <head>
         <meta name="x5-orientation" content="portrait" />
         <meta name="theme-color" content="#FAF8F4" />
-        <link rel="canonical" href={BASE_URL} />
         {/* Structured Data */}
         <script
           type="application/ld+json"

@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 import type { OAuthUser } from '@/lib/auth'
 import { loadLS, LS_CHALLENGE_DATA } from '@/lib/types'
 import { trackHomeEntryClick } from '@/lib/analytics'
+import Link from 'next/link'
+import PrivacyPolicyContent from './PrivacyPolicyContent'
 
 const ink = '#2C2820', sg = '#7A9E8A', bd = '#DDD8CF', ml = '#6B6358', mf = '#A39B8E', cr = '#EDE8DD', ww = '#FAF8F4'
 type Tab = 'home' | 'checklist' | 'declutter' | 'challenge' | 'recommend' | 'member'
@@ -154,13 +156,9 @@ function Footer({ onNavigate }: { onNavigate: (t: Tab) => void }) {
       {/* 隱私權政策 */}
       {showPrivacy && (
         <Modal title="隱私權政策" onClose={() => setShowPrivacy(false)}>
-          <div style={{ fontSize: 13, color: ml, lineHeight: 1.9 }}>
-            <p style={{ marginBottom: 12 }}>最後更新：2026 年 4 月</p>
-            <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>收集的資料</strong><br />本服務在您登入時會取得 Google 帳號的名稱、Email 及大頭照，僅用於識別您的帳號並顯示於介面。</p>
-            <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>資料儲存</strong><br />整理紀錄、照片、挑戰進度等資料儲存於 Supabase 雲端資料庫。未登入時，資料僅儲存於您的瀏覽器本機。</p>
-            <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>照片</strong><br />上傳的照片儲存於 Supabase Storage，僅您本人可透過帳號存取。我們不會將您的照片用於任何其他用途。</p>
-            <p style={{ marginBottom: 12 }}><strong style={{ color: ink }}>第三方服務</strong><br />本服務使用 Google OAuth 登入、Supabase 資料庫及 Vercel 部署，請參閱各服務的隱私權政策。<br />本網站使用 Google Analytics 4（GA4）分析網站使用情形與功能使用狀況。</p>
-            <p style={{ marginBottom: 0 }}><strong style={{ color: ink }}>刪除資料</strong><br />如需刪除您的所有資料，請透過聯絡方式與我們聯繫，我們將在 7 個工作天內處理。</p>
+          <PrivacyPolicyContent />
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <Link href="/privacy" style={{ fontSize: 13, color: ink, textDecoration: 'underline', textDecorationColor: bd }}>查看完整隱私權政策</Link>
           </div>
         </Modal>
       )}
